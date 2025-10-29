@@ -14,12 +14,15 @@ It's currently a thin wrapper around the OpenAI Realtime speech API, however the
   <img src="https://github.com/user-attachments/assets/3d0f9b19-54dc-45c2-888b-223e05fb46f4" alt="Demo video">
 </a>
 
-**What's in the Demo**:
+<details>
+  <summary>Whats's in the demo</summary>
 
-1. Navigate Google Drive via voice: "Find all files with the name vibemachine in it"
-2. Have the app summarize contents of a document in Google Drive: "Summarize the contents of the vibemachine design doc"
-3. File a Github issue: "Create a new issue to update design doc" 
-4. Show phone with github issue actually filed.
+  1. Navigate Google Drive via voice: "Find all files with the name vibemachine in it"
+  2. Have the app summarize contents of a document in Google Drive: "Summarize the contents of the vibemachine design doc"
+  3. File a Github issue: "Create a new issue to update design doc" 
+  4. Show phone with github issue actually filed.
+
+</details>
 
 ## 📱 Screenshots
 
@@ -112,6 +115,7 @@ This project offers a fully open alternative: local execution, no data monetizat
 
 - Connect your GitHub account: open the Hamburger Menu → Configure Connectors → GitHub and add a Personal Access Token. When creating the PAT, the recommended scopes are <code>gist</code>, <code>read:org</code>, and <code>repo</code>.
 - Personalize Arty: adjust the system prompt, voice, VAD mode, and tool configuration from the Advanced settings sheets to match your workflow.
+- Try out text chat mode when you can't use voice.  Under settings, configure it to use text chat mode.  Note, there's no streaming token support yet, so it feels pretty slow.
 
 </details>
 
@@ -194,9 +198,20 @@ Before you run the app, patch the WebRTC library headers to work around [WebRTC 
 npm run wizard
 ```
 
-Choose `1) Patch WebRTC-lib headers`.
+And choose `1) Patch WebRTC-lib headers`, otherwise when building you will get `'sdk/objc/base/RTCMacros.h' file not found` errors.
 
 > **Note:** Alternatively, pin the WebRTC pod version to 140, which does not have the headers issue.
+
+### Create a Google Drive Client ID
+
+When building from source, you will need to provide your own Google Drive Client ID.  You can decide the permissions you want to give it, as well as whether you want to go through the verification process.
+
+[Google API Instructions](https://support.google.com/cloud/answer/15549257)
+
+For testing, the following oauth scopes are suggested:
+
+1. See and download your google drive files (included by default)
+1. See, edit, create, and delete only the specific Google Drive files you use with this app
 
 ### Run the app
 
@@ -206,14 +221,13 @@ To run in the iOS simulator:
 bunx expo run:ios
 ```
 
+⚠️ Audio is flaky on the iOS Simulator.  Using a real device is highly recommended.
+
 To run on a physical device:
 
 ```bash
 bunx expo run:ios --device
 ```
-
-
-
 
 </details>
 

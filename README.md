@@ -197,7 +197,7 @@ Before you run the app, patch the WebRTC library headers to work around [WebRTC 
 npm run wizard
 ```
 
-And choose `1) Patch WebRTC-lib headers`.
+And choose `1) Patch WebRTC-lib headers`, otherwise when building you will get `'sdk/objc/base/RTCMacros.h' file not found` errors.
 
 > **Note:** Alternatively, pin the WebRTC pod version to 140, which does not have the headers issue.
 

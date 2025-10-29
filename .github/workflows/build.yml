@@ -64,20 +64,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install CocoaPods
+      - name: Build iOS app with Expo
+        env:
+          EXPO_NO_DOCTOR: "1"
         run: |
-          cd ios
-          pod install --ansi
-
-      - name: Build with Xcode
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -workspace ios/vibemachine.xcworkspace \
-            -scheme vibemachine \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
+          CI=1 bunx expo run:ios \
+            --no-wait \
+            --scheme vibemachine \
+            --configuration Debug \
+            --simulator "iPhone 15"

@@ -73,6 +73,8 @@ jobs:
         env:
           EXPO_NO_DOCTOR: "1"
           CI: "1"
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_LOCAL_BUILD_SKIP_GIT_CHECKS: "1"
         run: |
           bunx eas-cli build --platform ios \
             --profile ios-sim-ci \

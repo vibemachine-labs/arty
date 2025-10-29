@@ -375,6 +375,7 @@ final class OpenAIWebRTCClient: NSObject {
       sessionAudioSpeed = 1.0
     }
 
+    // Store context control settings
     self.maxConversationTurns = maxConversationTurns
     self.retentionRatio = retentionRatio
 

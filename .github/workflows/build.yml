@@ -71,5 +71,4 @@ jobs:
           CI=1 bunx expo run:ios \
             --scheme vibemachine \
             --configuration Debug \
-            --no-install \
             --no-bundler

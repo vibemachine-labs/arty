@@ -69,7 +69,7 @@ jobs:
           EXPO_NO_DOCTOR: "1"
         run: |
           CI=1 bunx expo run:ios \
-            --no-wait \
             --scheme vibemachine \
             --configuration Debug \
-            --simulator "iPhone 15"
+            --no-install \
+            --no-bundler

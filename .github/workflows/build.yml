@@ -73,7 +73,7 @@ jobs:
           EXPO_NO_DOCTOR: "1"
           CI: "1"
         run: |
-          bunx eas build --platform ios \
+          bunx eas-cli build --platform ios \
             --profile ios-sim-ci \
             --local \
             --non-interactive

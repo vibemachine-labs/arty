@@ -201,6 +201,17 @@ And choose `1) Patch WebRTC-lib headers`, otherwise when building you will get `
 
 > **Note:** Alternatively, pin the WebRTC pod version to 140, which does not have the headers issue.
 
+### Create a Google Drive Client ID
+
+When building from source, you will need to provide your own Google Drive Client ID.  You can decide the permissions you want to give it, as well as whether you want to go through the verification process.
+
+[Google API Instructions](https://support.google.com/cloud/answer/15549257)
+
+For testing, the following oauth scopes are suggested:
+
+1. See and download your google drive files (included by default)
+1. See, edit, create, and delete only the specific Google Drive files you use with this app
+
 ### Run the app
 
 To run in the iOS simulator:
@@ -216,9 +227,6 @@ To run on a physical device:
 ```bash
 bunx expo run:ios --device
 ```
-
-
-
 
 </details>
 

@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 16.1.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Debug"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_API_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_API_CLIENT_ID"
+      }
+    },
+    "dev_self_contained": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "channel": "dev_self_contained",
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_API_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_API_CLIENT_ID"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_API_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_API_CLIENT_ID"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_API_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_API_CLIENT_ID"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

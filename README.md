@@ -320,23 +320,23 @@ bunx expo run:ios
 
 ### Native Swift WebRTC Client
 
-React Native WebRTC libraries did not support speakerphone mode reliably during prototyping. The native Swift implementation resolves that but adds complexity and postpones Android support.
+React Native WebRTC libraries did not reliably support speakerphone mode during prototyping. The native Swift implementation resolves this issue but adds complexity and delays Android support.
 
 ### Codegen vs Static Tools
 
-Dynamic code generation currently drives connector operations, enabling rapid prototyping. Longer term, the plan is to shift to statically defined tools with codegen as a fallback.
+Dynamic code generation currently powers connector operations, enabling rapid prototyping. Long-term, the plan is to transition to statically defined tools with codegen as a fallback option.
 
 ### MCP Support
 
-Not implemented yet because all tools are local. Future versions will add MCP server support via cloud or local tunnel.
+Not yet implemented since all tools are currently local. Future versions will add MCP server support via cloud or local tunnel connections.
 
 ### Web Search
 
-GPT-4 web search is a temporary bridge. The roadmap includes integrating a dedicated search API (e.g., Brave Search) using user-provided tokens.
+GPT-4 web search serves as a temporary solution. The roadmap includes integrating a dedicated search API (e.g., Brave Search) using user-provided API tokens.
 
 ### Voice / Text LLM backend
 
-OpenAI is the only backend today. Adding multiple and self-hosted backends is on the roadmap.
+OpenAI is currently the only supported backend. Adding support for multiple providers and self-hosted backends is on the roadmap.
 
 </details>
 

@@ -1,0 +1,106 @@
+name: OSSF Scorecard (PR)
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    # run only when relevant files change (edit as you like)
+    paths:
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '.github/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'yarn.lock'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  id-token: write
+
+jobs:
+  scorecard-base:
+    if: ${{ !github.event.pull_request.draft }}   # skip drafts
+    runs-on: ubuntu-latest
+    outputs:
+      score: ${{ steps.extract.outputs.score }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Run OSSF Scorecard
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          results_file: results.json
+          results_format: json
+          publish_results: false
+
+      - id: extract
+        run: echo "score=$(jq -r '.score' results.json)" >> "$GITHUB_OUTPUT"
+
+  scorecard-head:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    outputs:
+      score: ${{ steps.extract.outputs.score }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run OSSF Scorecard
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          results_file: results.json
+          results_format: json
+          publish_results: false
+
+      - id: extract
+        run: echo "score=$(jq -r '.score' results.json)" >> "$GITHUB_OUTPUT"
+
+  compare-and-comment:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    needs: [scorecard-base, scorecard-head]
+    steps:
+      - id: diff
+        env:
+          BASE: ${{ needs.scorecard-base.outputs.score }}
+          HEAD: ${{ needs.scorecard-head.outputs.score }}
+        run: |
+          python3 - <<'PY'
+import os, sys
+b=float(os.environ['BASE']); h=float(os.environ['HEAD'])
+d=h-b
+open('comment.md','w').write(f"""**OSSF Scorecard** (PR vs base)
+
+- Base score: **{b}**
+- PR score: **{h}**
+- Change: **{d:.2f}** ({'↑ improved' if d>0 else '↓ regressed' if d<0 else 'unchanged'})
+""")
+print(f"DIFF={d:.2f}")
+PY
+
+      - name: Post/Update PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ossf-scorecard
+          path: comment.md
+
+      - name: Fail if score regressed
+        env:
+          BASE: ${{ needs.scorecard-base.outputs.score }}
+          HEAD: ${{ needs.scorecard-head.outputs.score }}
+          TOLERANCE: "0.00"
+        run: |
+          python3 - <<'PY'
+import os, sys
+b=float(os.environ['BASE']); h=float(os.environ['HEAD']); tol=float(os.environ['TOLERANCE'])
+if h + 1e-9 < b - tol:
+    print(f"Score regressed: base={b}, head={h}")
+    sys.exit(1)
+print("No regression")
+PY

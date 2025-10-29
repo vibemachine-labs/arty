@@ -14,12 +14,15 @@ It's currently a thin wrapper around the OpenAI Realtime speech API, however the
   <img src="https://github.com/user-attachments/assets/3d0f9b19-54dc-45c2-888b-223e05fb46f4" alt="Demo video">
 </a>
 
-**What's in the Demo**:
+<details>
+  <summary>Whats's in the demo</summary>
 
-1. Navigate Google Drive via voice: "Find all files with the name vibemachine in it"
-2. Have the app summarize contents of a document in Google Drive: "Summarize the contents of the vibemachine design doc"
-3. File a Github issue: "Create a new issue to update design doc" 
-4. Show phone with github issue actually filed.
+  1. Navigate Google Drive via voice: "Find all files with the name vibemachine in it"
+  2. Have the app summarize contents of a document in Google Drive: "Summarize the contents of the vibemachine design doc"
+  3. File a Github issue: "Create a new issue to update design doc" 
+  4. Show phone with github issue actually filed.
+
+</details>
 
 ## 📱 Screenshots
 

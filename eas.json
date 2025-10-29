@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 16.1.0",
+    "version": ">= 13.0.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -32,6 +32,12 @@
       },
       "env": {
         "EXPO_PUBLIC_GOOGLE_API_CLIENT_ID": "$EXPO_PUBLIC_GOOGLE_API_CLIENT_ID"
+      }
+    },
+    "ios-sim-ci": {
+      "developmentClient": false,
+      "ios": {
+        "simulator": true
       }
     },
     "production": {

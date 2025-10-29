@@ -67,11 +67,13 @@ jobs:
       - name: Patch native files via wizard
         run: node wizard.js --auto-select 1
 
-      - name: Build iOS app with Expo
+      # Build with Expo tooling only; doesn't run the app
+      - name: Build iOS (Simulator) with EAS local
         env:
           EXPO_NO_DOCTOR: "1"
+          CI: "1"
         run: |
-          CI=1 bunx expo run:ios \
-            --scheme vibemachine \
-            --configuration Debug \
-            --no-bundler
+          bunx eas build --platform ios \
+            --profile ios-sim-ci \
+            --local \
+            --non-interactive

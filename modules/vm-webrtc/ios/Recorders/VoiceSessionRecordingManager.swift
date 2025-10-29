@@ -81,7 +81,7 @@ final class VoiceSessionRecorder {
       try session.setCategory(
         .playAndRecord,
         mode: .voiceChat,
-        options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker]
+        options: [.allowBluetooth, .defaultToSpeaker]
       )
     }
 

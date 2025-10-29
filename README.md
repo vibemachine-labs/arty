@@ -1,5 +1,8 @@
 # 🎙️ Meet Arty, your Voice-Powered Mobile Assistant
 
+[![TestFlight](https://img.shields.io/badge/TestFlight-available-blue)](https://testflight.apple.com/join/DyK83gVd)
+[![OSSF Scorecard](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml/badge.svg)](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml)
+
 An open-source, privacy-first voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."
 
 Connects to your Google Drive, Github, and the web. 

@@ -32,6 +32,34 @@ env:
   BUN_VERSION: "1.1.34"
 
 jobs:
+  detect-ios-build-changes:
+    name: Detect iOS Build-Relevant Changes
+    runs-on: ubuntu-latest
+    outputs:
+      ios_build: ${{ steps.filter.outputs.ios_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ios_build:
+              - 'modules/**/*.swift'
+              - 'modules/**/*.m'
+              - 'modules/**/*.mm'
+              - 'modules/**/*.h'
+              - 'modules/**/*.hpp'
+              - 'modules/**/*.plist'
+              - 'modules/**/ios/**'
+              - 'app.json'
+              - 'app.config.js'
+              - 'app.config.ts'
+              - 'eas.json'
+              - 'expo-env.d.ts'
+
   typecheck:
     name: TypeScript (tsc --noEmit)
     runs-on: ubuntu-latest
@@ -52,7 +80,10 @@ jobs:
   ios-build:
     name: iOS Simulator Build
     runs-on: macos-15
-    needs: typecheck
+    needs:
+      - typecheck
+      - detect-ios-build-changes
+    if: ${{ needs.detect-ios-build-changes.outputs.ios_build == 'true' }}
     steps:
       - uses: actions/checkout@v4
 

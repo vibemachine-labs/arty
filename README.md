@@ -115,6 +115,7 @@ This project offers a fully open alternative: local execution, no data monetizat
 
 - Connect your GitHub account: open the Hamburger Menu → Configure Connectors → GitHub and add a Personal Access Token. When creating the PAT, the recommended scopes are <code>gist</code>, <code>read:org</code>, and <code>repo</code>.
 - Personalize Arty: adjust the system prompt, voice, VAD mode, and tool configuration from the Advanced settings sheets to match your workflow.
+- Try out text chat mode when you can't use voice.  Under settings, configure it to use text chat mode.  Note, there's no streaming token support yet, so it feels pretty slow.
 
 </details>
 

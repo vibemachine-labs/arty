@@ -170,8 +170,6 @@ class TTSSegmentGenerator: NSObject {
                         completion: completion
                     )
                 }
-            } else if buffer == nil {
-                print("[TTSGenerator] ⚠️ Received nil buffer")
             } else {
                 print("[TTSGenerator] ⚠️ Received unknown buffer type: \(type(of: buffer))")
             }

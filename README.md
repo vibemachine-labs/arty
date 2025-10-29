@@ -1,5 +1,7 @@
 # 🎙️ Meet Arty, your Voice-Powered Mobile Assistant
 
+[![OSSF Scorecard](https://github.com/vibemachine/arty/actions/workflows/scorecard-pr.yml/badge.svg)](https://github.com/vibemachine/arty/actions/workflows/scorecard-pr.yml)
+
 An open-source, privacy-first voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."
 
 Connects to your Google Drive, Github, and the web. 

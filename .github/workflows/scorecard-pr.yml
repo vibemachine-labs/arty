@@ -12,6 +12,16 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'yarn.lock'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '.github/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'yarn.lock'
   workflow_dispatch: {}
 
 permissions:
@@ -22,7 +32,7 @@ permissions:
 
 jobs:
   scorecard-base:
-    if: ${{ !github.event.pull_request.draft }}   # skip drafts
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}   # skip drafts
     runs-on: ubuntu-latest
     outputs:
       score: ${{ steps.extract.outputs.score }}
@@ -42,7 +52,7 @@ jobs:
         run: echo "score=$(jq -r '.score' results.json)" >> "$GITHUB_OUTPUT"
 
   scorecard-head:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     outputs:
       score: ${{ steps.extract.outputs.score }}
@@ -62,7 +72,7 @@ jobs:
         run: echo "score=$(jq -r '.score' results.json)" >> "$GITHUB_OUTPUT"
 
   compare-and-comment:
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     needs: [scorecard-base, scorecard-head]
     steps:
@@ -115,3 +125,16 @@ jobs:
 
           print("No regression")
           PY
+
+  scorecard-main:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OSSF Scorecard
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          results_file: results.json
+          results_format: json
+          publish_results: false

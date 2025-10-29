@@ -64,9 +64,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Patch native files via wizard
-        run: node wizard.js --auto-select 1
-
       # Build with Expo tooling only; doesn't run the app
       # Requires EAS_TOKEN secret to be set in GitHub repo settings
       - name: Build iOS (Simulator) with EAS local

@@ -193,18 +193,6 @@ curl -fsSL https://bun.sh/install | bash
 bun install
 ```
 
-### Patch WebRTC headers
-
-Before you run the app, patch the WebRTC library headers to work around [WebRTC issue #132](https://github.com/stasel/WebRTC/issues/132):
-
-```bash
-npm run wizard
-```
-
-And choose `1) Patch WebRTC-lib headers`, otherwise when building you will get `'sdk/objc/base/RTCMacros.h' file not found` errors.
-
-> **Note:** Alternatively, pin the WebRTC pod version to 140, which does not have the headers issue.
-
 ### Create a Google Drive Client ID
 
 When building from source, you will need to provide your own Google Drive Client ID.  You can decide the permissions you want to give it, as well as whether you want to go through the verification process.

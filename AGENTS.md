@@ -18,7 +18,7 @@ eas build --platform ios --profile dev_self_contained --non-interactive
 eas build --platform ios --profile dev_self_contained --non-interactive --local
 
 # Full rebuild with prebuild and wizard
-CI=1 bunx expo prebuild --clean --platform ios && node wizard.js --auto-select 1 && eas build --platform ios --profile dev_self_contained --non-interactive
+CI=1 bunx expo prebuild --clean --platform ios && eas build --platform ios --profile dev_self_contained --non-interactive
 ```
 
 ### Production Builds:
@@ -27,7 +27,7 @@ CI=1 bunx expo prebuild --clean --platform ios && node wizard.js --auto-select 1
 eas build --platform ios --profile production --non-interactive
 
 # Production with prebuild
-CI=1 bunx expo prebuild --clean --platform ios && node wizard.js --auto-select 1 && eas build --platform ios --profile production --non-interactive
+CI=1 bunx expo prebuild --clean --platform ios && eas build --platform ios --profile production --non-interactive
 
 # Both dev and production together
 eas build --platform ios --profile dev_self_contained --non-interactive && eas build --platform ios --profile production --non-interactive
@@ -49,7 +49,7 @@ eas update --branch production --message "Update for self-contained app" --non-i
 ## **Most Common Pattern**
 The most frequently used command appears to be:
 ```bash
-CI=1 bunx expo prebuild --clean --platform ios && node wizard.js --auto-select 1 && eas build --platform ios --profile dev_self_contained --non-interactive
+CI=1 bunx expo prebuild --clean --platform ios && eas build --platform ios --profile dev_self_contained --non-interactive
 ```
 
 This does a clean prebuild, runs the wizard, and builds for the `dev_self_contained` profile.

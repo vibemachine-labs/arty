@@ -72,17 +72,23 @@ jobs:
           HEAD: ${{ needs.scorecard-head.outputs.score }}
         run: |
           python3 - <<'PY'
-import os, sys
-b=float(os.environ['BASE']); h=float(os.environ['HEAD'])
-d=h-b
-open('comment.md','w').write(f"""**OSSF Scorecard** (PR vs base)
+          import os, sys
 
-- Base score: **{b}**
-- PR score: **{h}**
-- Change: **{d:.2f}** ({'↑ improved' if d>0 else '↓ regressed' if d<0 else 'unchanged'})
-""")
-print(f"DIFF={d:.2f}")
-PY
+          b = float(os.environ['BASE'])
+          h = float(os.environ['HEAD'])
+          d = h - b
+
+          comment = (
+              "**OSSF Scorecard** (PR vs base)\n\n"
+              f"- Base score: **{b}**\n"
+              f"- PR score: **{h}**\n"
+              f"- Change: **{d:.2f}** "
+              f"({'improved' if d > 0 else 'regressed' if d < 0 else 'unchanged'})\n"
+          )
+
+          open('comment.md', 'w').write(comment)
+          print(f"DIFF={d:.2f}")
+          PY
 
       - name: Post/Update PR comment
         uses: marocchino/sticky-pull-request-comment@v2
@@ -97,10 +103,15 @@ PY
           TOLERANCE: "0.00"
         run: |
           python3 - <<'PY'
-import os, sys
-b=float(os.environ['BASE']); h=float(os.environ['HEAD']); tol=float(os.environ['TOLERANCE'])
-if h + 1e-9 < b - tol:
-    print(f"Score regressed: base={b}, head={h}")
-    sys.exit(1)
-print("No regression")
-PY
+          import os, sys
+
+          b = float(os.environ['BASE'])
+          h = float(os.environ['HEAD'])
+          tol = float(os.environ['TOLERANCE'])
+
+          if h + 1e-9 < b - tol:
+              print(f"Score regressed: base={b}, head={h}")
+              sys.exit(1)
+
+          print("No regression")
+          PY

@@ -385,7 +385,6 @@ final class OpenAIWebRTCClient: NSObject {
       .info,
       "Starting OpenAI WebRTC connection",
       metadata: [
-        "hasApiKey": !apiKey.isEmpty,
         "hasModel": (model?.isEmpty == false),
         "hasBaseURL": (baseURL?.isEmpty == false),
         "audioOutput": audioOutput.rawValue,

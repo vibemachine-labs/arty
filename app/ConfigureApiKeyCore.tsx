@@ -72,7 +72,7 @@ export const ConfigureApiKeyCore: React.FC<ConfigureApiKeyCoreProps> = ({
       log.info(
         '🔄 ConfigureApiKeyCore: API key loaded result:',
         {},
-        savedKey ? `exists (length: ${savedKey.length})` : 'not found'
+        savedKey ? 'exists' : 'not found'
       );
     } catch (error) {
       log.error('❌ ConfigureApiKeyCore: Failed to load current API key:', {}, error);

@@ -2,6 +2,22 @@ import { initializeLogfire, logfireEvent } from './otel';
 import { trace } from '@opentelemetry/api';
 
 const LOG_PREFIX = 'VmConsoleLog';
+const REDACTED_TEXT = '[REDACTED]';
+const SENSITIVE_KEYWORDS = [
+  'password',
+  'passwd',
+  'secret',
+  'token',
+  'apikey',
+  'api_key',
+  'credential',
+  'session',
+  'cookie',
+  'auth',
+  'authorization',
+  'bearer',
+  'key',
+] as const;
 
 const levelPriority = {
   debug: 10,
@@ -11,6 +27,75 @@ const levelPriority = {
 } as const;
 
 type LogLevel = keyof typeof levelPriority;
+
+const hasSensitiveKeyword = (value: string) => {
+  const lower = value.toLowerCase();
+  return SENSITIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
+
+const isLikelySensitiveString = (value: string) => {
+  if (!value) {
+    return false;
+  }
+
+  if (hasSensitiveKeyword(value)) {
+    return true;
+  }
+
+  if (/^bearer\s+\S+/i.test(value)) {
+    return true;
+  }
+
+  if (/^[A-Za-z0-9+/=]{32,}$/.test(value) && !/^\d+$/.test(value)) {
+    return true;
+  }
+
+  return false;
+};
+
+const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return keyHint && hasSensitiveKeyword(keyHint) ? REDACTED_TEXT : isLikelySensitiveString(value) ? REDACTED_TEXT : value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: isLikelySensitiveString(value.message) ? REDACTED_TEXT : value.message,
+      stack: value.stack,
+    };
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeValue(entry));
+  }
+
+  if (typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+      result[key] = hasSensitiveKeyword(key) ? REDACTED_TEXT : sanitizeValue(val, key);
+    });
+    return result;
+  }
+
+  return REDACTED_TEXT;
+};
+
+const sanitizeMessage = (message: string) => (isLikelySensitiveString(message) ? REDACTED_TEXT : message);
+
+const sanitizeArgs = (args: unknown[]) => args.map((arg) => sanitizeValue(arg));
 
 const getMinimumLevel = (): LogLevel => {
   const raw = process.env.EXPO_PUBLIC_LOG_LEVEL?.toLowerCase();
@@ -31,6 +116,7 @@ const shouldLog = (level: LogLevel) => levelPriority[level] >= levelPriority[min
 
 export type LogOptions = {
   emit2logfire?: boolean;
+  allowSensitiveLogging?: boolean;
 };
 
 const emit = (level: LogLevel, message: string, options: LogOptions, ...args: unknown[]) => {
@@ -38,24 +124,28 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
     return;
   }
 
+  const allowSensitiveLogging = options.allowSensitiveLogging === true;
+  const safeMessage = allowSensitiveLogging ? message : sanitizeMessage(message);
+  const safeArgs = allowSensitiveLogging ? args : sanitizeArgs(args);
+
   const timestamp = new Date().toISOString();
   const prefix = `[${LOG_PREFIX}][${level.toUpperCase()}][${timestamp}]`;
 
   switch (level) {
     case 'debug':
-      console.debug(prefix, message, ...args);
+      console.debug(prefix, safeMessage, ...safeArgs);
       break;
     case 'info':
-      console.info(prefix, message, ...args);
+      console.info(prefix, safeMessage, ...safeArgs);
       break;
     case 'warn':
-      console.warn(prefix, message, ...args);
+      console.warn(prefix, safeMessage, ...safeArgs);
       break;
     case 'error':
-      console.error(prefix, message, ...args);
+      console.error(prefix, safeMessage, ...safeArgs);
       break;
     default:
-      console.log(prefix, message, ...args);
+      console.log(prefix, safeMessage, ...safeArgs);
       break;
   }
 
@@ -68,8 +158,8 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
     };
 
     // Add any additional args as attributes
-    if (args.length > 0) {
-      args.forEach((arg, index) => {
+    if (safeArgs.length > 0) {
+      safeArgs.forEach((arg, index) => {
         if (arg && typeof arg === 'object' && !Array.isArray(arg)) {
           Object.assign(attrs, arg);
         } else {
@@ -78,7 +168,7 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
       });
     }
 
-    logfireEvent(message, attrs);
+    logfireEvent(safeMessage, attrs);
   }
 };
 

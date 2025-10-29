@@ -183,14 +183,7 @@ export const openOpenAIConnectionAsync = async (
     audioSpeed: resolvedAudioSpeed,
   };
 
-  // Log API key with first 4 and last 4 characters visible
-  const apiKeyPreview = options.apiKey && options.apiKey.length >= 8
-    ? `${options.apiKey.slice(0, 4)}...${options.apiKey.slice(-4)}`
-    : '(too short to preview)';
-
   log.debug(`[${MODULE_NAME}] openOpenAIConnectionAsync invoked`, {}, {
-    apiKeyPreview,
-    hasApiKey: Boolean(options.apiKey),
     hasBaseUrl: Boolean(options.baseUrl),
     hasModel: Boolean(options.model),
     audioOutput: options.audioOutput ?? 'handset',

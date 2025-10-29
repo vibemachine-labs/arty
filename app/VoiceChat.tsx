@@ -333,7 +333,6 @@ export function VoiceChat({
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
 
       log.info("Starting OpenAI voice session", {}, {
-        hasApiKey: Boolean(baseConnectionOptions.apiKey),
         hasBaseUrl: Boolean(baseConnectionOptions.baseUrl),
         hasModel: Boolean(baseConnectionOptions.model),
         audioOutput,

@@ -9,10 +9,9 @@ export const composeMainPrompt = (addition: string): string =>
   composePrompt(BASE_MAIN_PROMPT, addition);
 
 export const loadMainPromptAddition = async (): Promise<string> =>
-  loadPromptAddition(MAIN_PROMPT_STORAGE_KEY);
+  loadPromptAddition(MAIN_PROMPT_STORAGE_K
 
-export const saveMainPromptAddition = async (addition: string): Promise<void> =>
-  savePromptAddition(MAIN_PROMPT_STORAGE_KEY, addition);
+export const saveMainPromptAddition = async (addition: string): Promise<void> 
 
 export const loadComposedMainPrompt = async (): Promise<string> => {
   const addition = await loadMainPromptAddition();

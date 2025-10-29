@@ -103,7 +103,11 @@ export function invalidateCache(): void {
 }
 
 export async function saveApiKey(apiKey: string): Promise<void> {
-  log.info('🔄 Attempting to save API key, length:', {}, apiKey?.length);
+  if (!apiKey || apiKey.length === 0) {
+    throw new Error('API key must not be empty.');
+  }
+
+  log.info('🔄 Attempting to save API key...', {});
 
   try {
     await SecureStore.setItemAsync(OPENAI_API_KEY, apiKey);
@@ -112,7 +116,7 @@ export async function saveApiKey(apiKey: string): Promise<void> {
 
     const verification = await SecureStore.getItemAsync(OPENAI_API_KEY);
     if (verification) {
-      log.info('✅ SecureStore verification successful, length:', {}, verification.length);
+      log.info('✅ SecureStore verification successful', {});
     } else {
       log.error('❌ SecureStore verification failed', {});
     }
@@ -142,7 +146,7 @@ export async function getApiKey(options?: { forceSecureStore?: boolean }): Promi
     memoryCache[OPENAI_API_KEY] = apiKey;
 
     if (apiKey) {
-      log.info('✅ OpenAI API key retrieved from SecureStore, length:', {}, apiKey.length);
+      log.info('✅ OpenAI API key retrieved from SecureStore', {});
       return apiKey;
     }
 
@@ -204,7 +208,11 @@ export function isValidApiKey(apiKey: string): boolean {
 
 // GitHub Token Functions
 export async function saveGithubToken(token: string): Promise<void> {
-  log.info('🔄 Attempting to save GitHub token, length:', {}, token?.length);
+  if (!token || token.length === 0) {
+    throw new Error('GitHub token must not be empty.');
+  }
+
+  log.info('🔄 Attempting to save GitHub token...', {});
 
   try {
     await SecureStore.setItemAsync(GITHUB_TOKEN_KEY, token);
@@ -213,7 +221,7 @@ export async function saveGithubToken(token: string): Promise<void> {
 
     const verification = await SecureStore.getItemAsync(GITHUB_TOKEN_KEY);
     if (verification) {
-      log.info('✅ SecureStore verification successful, length:', {}, verification.length);
+      log.info('✅ SecureStore verification successful', {});
     } else {
       log.error('❌ SecureStore verification failed', {});
     }
@@ -241,7 +249,7 @@ export async function getGithubToken(): Promise<string | null> {
     memoryCache[GITHUB_TOKEN_KEY] = token;
 
     if (token) {
-      log.info('✅ GitHub token retrieved from SecureStore, length:', {}, token.length);
+      log.info('✅ GitHub token retrieved from SecureStore', {});
       return token;
     }
 
@@ -297,7 +305,11 @@ export function isValidGithubToken(token: string): boolean {
 
 // Google Drive Client ID (override and effective getter)
 export async function saveGDriveClientIdOverride(clientId: string): Promise<void> {
-  log.info('🔄 Saving GDrive Client ID override, length:', {}, clientId?.length);
+  if (!clientId || clientId.length === 0) {
+    throw new Error('GDrive Client ID override must not be empty.');
+  }
+
+  log.info('🔄 Saving GDrive Client ID override...', {});
   try {
     await SecureStore.setItemAsync(GDRIVE_CLIENT_ID_OVERRIDE_KEY, clientId);
     invalidateCache();
@@ -371,7 +383,11 @@ export async function getGDriveClientId(): Promise<string | null> {
 
 // Google Drive Tokens
 export async function saveGDriveAccessToken(token: string): Promise<void> {
-  log.info('🔄 Saving GDrive access token, length:', {}, token?.length);
+  if (!token || token.length === 0) {
+    throw new Error('GDrive access token must not be empty.');
+  }
+
+  log.info('🔄 Saving GDrive access token...', {});
   try {
     await SecureStore.setItemAsync(GDRIVE_ACCESS_TOKEN_KEY, token);
     invalidateCache();
@@ -393,7 +409,11 @@ export async function setGDriveAccessToken(token: string, _expiresIn?: number): 
 }
 
 export async function saveGDriveRefreshToken(token: string): Promise<void> {
-  log.info('🔄 Saving GDrive refresh token, length:', {}, token?.length);
+  if (!token || token.length === 0) {
+    throw new Error('GDrive refresh token must not be empty.');
+  }
+
+  log.info('🔄 Saving GDrive refresh token...', {});
   try {
     await SecureStore.setItemAsync(GDRIVE_REFRESH_TOKEN_KEY, token);
     invalidateCache();
@@ -496,7 +516,11 @@ export async function deleteGDriveTokens(): Promise<void> {
 
 // Pydantic Logfire API Key Functions
 export async function saveLogfireApiKey(apiKey: string): Promise<void> {
-  log.info('🔄 Attempting to save Logfire API key, length:', {}, apiKey?.length);
+  if (!apiKey || apiKey.length === 0) {
+    throw new Error('Logfire API key must not be empty.');
+  }
+
+  log.info('🔄 Attempting to save Logfire API key...', {});
 
   try {
     await SecureStore.setItemAsync(LOGFIRE_API_KEY, apiKey);
@@ -505,7 +529,7 @@ export async function saveLogfireApiKey(apiKey: string): Promise<void> {
 
     const verification = await SecureStore.getItemAsync(LOGFIRE_API_KEY);
     if (verification) {
-      log.info('✅ SecureStore verification successful, length:', {}, verification.length);
+      log.info('✅ SecureStore verification successful', {});
     } else {
       log.error('❌ SecureStore verification failed', {});
     }
@@ -533,7 +557,7 @@ export async function getLogfireApiKey(): Promise<string | null> {
     memoryCache[LOGFIRE_API_KEY] = apiKey;
 
     if (apiKey) {
-      log.info('✅ Logfire API key retrieved from SecureStore, length:', {}, apiKey.length);
+      log.info('✅ Logfire API key retrieved from SecureStore', {});
       return apiKey;
     }
 

@@ -194,7 +194,7 @@ Before you run the app, patch the WebRTC library headers to work around [WebRTC 
 npm run wizard
 ```
 
-Choose `1) Patch WebRTC-lib headers`.
+And choose `1) Patch WebRTC-lib headers`.
 
 > **Note:** Alternatively, pin the WebRTC pod version to 140, which does not have the headers issue.
 
@@ -205,6 +205,8 @@ To run in the iOS simulator:
 ```bash
 bunx expo run:ios
 ```
+
+⚠️ Audio is flaky on the iOS Simulator.  Using a real device is highly recommended.
 
 To run on a physical device:
 

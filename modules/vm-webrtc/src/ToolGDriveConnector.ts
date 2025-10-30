@@ -255,7 +255,7 @@ Here is some sample code:
     modifiedTime: file.modifiedTime,
     owner: (file.owners && file.owners[0] && file.owners[0].emailAddress) || null
   })));
-})("runpod")`,
+})("search_param_goes_here")`,
   parameters: {
     type: 'object',
     properties: {

@@ -224,6 +224,29 @@ final class OpenAIWebRTCClient: NSObject {
     ])
   }
 
+  private func appendToolDefinition(
+    for delegate: BaseTool?,
+    warningMessage: String,
+    definitionsByName: [String: [String: Any]],
+    tools: inout [[String: Any]]
+  ) {
+    guard let delegate else { return }
+    let toolName = delegate.toolName
+    if let definition = definitionsByName[toolName] {
+      tools.append(definition)
+    } else {
+      emit(
+        .warn,
+        warningMessage,
+        metadata: [
+          "toolName": toolName,
+          "availableDefinitions": Array(definitionsByName.keys)
+        ],
+        propagateToReactNative: true
+      )
+    }
+  }
+
   private let defaultEndpoint = "https://api.openai.com/v1/realtime"
   private let defaultModel = "gpt-realtime"
   private let iceGatheringGracePeriod: TimeInterval = 0.5
@@ -1140,72 +1163,20 @@ final class OpenAIWebRTCClient: NSObject {
       definitionsByName[name] = definition
     }
 
-    if let githubDelegate = githubConnectorDelegate {
-      let toolName = githubDelegate.toolName
-      if let definition = definitionsByName[toolName] {
-        tools.append(definition)
-      } else {
-        emit(
-          .warn,
-          "No JavaScript-provided definition found for github connector tool",
-          metadata: [
-            "toolName": toolName,
-            "availableDefinitions": Array(definitionsByName.keys)
-          ],
-          propagateToReactNative: true
-        )
-      }
-    }
+    let delegateWarnings: [(BaseTool?, String)] = [
+      (githubConnectorDelegate, "No JavaScript-provided definition found for github connector tool"),
+      (gdriveConnectorDelegate, "No JavaScript-provided definition found for gdrive connector tool"),
+      (gpt5GDriveFixerDelegate, "No JavaScript-provided definition found for GPT5 gdrive fixer tool"),
+      (gpt5WebSearchDelegate, "No JavaScript-provided definition found for GPT5 web search tool")
+    ]
 
-    if let gdriveDelegate = gdriveConnectorDelegate {
-      let toolName = gdriveDelegate.toolName
-      if let definition = definitionsByName[toolName] {
-        tools.append(definition)
-      } else {
-        emit(
-          .warn,
-          "No JavaScript-provided definition found for gdrive connector tool",
-          metadata: [
-            "toolName": toolName,
-            "availableDefinitions": Array(definitionsByName.keys)
-          ],
-          propagateToReactNative: true
-        )
-      }
-    }
-
-    if let fixerDelegate = gpt5GDriveFixerDelegate {
-      let toolName = fixerDelegate.toolName
-      if let definition = definitionsByName[toolName] {
-        tools.append(definition)
-      } else {
-        emit(
-          .warn,
-          "No JavaScript-provided definition found for GPT5 gdrive fixer tool",
-          metadata: [
-            "toolName": toolName,
-            "availableDefinitions": Array(definitionsByName.keys)
-          ],
-          propagateToReactNative: true
-        )
-      }
-    }
-
-    if let webSearchDelegate = gpt5WebSearchDelegate {
-      let toolName = webSearchDelegate.toolName
-      if let definition = definitionsByName[toolName] {
-        tools.append(definition)
-      } else {
-        emit(
-          .warn,
-          "No JavaScript-provided definition found for GPT5 web search tool",
-          metadata: [
-            "toolName": toolName,
-            "availableDefinitions": Array(definitionsByName.keys)
-          ],
-          propagateToReactNative: true
-        )
-      }
+    for (delegate, warning) in delegateWarnings {
+      appendToolDefinition(
+        for: delegate,
+        warningMessage: warning,
+        definitionsByName: definitionsByName,
+        tools: &tools
+      )
     }
 
     if tools.isEmpty && !toolDefinitions.isEmpty {

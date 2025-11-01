@@ -15,7 +15,7 @@ It's currently a thin wrapper around the OpenAI Realtime speech API, however the
 (Does not play directly, this links to a Vimeo.  Open in a new tab.)
 
 <a href="https://vimeo.com/manage/videos/1127547235" target="_blank">
-  <img src="https://github.com/user-attachments/assets/3d0f9b19-54dc-45c2-888b-223e05fb46f4" alt="Demo video">
+  <img src="https://github.com/user-attachments/assets/e500b199-f0a2-4d6b-9a1a-f572fc48361a" alt="Demo video">
 </a>
 
 <details>

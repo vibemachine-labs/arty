@@ -234,9 +234,7 @@ To open the project in Xcode:
 xed ios
 ```
 
-In Xcode, the project appears under **Pods / Development Pods**:
-
-![Xcode Development Pods](https://github.com/user-attachments/assets/bea7ee11-3cd6-4a7a-a620-a273a01ce316)
+In Xcode, the native swift code will be under **Pods / Development Pods**
 
 </details>
 

@@ -33,15 +33,15 @@ It's currently a thin wrapper around the OpenAI Realtime speech API, however the
 <table style="border-collapse:collapse; border-spacing:0; border:none; margin:0 auto;">
   <tr>
     <td align="center" style="border:none; padding:0 12px;">
-      <img width="250" alt="Voice chat home screen" src="https://github.com/user-attachments/assets/71eafec2-8979-4455-9852-29e9ef0d0335" />
+      <img width="250" alt="Voice chat home screen" src="https://github.com/user-attachments/assets/16cebc15-46bc-4e9a-8896-17355d079967" />
       <div>Voice chat (home screen)</div>
     </td>
     <td align="center" style="border:none; padding:0 12px;">
-      <img width="250" alt="Text chat conversation" src="https://github.com/user-attachments/assets/c2c390a5-2a40-46b5-a29d-a243be0886b3" />
+      <img width="250" alt="Text chat conversation" src="https://github.com/user-attachments/assets/23a68aad-9b6b-4b21-aebb-2cc73c83530d" />
       <div>Text chat</div>
     </td>
     <td align="center" style="border:none; padding:0 12px;">
-      <img width="250" alt="Configure connectors screen" src="https://github.com/user-attachments/assets/a9406767-d6fa-4284-a813-1e029ad1b345" />
+      <img width="250" alt="Configure connectors screen" src="https://github.com/user-attachments/assets/5270b4ce-0951-45df-b7b0-9d1ae6402f5d" />
       <div>Configure connectors</div>
     </td>
   </tr>
@@ -55,7 +55,7 @@ This project offers a fully open alternative: local execution, no data monetizat
 
 ## ▶️ Install it via TestFlight
 
-[<img src="https://github.com/user-attachments/assets/8d82e676-b913-45a5-91e4-f37e1df99e97" alt="Join the TestFlight beta" width="220" />](https://testflight.apple.com/join/DyK83gVd)
+[<img src="https://github.com/user-attachments/assets/33a4ed30-f00d-4639-9389-022d8f9bf581" alt="Join the TestFlight beta" width="220" />](https://testflight.apple.com/join/DyK83gVd)
 
 [Test Flight Installation](https://testflight.apple.com/join/DyK83gVd)
 

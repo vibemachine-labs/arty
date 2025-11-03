@@ -10,6 +10,8 @@ Connects to your Google Drive, Github, and the web.
 
 It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source stack.
 
+If this sounds interesting, [star the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to help it grow.
+
 ## 🎥 Demo Reel (80 seconds)
 
 (Does not play directly, this links to a Vimeo.  Open in a new tab.)

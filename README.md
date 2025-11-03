@@ -1,5 +1,6 @@
 # 🎙️ Meet Arty, your Voice-Powered Mobile Assistant
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/08f588cf539c47ed8395b819789882b3)](https://app.codacy.com/gh/vibemachine-labs/arty?utm_source=github.com&utm_medium=referral&utm_content=vibemachine-labs/arty&utm_campaign=Badge_Grade)
 [![TestFlight](https://img.shields.io/badge/TestFlight-available-blue)](https://testflight.apple.com/join/DyK83gVd)
 [![OSSF Scorecard](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml/badge.svg)](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml)
 [![Snyk](https://snyk.io/test/github/vibemachine-labs/arty/badge.svg)](https://snyk.io/test/github/vibemachine-labs/arty)

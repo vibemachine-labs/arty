@@ -1,4 +1,4 @@
-import { initializeLogfire, logfireEvent } from './otel';
+import { initializeLogfire, logfireEvent, registerLogfireLogger } from './otel';
 import { trace } from '@opentelemetry/api';
 import { loadLogRedactionDisabled, saveLogRedactionDisabled } from './developerSettings';
 
@@ -288,5 +288,7 @@ export const log = {
     }
   },
 };
+
+registerLogfireLogger(log);
 
 export type Logger = typeof log;

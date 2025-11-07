@@ -1,27 +1,62 @@
+import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
 import { trace, type Tracer } from "@opentelemetry/api";
 import { BasicTracerProvider, BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 
-import VmWebrtcModule from "../modules/vm-webrtc";
 import { getLogfireApiKey, getLogfireEnabled } from "./secure-storage";
-import { log } from "./logger";
 
 type NativeTracingModule = {
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
   logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
 };
 
+type LoggerOptions = {
+  emit2logfire?: boolean;
+  allowSensitiveLogging?: boolean;
+};
+
+type LoggerLike = {
+  debug: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+  info: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+  warn: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+  error: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+};
+
+const fallbackLogger: LoggerLike = {
+  debug: (message, _options, ...args) => console.debug("[Logfire]", message, ...args),
+  info: (message, _options, ...args) => console.info("[Logfire]", message, ...args),
+  warn: (message, _options, ...args) => console.warn("[Logfire]", message, ...args),
+  error: (message, _options, ...args) => console.error("[Logfire]", message, ...args),
+};
+
+let currentLogger: LoggerLike = fallbackLogger;
+
+export const registerLogfireLogger = (logger: LoggerLike | undefined): void => {
+  if (logger) {
+    currentLogger = logger;
+  }
+};
+
+const log: LoggerLike = {
+  debug: (message, options, ...args) => currentLogger.debug(message, options, ...args),
+  info: (message, options, ...args) => currentLogger.info(message, options, ...args),
+  warn: (message, options, ...args) => currentLogger.warn(message, options, ...args),
+  error: (message, options, ...args) => currentLogger.error(message, options, ...args),
+};
+
 const SERVICE_NAME = "vibemachine";
 const TRACER_NAME = "vibemachine-tracer";
 const LOGFIRE_ENDPOINT = "https://logfire-us.pydantic.dev/v1/traces";
+
+const MODULE_NAME = "VmWebrtc";
 
 const resolveNativeModule = (): NativeTracingModule | undefined => {
   if (Platform.OS !== "ios") {
     return undefined;
   }
 
-  const candidate = VmWebrtcModule as Partial<NativeTracingModule> | undefined;
+  const candidate = requireOptionalNativeModule<NativeTracingModule>(MODULE_NAME);
   if (
     candidate &&
     typeof candidate.initializeLogfireTracing === "function" &&

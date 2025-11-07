@@ -46,6 +46,7 @@ public class VmWebrtcModule: Module {
   private var toolGDriveConnector: ToolGDriveConnector?
   private var toolGPT5GDriveFixer: ToolGPT5GDriveFixer?
   private var toolGPT5WebSearch: ToolGPT5WebSearch?
+  private var toolHackerNews: [HackerNewsToolName: ToolHackerNews] = [:]
 
   public func helloFromExpoModule() -> String {
     return "Hello world from module"
@@ -77,6 +78,8 @@ public class VmWebrtcModule: Module {
       "onGPT5GDriveFixerResponse",
       "onGPT5WebSearchRequest",
       "onGPT5WebSearchResponse",
+      "onHackerNewsToolRequest",
+      "onHackerNewsToolResponse",
       "onIdleTimeout",
       "onTokenUsage",
       "onRealtimeError",
@@ -130,6 +133,15 @@ public class VmWebrtcModule: Module {
       } else {
         print("[VmWebrtc] Delegate set NOT: GPT5 web search")
       }
+
+      var hackerNewsDelegates: [String: BaseTool] = [:]
+      for name in HackerNewsToolName.allCases {
+        let tool = ToolHackerNews(module: self, responder: self.webrtcClient, name: name)
+        self.toolHackerNews[name] = tool
+        hackerNewsDelegates[name.rawValue] = tool
+      }
+      self.webrtcClient.setHackerNewsDelegates(hackerNewsDelegates)
+      print("[VmWebrtc] Hacker News tools initialized =", hackerNewsDelegates.keys)
       print("[VmWebrtc] Delegates set: github, possibly GDrive")
     }
 
@@ -218,6 +230,16 @@ public class VmWebrtcModule: Module {
     Function("sendGPT5WebSearchResponse") { (requestId: String, result: String) in
       print("[VmWebrtc] JS→Native sendGPT5WebSearchResponse requestId=\(requestId) resultLen=\(result.count)")
       self.toolGPT5WebSearch?.handleResponse(requestId: requestId, result: result)
+    }
+
+    Function("sendHackerNewsToolResponse") { (requestId: String, toolName: String, result: String) in
+      guard let name = HackerNewsToolName(rawValue: toolName),
+            let tool = self.toolHackerNews[name] else {
+        print("[VmWebrtc] ⚠️ Unknown Hacker News tool response: \(toolName)")
+        return
+      }
+      print("[VmWebrtc] JS→Native sendHackerNewsToolResponse tool=\(toolName) requestId=\(requestId)")
+      tool.handleResponse(requestId: requestId, result: result)
     }
 
     // Github Connector function - calls JavaScript github connector via events

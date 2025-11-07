@@ -12,6 +12,7 @@ export { githubConnectorDefinition } from './ToolGithubConnector';
 export { gdriveConnectorDefinition } from './ToolGDriveConnector';
 export { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 export { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
+export { hackerNewsToolDefinitions } from './ToolHackerNews';
 
 type VmWebrtcModuleEvents = {
   onChange: (params: ChangeEventPayload) => void;

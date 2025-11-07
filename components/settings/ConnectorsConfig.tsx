@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GDriveConnectorConfig } from "./GDriveConnectorConfig";
@@ -18,6 +19,10 @@ import {
   type ConnectorOption,
 } from "./connectorOptions";
 import { WebConnectorInfo } from "./WebConnectorInfo";
+import {
+  loadHackerNewsSuiteEnabled,
+  saveHackerNewsSuiteEnabled,
+} from "../../lib/hackerNewsSettings";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -32,6 +37,29 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const [githubConfigVisible, setGithubConfigVisible] = useState(false);
   const [gdriveConfigVisible, setGDriveConfigVisible] = useState(false);
   const [webInfoVisible, setWebInfoVisible] = useState(false);
+  const [hackerNewsEnabled, setHackerNewsEnabled] = useState(true);
+  const [isHackerNewsHydrated, setIsHackerNewsHydrated] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      const stored = await loadHackerNewsSuiteEnabled();
+      if (!isMounted) {
+        return;
+      }
+      setHackerNewsEnabled(stored);
+      setIsHackerNewsHydrated(true);
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleHackerNews = async () => {
+    const next = !hackerNewsEnabled;
+    setHackerNewsEnabled(next);
+    await saveHackerNewsSuiteEnabled(next);
+  };
 
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
@@ -85,6 +113,23 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
           <Text style={styles.subtitle}>
             Configure external services to extend assistant capabilities
           </Text>
+
+          <View style={styles.toggleCard}>
+            <View style={styles.toggleTextContainer}>
+              <Text style={styles.toggleTitle}>Hacker News tools</Text>
+              <Text style={styles.toggleSubtitle}>
+                Read-only access to stories, users, and updates. Enabled by default.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Enable Hacker News tool suite"
+              onValueChange={handleToggleHackerNews}
+              value={hackerNewsEnabled}
+              disabled={!isHackerNewsHydrated}
+              trackColor={{ true: "#0A84FF", false: "#D1D1D6" }}
+              ios_backgroundColor="#D1D1D6"
+            />
+          </View>
 
           <View style={styles.grid}>
             {CONNECTOR_OPTIONS.map((connector: ConnectorOption) => (
@@ -190,6 +235,32 @@ const styles = StyleSheet.create({
     color: "#636366",
     marginBottom: 24,
     lineHeight: 20,
+  },
+  toggleCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+  },
+  toggleTextContainer: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1C1C1E",
+  },
+  toggleSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#6E6E73",
+    lineHeight: 18,
   },
   grid: {
     flexDirection: "row",

@@ -1,6 +1,7 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo';
 
 import { log } from '../../../lib/logger';
+import { loadHackerNewsSuiteEnabled } from '../../../lib/hackerNewsSettings';
 import { composePrompt } from '../../../lib/promptStorage';
 import { loadToolPromptAddition } from '../../../lib/toolPrompts';
 import {
@@ -19,6 +20,9 @@ import {
   gpt5WebSearchDefinition,
   type GPT5WebSearchNativeModule,
 } from './ToolGPT5WebSearch';
+import {
+  hackerNewsToolDefinitions,
+} from './ToolHackerNews';
 import type { VadMode } from '../../../lib/vadPreference';
 
 import {
@@ -48,6 +52,8 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   sendGPT5GDriveFixerResponse(requestId: string, result: string): void;
   gpt5WebSearchOperationFromSwift(query: string): Promise<string>;
   sendGPT5WebSearchResponse(requestId: string, result: string): void;
+  hackerNewsOperationFromSwift(payloadJson: string): Promise<string>;
+  sendHackerNewsToolResponse(requestId: string, toolName: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
 }
 
@@ -67,12 +73,21 @@ const gpt5WebSearchTool = createGPT5WebSearchTool(
   module as unknown as GPT5WebSearchNativeModule | null,
 );
 
-const defaultToolDefinitions: ToolDefinition[] = [
+const baseDefaultToolDefinitions: ToolDefinition[] = [
   githubConnectorDefinition,
   gdriveConnectorDefinition,
   gpt5GDriveFixerDefinition,
   gpt5WebSearchDefinition,
 ];
+
+const resolveDefaultToolDefinitions = async (): Promise<ToolDefinition[]> => {
+  const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
+  const defaults = [...baseDefaultToolDefinitions];
+  if (hackerNewsEnabled) {
+    defaults.push(...hackerNewsToolDefinitions);
+  }
+  return defaults;
+};
 
 const summarizeDescription = (value: string): string => {
   const trimmed = value.trim();
@@ -151,6 +166,7 @@ export const openOpenAIConnectionAsync = async (
     throw new Error(`[${MODULE_NAME}] instructions must be a non-empty string.`);
   }
   const providedToolDefinitions = options.toolDefinitions ?? [];
+  const defaultToolDefinitions = await resolveDefaultToolDefinitions();
   const mergedToolDefinitions = [
     ...providedToolDefinitions,
     ...defaultToolDefinitions.filter(

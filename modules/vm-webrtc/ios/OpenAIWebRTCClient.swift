@@ -109,6 +109,7 @@ final class OpenAIWebRTCClient: NSObject {
   private weak var gdriveConnectorDelegate: BaseTool?
   private weak var gpt5GDriveFixerDelegate: BaseTool?
   private weak var gpt5WebSearchDelegate: BaseTool?
+  private var hackerNewsDelegates: [String: BaseTool] = [:]
 
   private var toolDefinitions: [[String: Any]] = []
   private lazy var eventHandler: WebRTCEventHandler = {
@@ -160,6 +161,7 @@ final class OpenAIWebRTCClient: NSObject {
       gdriveConnectorDelegate: gdriveConnectorDelegate,
       gpt5GDriveFixerDelegate: gpt5GDriveFixerDelegate,
       gpt5WebSearchDelegate: gpt5WebSearchDelegate,
+      hackerNewsDelegates: hackerNewsDelegates,
       sendToolCallError: { [weak self] callId, error in
         guard let self else { return }
         self.sendToolCallError(callId: callId, error: error)
@@ -199,6 +201,10 @@ final class OpenAIWebRTCClient: NSObject {
 
   func setGPT5WebSearchDelegate(_ delegate: BaseTool) {
     self.gpt5WebSearchDelegate = delegate
+  }
+
+  func setHackerNewsDelegates(_ delegates: [String: BaseTool]) {
+    self.hackerNewsDelegates = delegates
   }
 
   @MainActor
@@ -1174,6 +1180,15 @@ final class OpenAIWebRTCClient: NSObject {
       appendToolDefinition(
         for: delegate,
         warningMessage: warning,
+        definitionsByName: definitionsByName,
+        tools: &tools
+      )
+    }
+
+    for (name, delegate) in hackerNewsDelegates {
+      appendToolDefinition(
+        for: delegate,
+        warningMessage: "No JavaScript-provided definition found for Hacker News tool \(name)",
         definitionsByName: definitionsByName,
         tools: &tools
       )

@@ -15,6 +15,7 @@ import {
 import { log } from '../lib/logger';
 import { composeMainPrompt } from '../lib/mainPrompt';
 import { composePrompt } from '../lib/promptStorage';
+import { loadHackerNewsSuiteEnabled } from '../lib/hackerNewsSettings';
 import { getApiKey } from '../lib/secure-storage';
 import { loadToolPromptAddition } from '../lib/toolPrompts';
 import {
@@ -30,6 +31,12 @@ import {
   type GithubConnectorParams,
 } from '../modules/vm-webrtc/src/ToolGithubConnector';
 import { gpt5WebSearchDefinition } from '../modules/vm-webrtc/src/ToolGPT5WebSearch';
+import {
+  getSharedHackerNewsTool,
+  hackerNewsToolDefinitions,
+  isHackerNewsToolName,
+  type HackerNewsToolName,
+} from '../modules/vm-webrtc/src/ToolHackerNews';
 import type { ToolDefinition } from '../modules/vm-webrtc/src/VmWebrtc.types';
 
 interface ToolCall {
@@ -115,6 +122,8 @@ const githubConnectorTool = VmWebrtcModule
 const gdriveConnectorTool = VmWebrtcModule
   ? new ToolGDriveConnector(VmWebrtcModule as GDriveConnectorNativeModule)
   : null;
+
+const hackerNewsTool = getSharedHackerNewsTool();
 
 const BASE_URL = "https://api.openai.com/v1/responses";
 
@@ -388,6 +397,23 @@ async function handleToolCall(toolCall: ToolCall): Promise<string> {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return `Error executing Google Drive connector: ${errorMessage}`;
     }
+  } else if (isHackerNewsToolName(toolCall.name)) {
+    if (!hackerNewsTool) {
+      return 'Hacker News tools are not available';
+    }
+
+    try {
+      const result = await hackerNewsTool.execute({
+        toolName: toolCall.name as HackerNewsToolName,
+        args: toolCall.arguments ?? {},
+      });
+      log.info('[TextChat] Hacker News result:', {}, { toolName: toolCall.name, resultLength: result.length });
+      return result;
+    } catch (error) {
+      log.error('[TextChat] Hacker News tool execution failed:', {}, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return `Error executing Hacker News tool: ${errorMessage}`;
+    }
   }
 
   return `Unknown tool: ${toolCall.name}`;
@@ -532,12 +558,27 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
 
     try {
       // Get tool definitions with user additions applied
-      const [githubTool, gdriveTool, webSearchTool] = await Promise.all([
+      const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
+      const [githubTool, gdriveTool, webSearchTool, hackerNewsTools] = await Promise.all([
         applyPromptAddition(getGithubToolDefinition()),
         applyPromptAddition(getGDriveToolDefinitionImpl()),
         applyPromptAddition(getWebSearchToolDefinition()),
+        (async () => {
+          if (!hackerNewsEnabled) {
+            return [] as ToolDefinition[];
+          }
+          const augmented = await Promise.all(
+            hackerNewsToolDefinitions.map((definition) => applyPromptAddition(definition))
+          );
+          return augmented.filter((definition): definition is ToolDefinition => Boolean(definition));
+        })(),
       ]);
-      const tools = [githubTool, gdriveTool, webSearchTool].filter(Boolean) as any[];
+      const tools = [
+        githubTool,
+        gdriveTool,
+        webSearchTool,
+        ...(hackerNewsTools ?? []),
+      ].filter(Boolean) as ToolDefinition[];
 
       // Instrumentation: log tool names only (avoid dumping full definitions)
       const toolNames = tools

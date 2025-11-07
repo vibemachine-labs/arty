@@ -11,6 +11,7 @@ final class WebRTCEventHandler {
     let gdriveConnectorDelegate: BaseTool?
     let gpt5GDriveFixerDelegate: BaseTool?
     let gpt5WebSearchDelegate: BaseTool?
+    let hackerNewsDelegates: [String: BaseTool]
     let sendToolCallError: (_ callId: String, _ error: String) -> Void
     let emitModuleEvent: (_ name: String, _ payload: [String: Any]) -> Void
   }
@@ -519,6 +520,11 @@ final class WebRTCEventHandler {
       "tool": toolName,
       "argsLen": argumentsJSON.count
     ])
+
+    if let delegate = context.hackerNewsDelegates[toolName] {
+      delegate.handleToolCall(callId: callId, argumentsJSON: argumentsJSON)
+      return
+    }
 
     switch toolName {
     case "github_connector":

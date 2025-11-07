@@ -586,12 +586,16 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
 
     try {
       // Get tool definitions with user additions applied
-      const [githubTool, gdriveTool, webSearchTool, hackerNewsTools] = await Promise.all([
+      const [githubTool, gdriveTool, webSearchTool] = await Promise.all([
         applyPromptAddition(getGithubToolDefinition()),
         applyPromptAddition(getGDriveToolDefinitionImpl()),
         applyPromptAddition(getWebSearchToolDefinition()),
-        buildHackerNewsTools(),
       ]);
+      const hackerNewsTools = await buildHackerNewsTools();
+      log.info('[TextChat] Hacker News tool bundle resolved', {}, {
+        count: hackerNewsTools.length,
+        names: hackerNewsTools.map((tool) => tool.name),
+      });
       const tools = [
         githubTool,
         gdriveTool,

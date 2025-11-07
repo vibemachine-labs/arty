@@ -47,6 +47,7 @@ public class VmWebrtcModule: Module {
   private var toolGPT5GDriveFixer: ToolGPT5GDriveFixer?
   private var toolGPT5WebSearch: ToolGPT5WebSearch?
   private let logfireTracingManager = LogfireTracingManager()
+  private lazy var logger = NativeLogger(category: "VmWebrtc", tracingManager: logfireTracingManager)
 
   public func helloFromExpoModule() -> String {
     return "Hello world from module"
@@ -87,21 +88,23 @@ public class VmWebrtcModule: Module {
 
     // Initialize native tool delegates used by the module
     OnCreate {
-      print("[VmWebrtc] OnCreate: initializing tool delegates")
+      self.logger.log("OnCreate: initializing tool delegates")
       self.webrtcClient.setEventEmitter { [weak self] eventName, payload in
         guard let self else { return }
         self.sendEvent(eventName, payload)
       }
-      print("[VmWebrtc] Event emitter configured for OpenAI WebRTC client")
+      self.logger.log("Event emitter configured for OpenAI WebRTC client")
       self.webrtcClient.setMinimumLogLevel(.debug)
-      print("[VmWebrtc] Minimum log level set to debug")
+      self.logger.log("Minimum log level set to debug")
       // Initialize github connector tool
       self.toolGithubConnector = ToolGithubConnector(module: self, responder: self.webrtcClient)
-      print("[VmWebrtc] ToolGithubConnector initialized =", self.toolGithubConnector != nil)
+      let githubInitialized = self.toolGithubConnector != nil
+      self.logger.log("ToolGithubConnector initialized = \(githubInitialized)")
 
       // Initialize gdrive connector tool
       self.toolGDriveConnector = ToolGDriveConnector(module: self, responder: self.webrtcClient)
-      print("[VmWebrtc] ToolGDriveConnector initialized =", self.toolGDriveConnector != nil)
+      let gdriveInitialized = self.toolGDriveConnector != nil
+      self.logger.log("ToolGDriveConnector initialized = \(gdriveInitialized)")
 
       // Initialize GPT5 gdrive fixer tool
       self.toolGPT5GDriveFixer = ToolGPT5GDriveFixer(module: self, responder: self.webrtcClient)

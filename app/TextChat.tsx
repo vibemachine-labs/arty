@@ -1,4 +1,3 @@
-import { requireOptionalNativeModule } from 'expo-modules-core';
 import React, { useRef, useState } from 'react';
 import {
   Alert,
@@ -14,22 +13,8 @@ import {
 } from 'react-native';
 import { log } from '../lib/logger';
 import { composeMainPrompt } from '../lib/mainPrompt';
-import { composePrompt } from '../lib/promptStorage';
 import { getApiKey } from '../lib/secure-storage';
-import { loadToolPromptAddition } from '../lib/toolPrompts';
-import {
-  ToolGDriveConnector,
-  gdriveConnectorDefinition,
-  type GDriveConnectorNativeModule,
-  type GDriveConnectorParams,
-} from '../modules/vm-webrtc/src/ToolGDriveConnector';
-import {
-  ToolGithubConnector,
-  githubConnectorDefinition,
-  type GithubConnectorNativeModule,
-  type GithubConnectorParams,
-} from '../modules/vm-webrtc/src/ToolGithubConnector';
-import { gpt5WebSearchDefinition } from '../modules/vm-webrtc/src/ToolGPT5WebSearch';
+import toolManager from '../modules/vm-webrtc/src/ToolManager';
 import type { ToolDefinition } from '../modules/vm-webrtc/src/VmWebrtc.types';
 
 interface ToolCall {
@@ -104,18 +89,6 @@ interface Instrumentation {
   responseHeaders?: Record<string, string>;
 }
 
-const VmWebrtcModule = requireOptionalNativeModule('VmWebrtc');
-
-// Create GitHub connector tool instance
-const githubConnectorTool = VmWebrtcModule
-  ? new ToolGithubConnector(VmWebrtcModule as GithubConnectorNativeModule)
-  : null;
-
-// Create Google Drive connector tool instance (if needed)
-const gdriveConnectorTool = VmWebrtcModule
-  ? new ToolGDriveConnector(VmWebrtcModule as GDriveConnectorNativeModule)
-  : null;
-
 const BASE_URL = "https://api.openai.com/v1/responses";
 
 function genRequestId(): string {
@@ -140,31 +113,6 @@ function logInstrumentation(instr: Instrumentation) {
   });
 }
 
-function getGithubToolDefinition(): ToolDefinition | null {
-  if (!githubConnectorDefinition) {
-    log.info('[TextChat] GitHub connector definition not available');
-    return null;
-  }
-  return githubConnectorDefinition;
-}
-
-
-function getGDriveToolDefinitionImpl(): ToolDefinition | null {
-  if (!gdriveConnectorDefinition) {
-    log.info('[TextChat] Google Drive connector definition not available');
-    return null;
-  }
-  return gdriveConnectorDefinition;
-}
-
-function getWebSearchToolDefinition(): ToolDefinition | null {
-  if (!gpt5WebSearchDefinition) {
-    log.info('[TextChat] Web search tool definition not available');
-    return null;
-  }
-  return gpt5WebSearchDefinition;
-}
-
 const summarizeDescription = (value: string): string => {
   const trimmed = value.trim();
   if (trimmed.length <= 60) {
@@ -174,46 +122,6 @@ const summarizeDescription = (value: string): string => {
   const tail = trimmed.slice(-25);
   return `${head}…${tail}`;
 };
-
-async function applyPromptAddition(definition: ToolDefinition | null): Promise<ToolDefinition | null> {
-  if (!definition) {
-    return null;
-  }
-
-  const addition = await loadToolPromptAddition(definition.name);
-  const trimmedAddition = addition.trim();
-  const beforeLength = definition.description.length;
-
-  if (trimmedAddition.length === 0) {
-    log.info(`[TextChat] Tool definition unchanged: ${definition.name}`, {}, {
-      toolName: definition.name,
-      descriptionLength: beforeLength,
-      description: definition.description,
-      descriptionPreview: summarizeDescription(definition.description),
-    });
-    return { ...definition };
-  }
-
-  const composedDescription = composePrompt(definition.description, trimmedAddition);
-
-  log.info(`[TextChat] Tool definition augmented: ${definition.name}`, {}, {
-    toolName: definition.name,
-    beforeLength,
-    afterLength: composedDescription.length,
-    beforeDescription: definition.description,
-    afterDescription: composedDescription,
-    addition: trimmedAddition,
-    beforePreview: summarizeDescription(definition.description),
-    additionLength: trimmedAddition.length,
-    additionPreview: summarizeDescription(trimmedAddition),
-    afterPreview: summarizeDescription(composedDescription),
-  });
-
-  return {
-    ...definition,
-    description: composedDescription,
-  };
-}
 
 // Lightweight helpers for 2-turn tool flow
 type NormalizedToolCall = { id: string; name: string; argsJson: string };
@@ -345,52 +253,14 @@ function buildSecondTurnInput(callId: string, toolResult: unknown) {
   ];
 }
 
-async function handleToolCall(toolCall: ToolCall): Promise<string> {
-  log.info(`[TextChat] Tool call requested: ${toolCall.name}`, {}, toolCall);
-
-  if (toolCall.name === 'github_connector') {
-    if (!githubConnectorTool) {
-      return 'GitHub connector tool is not available';
-    }
-
-    try {
-      // Extract the code snippet from the arguments
-      const params: GithubConnectorParams = {
-        self_contained_javascript_octokit_code_snippet: toolCall.arguments.self_contained_javascript_octokit_code_snippet
-      };
-
-      log.info('[TextChat] Executing GitHub connector with params:', {}, params);
-      const result = await githubConnectorTool.execute(params);
-      log.info('[TextChat] GitHub connector result:', {}, result);
-      return result;
-    } catch (error) {
-      log.error('[TextChat] GitHub connector execution failed:', {}, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return `Error executing GitHub connector: ${errorMessage}`;
-    }
-  } else if (toolCall.name === 'gdrive_connector') {
-    if (!gdriveConnectorTool) {
-      return 'Google Drive connector tool is not available';
-    }
-
-    try {
-      // Extract the code snippet from the arguments
-      const params: GDriveConnectorParams = {
-        self_contained_javascript_gdrive_code_snippet: toolCall.arguments.self_contained_javascript_gdrive_code_snippet
-      };
-
-      log.info('[TextChat] Executing Google Drive connector with params:', {}, params);
-      const result = await gdriveConnectorTool.execute(params);
-      log.info('[TextChat] Google Drive connector result:', {}, result);
-      return result;
-    } catch (error) {
-      log.error('[TextChat] Google Drive connector execution failed:', {}, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return `Error executing Google Drive connector: ${errorMessage}`;
-    }
+async function executeToolCall(toolCall: ToolCall): Promise<string> {
+  try {
+    return await toolManager.executeToolCall(toolCall.name, toolCall.arguments);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    log.error('[TextChat] Tool call execution failed', {}, errorMessage);
+    return `Error executing ${toolCall.name}: ${errorMessage}`;
   }
-
-  return `Unknown tool: ${toolCall.name}`;
 }
 
 async function callResponsesAPI(
@@ -429,7 +299,7 @@ async function callResponsesAPI(
     };
   }
 
-  const toolResult = await handleToolCall({
+  const toolResult = await executeToolCall({
     name: toolCall.name,
     arguments: argsObj,
   });
@@ -531,18 +401,8 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     setIsSending(true);
 
     try {
-      // Get tool definitions with user additions applied
-      const [githubTool, gdriveTool, webSearchTool] = await Promise.all([
-        applyPromptAddition(getGithubToolDefinition()),
-        applyPromptAddition(getGDriveToolDefinitionImpl()),
-        applyPromptAddition(getWebSearchToolDefinition()),
-      ]);
-      const tools = [githubTool, gdriveTool, webSearchTool].filter(Boolean) as any[];
-
-      // Instrumentation: log tool names only (avoid dumping full definitions)
-      const toolNames = tools
-        .map((t) => (t && typeof t === 'object' && 'name' in (t as any) ? (t as any).name : '(unknown)'))
-        .filter(Boolean);
+      const tools = await toolManager.getAugmentedToolDefinitions();
+      const toolNames = toolManager.getToolNames(tools);
       log.info('[TextChat] tools included:', {}, toolNames);
 
       const resolvedInstructions = composeMainPrompt(mainPromptAddition);

@@ -17,6 +17,7 @@ import { log } from "../lib/logger";
 import { composeMainPrompt } from "../lib/mainPrompt";
 import { TokenUsageTracker } from "../lib/tokenUsageTracker";
 import type { VadMode } from "../lib/vadPreference";
+import toolManager from "../modules/vm-webrtc/src/ToolManager";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
   muteUnmuteOutgoingAudio,
@@ -330,6 +331,9 @@ export function VoiceChat({
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
 
+      const canonicalToolDefinitions = toolManager.getCanonicalToolDefinitions();
+      const voiceToolNames = toolManager.getToolNames(canonicalToolDefinitions);
+
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
 
       log.info("Starting OpenAI voice session", {}, {
@@ -339,6 +343,7 @@ export function VoiceChat({
         voice: selectedVoice,
         hasInstructions: resolvedPrompt.trim().length > 0,
         hasCustomAddition: mainPromptAddition.trim().length > 0,
+        toolNames: voiceToolNames,
       });
       setIsConnecting(true);
       setIsSessionActive(false);
@@ -353,6 +358,7 @@ export function VoiceChat({
         enableRecording: isRecordingEnabled,
         maxConversationTurns,
         retentionRatio,
+        toolDefinitions: canonicalToolDefinitions,
       };
       const state: OpenAIConnectionState = await openOpenAIConnectionAsync(customConnectionOptions);
       log.info("OpenAI voice session resolved", {}, { state });

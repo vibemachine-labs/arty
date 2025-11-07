@@ -329,13 +329,11 @@ export const revokeGDriveAccess = async (): Promise<void> => {
   );
 
   for (const token of uniqueTokens) {
-    const preview = `${token.slice(0, 6)}...${token.slice(-6)}`;
     try {
       await AuthSession.revokeAsync({ token }, { revocationEndpoint: GOOGLE_REVOCATION_ENDPOINT });
-      log.info(`[ToolGDriveConnector] ✅ Token revoked`, {}, { tokenPreview: preview });
+      log.info(`[ToolGDriveConnector] ✅ Token revoked`, {}, {});
     } catch (error) {
       log.warn(`[ToolGDriveConnector] ⚠️ Failed to revoke token`, {}, {
-        tokenPreview: preview,
         errorMessage: error instanceof Error ? error.message : String(error),
         errorStack: error instanceof Error ? error.stack : undefined,
       }, error);
@@ -491,10 +489,8 @@ export const executeGDriveSnippet = async ({
   const accessToken = await getGDriveAccessToken();
 
   const tokenLen = accessToken?.length ?? 0;
-  const tokenPreview = accessToken ? `${accessToken.slice(0, 6)}...${accessToken.slice(-6)}` : 'null';
   log.info(`[${toolName}] 🔑 GDrive access token retrieved`, {}, {
     hasToken: !!accessToken,
-    tokenPreview,
     tokenLength: tokenLen,
   });
 
@@ -770,9 +766,7 @@ const refreshDriveAccessToken = async (toolName: string): Promise<string | null>
     (globalThis as any).accessToken = newAccessToken;
 
     const newTokenLen = newAccessToken.length;
-    const newTokenPreview = `${newAccessToken.slice(0, 6)}...${newAccessToken.slice(-6)}`;
     log.info(`[${toolName}] ✅ Token refreshed successfully`, {}, {
-      tokenPreview: newTokenPreview,
       tokenLength: newTokenLen,
       expiresIn: json?.expires_in,
     });

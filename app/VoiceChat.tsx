@@ -13,6 +13,7 @@ import {
 import { MiniVisualizer } from "../components/AudioVisualizer";
 import { VoiceSpeedCustomization } from "../components/VoiceSpeedCustomization";
 import { loadShowRealtimeErrorAlerts } from "../lib/developerSettings";
+import { loadHackerNewsSuiteEnabled } from "../lib/hackerNewsSettings";
 import { log } from "../lib/logger";
 import { composeMainPrompt } from "../lib/mainPrompt";
 import { TokenUsageTracker } from "../lib/tokenUsageTracker";
@@ -329,6 +330,14 @@ export function VoiceChat({
     try {
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
+
+      const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
+      log.info("Voice session Hacker News tool preference", {}, {
+        enabled: hackerNewsEnabled,
+        note: hackerNewsEnabled
+          ? "Default Hacker News tool definitions will be merged server-side"
+          : "Definitions will be skipped until the connector is enabled in settings",
+      });
 
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
 

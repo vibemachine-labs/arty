@@ -1185,13 +1185,44 @@ final class OpenAIWebRTCClient: NSObject {
       )
     }
 
+    var hackerNewsToolsAdded: [String] = []
     for (name, delegate) in hackerNewsDelegates {
+      let previousCount = tools.count
       appendToolDefinition(
         for: delegate,
         warningMessage: "No JavaScript-provided definition found for Hacker News tool \(name)",
         definitionsByName: definitionsByName,
         tools: &tools
       )
+      if tools.count > previousCount {
+        hackerNewsToolsAdded.append(name)
+      }
+    }
+
+    if !hackerNewsDelegates.isEmpty {
+      let missing = Set(hackerNewsDelegates.keys).subtracting(Set(hackerNewsToolsAdded))
+      if hackerNewsToolsAdded.isEmpty {
+        emit(
+          .warn,
+          "Hacker News tool delegates configured but no matching definitions were provided",
+          metadata: [
+            "delegateCount": hackerNewsDelegates.count,
+            "missingNames": Array(missing),
+            "availableDefinitionNames": Array(definitionsByName.keys)
+          ],
+          propagateToReactNative: true
+        )
+      } else {
+        emit(
+          .info,
+          "Hacker News tool delegates resolved for session",
+          metadata: [
+            "delegateCount": hackerNewsDelegates.count,
+            "attachedTools": hackerNewsToolsAdded,
+            "missingNames": Array(missing)
+          ]
+        )
+      }
     }
 
     if tools.isEmpty && !toolDefinitions.isEmpty {

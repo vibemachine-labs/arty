@@ -20,7 +20,6 @@ import { RecordingScreen } from "./RecordingScreen";
 import {
   loadLogRedactionDisabled,
   loadShowRealtimeErrorAlerts,
-  saveLogRedactionDisabled,
   saveShowRealtimeErrorAlerts,
 } from "../../lib/developerSettings";
 import {
@@ -360,8 +359,7 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
         await log.initialize();
       }
       if (logRedactionDisabled !== previous.logRedactionDisabled) {
-        await saveLogRedactionDisabled(logRedactionDisabled);
-        log.setRedactionEnabled(!logRedactionDisabled);
+        await log.setRedactionEnabled(!logRedactionDisabled, { persist: true });
       }
       setInitialSettings({
         showErrorAlerts,
@@ -388,6 +386,7 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
     logfireEnabled,
     onClose,
     showErrorAlerts,
+    logRedactionDisabled,
   ]);
 
   const handleCancel = useCallback(() => {

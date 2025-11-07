@@ -21,7 +21,6 @@ import { DeveloperMode } from "../components/ui/DeveloperMode";
 import { HamburgerButton } from "../components/ui/HamburgerButton";
 import { HamburgerMenu, type MenuSection } from "../components/ui/HamburgerMenu";
 import { log } from "../lib/logger";
-import { loadLogRedactionDisabled } from "../lib/developerSettings";
 import { DEFAULT_VAD_MODE, loadVadPreference, saveVadPreference, type VadMode } from "../lib/vadPreference";
 import { DEFAULT_VOICE, loadVoicePreference, saveVoicePreference } from "../lib/voicePreference";
 import { getApiKey } from "../lib/secure-storage";
@@ -87,21 +86,6 @@ export default function Index() {
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadLogPreference = async () => {
-      const disabled = await loadLogRedactionDisabled();
-      if (!isMounted) {
-        return;
-      }
-      log.setRedactionEnabled(!disabled);
-    };
-    void loadLogPreference();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   // Load connection options on mount and when API key config screen closes
   useEffect(() => {

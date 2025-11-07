@@ -174,6 +174,34 @@ function getWebSearchToolDefinition(): ToolDefinition | null {
   return gpt5WebSearchDefinition;
 }
 
+async function buildHackerNewsTools(): Promise<ToolDefinition[]> {
+  const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
+  if (!hackerNewsEnabled) {
+    log.info('[TextChat] Hacker News tools excluded (disabled by user)', {}, {
+      enabled: false,
+      included: false,
+    });
+    return [];
+  }
+
+  const augmented = await Promise.all(
+    hackerNewsToolDefinitions.map((definition) => applyPromptAddition(definition))
+  );
+
+  const filtered = augmented.filter(
+    (definition): definition is ToolDefinition => Boolean(definition)
+  );
+
+  log.info('[TextChat] Hacker News tools prepared', {}, {
+    enabled: true,
+    included: filtered.length > 0,
+    count: filtered.length,
+    names: filtered.map((tool) => tool.name),
+  });
+
+  return filtered;
+}
+
 const summarizeDescription = (value: string): string => {
   const trimmed = value.trim();
   if (trimmed.length <= 60) {
@@ -558,26 +586,17 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
 
     try {
       // Get tool definitions with user additions applied
-      const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
       const [githubTool, gdriveTool, webSearchTool, hackerNewsTools] = await Promise.all([
         applyPromptAddition(getGithubToolDefinition()),
         applyPromptAddition(getGDriveToolDefinitionImpl()),
         applyPromptAddition(getWebSearchToolDefinition()),
-        (async () => {
-          if (!hackerNewsEnabled) {
-            return [] as ToolDefinition[];
-          }
-          const augmented = await Promise.all(
-            hackerNewsToolDefinitions.map((definition) => applyPromptAddition(definition))
-          );
-          return augmented.filter((definition): definition is ToolDefinition => Boolean(definition));
-        })(),
+        buildHackerNewsTools(),
       ]);
       const tools = [
         githubTool,
         gdriveTool,
         webSearchTool,
-        ...(hackerNewsTools ?? []),
+        ...hackerNewsTools,
       ].filter(Boolean) as ToolDefinition[];
 
       // Instrumentation: log tool names only (avoid dumping full definitions)

@@ -15,7 +15,6 @@ const SENSITIVE_KEYWORDS = [
   'auth',
   'authorization',
   'bearer',
-  'key',
 ] as const;
 
 const levelPriority = {

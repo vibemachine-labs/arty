@@ -83,9 +83,20 @@ const baseDefaultToolDefinitions: ToolDefinition[] = [
 const resolveDefaultToolDefinitions = async (): Promise<ToolDefinition[]> => {
   const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
   const defaults = [...baseDefaultToolDefinitions];
+
   if (hackerNewsEnabled) {
     defaults.push(...hackerNewsToolDefinitions);
+    log.info(`[${MODULE_NAME}] Hacker News tools enabled for voice session`, {}, {
+      enabled: true,
+      count: hackerNewsToolDefinitions.length,
+      names: hackerNewsToolDefinitions.map((tool) => tool.name),
+    });
+  } else {
+    log.info(`[${MODULE_NAME}] Hacker News tools disabled for voice session`, {}, {
+      enabled: false,
+    });
   }
+
   return defaults;
 };
 

@@ -301,12 +301,15 @@ const ensureSharedInstance = (): ToolHackerNewsSuite | null => {
   if (sharedInstance) {
     return sharedInstance;
   }
+
   const nativeModule = requireOptionalNativeModule<HackerNewsNativeModule>('VmWebrtc');
   if (!nativeModule) {
-    log.info('[ToolHackerNews] Native module not available at initialization', {});
-    return null;
+    log.info('[ToolHackerNews] Native module not available; running in standalone HTTP mode', {});
+  } else {
+    log.info('[ToolHackerNews] Native module detected; enabling bridge listeners', {});
   }
-  sharedInstance = new ToolHackerNewsSuite(nativeModule);
+
+  sharedInstance = new ToolHackerNewsSuite(nativeModule ?? null);
   return sharedInstance;
 };
 

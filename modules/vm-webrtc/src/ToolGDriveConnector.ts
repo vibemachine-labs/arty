@@ -613,12 +613,12 @@ export const executeGDriveSnippet = async ({
     }
 
     // Attempt one refresh and retry once
-  log.info(`[${toolName}] 🔁 401 Unauthorized - attempting token refresh`, {}, { url: urlStr, ...eventMeta });
-  const newToken = await refreshDriveAccessToken(toolName);
-  if (!newToken) {
-    log.warn(`[${toolName}] ⚠️ Token refresh failed`, {}, { url: urlStr, ...eventMeta });
-    return res;
-  }
+    log.info(`[${toolName}] 🔁 401 Unauthorized - attempting token refresh`, {}, { url: urlStr, ...eventMeta });
+    const newToken = await refreshDriveAccessToken(toolName);
+    if (!newToken) {
+      log.warn(`[${toolName}] ⚠️ Token refresh failed`, {}, { url: urlStr, ...eventMeta });
+      return res;
+    }
 
     // Update Authorization header and retry
     try {

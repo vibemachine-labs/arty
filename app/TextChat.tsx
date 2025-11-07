@@ -123,6 +123,46 @@ const summarizeDescription = (value: string): string => {
   return `${head}…${tail}`;
 };
 
+const summarizeToolCallArguments = (args: Record<string, unknown> | null | undefined) => {
+  const entries = Object.entries(args ?? {});
+  const previews = entries.reduce<Record<string, unknown>>((acc, [key, value]) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      acc[key] = {
+        type: 'string',
+        length: trimmed.length,
+        preview: summarizeDescription(trimmed),
+      };
+      return acc;
+    }
+    if (Array.isArray(value)) {
+      acc[key] = {
+        type: 'array',
+        length: value.length,
+      };
+      return acc;
+    }
+    if (value && typeof value === 'object') {
+      acc[key] = {
+        type: 'object',
+        keys: Object.keys(value).slice(0, 5),
+      };
+      return acc;
+    }
+    acc[key] = {
+      type: value === null ? 'null' : typeof value,
+      value,
+    };
+    return acc;
+  }, {});
+
+  return {
+    argCount: entries.length,
+    argKeys: entries.map(([key]) => key),
+    previews,
+  };
+};
+
 // Lightweight helpers for 2-turn tool flow
 type NormalizedToolCall = { id: string; name: string; argsJson: string };
 
@@ -254,11 +294,29 @@ function buildSecondTurnInput(callId: string, toolResult: unknown) {
 }
 
 async function executeToolCall(toolCall: ToolCall): Promise<string> {
+  const argSummary = summarizeToolCallArguments(toolCall.arguments);
+  log.info('[TextChat] Dispatching tool call to ToolManager', {}, {
+    toolName: toolCall.name,
+    ...argSummary,
+  });
+
+  const start = Date.now();
+
   try {
-    return await toolManager.executeToolCall(toolCall.name, toolCall.arguments);
+    const result = await toolManager.executeToolCall(toolCall.name, toolCall.arguments);
+    log.info('[TextChat] Tool call completed', {}, {
+      toolName: toolCall.name,
+      durationMs: Date.now() - start,
+      resultLength: typeof result === 'string' ? result.length : undefined,
+    });
+    return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    log.error('[TextChat] Tool call execution failed', {}, errorMessage);
+    log.error('[TextChat] Tool call execution failed', {}, {
+      toolName: toolCall.name,
+      durationMs: Date.now() - start,
+      errorMessage,
+    });
     return `Error executing ${toolCall.name}: ${errorMessage}`;
   }
 }

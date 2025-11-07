@@ -33,6 +33,21 @@ const summarizeDescription = (value: string): string => {
   return `${head}…${tail}`;
 };
 
+const summarizeSnippetArgument = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return {
+      snippetProvided: Boolean(value),
+      snippetType: value === null ? 'null' : typeof value,
+    };
+  }
+  const trimmed = value.trim();
+  return {
+    snippetProvided: trimmed.length > 0,
+    snippetLength: trimmed.length,
+    snippetPreview: summarizeDescription(trimmed),
+  };
+};
+
 const cloneDefinition = (definition: ToolDefinition): ToolDefinition => ({
   ...definition,
   parameters: {
@@ -54,6 +69,16 @@ class ToolManager {
   private gdriveConnectorTool: ToolGDriveConnector | null | undefined;
   private readonly nativeModule = requireOptionalNativeModule(MODULE_NAME);
 
+  constructor() {
+    if (!this.nativeModule) {
+      log.warn('[ToolManager] Native module unavailable during initialization; tool listeners inactive until module loads');
+      return;
+    }
+
+    log.info('[ToolManager] Native module detected, prewarming tool listeners');
+    this.prewarmNativeToolListeners();
+  }
+
   private getGithubConnectorTool(): ToolGithubConnector | null {
     if (this.githubConnectorTool !== undefined) {
       return this.githubConnectorTool;
@@ -72,6 +97,21 @@ class ToolManager {
       ? new ToolGDriveConnector(this.nativeModule as GDriveConnectorNativeModule)
       : null;
     return this.gdriveConnectorTool;
+  }
+
+  private prewarmNativeToolListeners() {
+    try {
+      const github = this.getGithubConnectorTool();
+      const gdrive = this.getGDriveConnectorTool();
+      log.info('[ToolManager] Tool listener prewarm complete', {}, {
+        githubListenerActive: Boolean(github),
+        gdriveListenerActive: Boolean(gdrive),
+      });
+    } catch (error) {
+      log.error('[ToolManager] Failed to prewarm native tool listeners', {}, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   getCanonicalToolDefinitions(overrides?: ToolDefinition[]): ToolDefinition[] {
@@ -97,11 +137,19 @@ class ToolManager {
   }
 
   async executeToolCall(toolName: string, args: ToolCallArguments): Promise<string> {
-    log.info('[ToolManager] Tool call requested', {}, { toolName });
+    const argKeys = Object.keys(args ?? {});
+    log.info('[ToolManager] Tool call requested', {}, {
+      toolName,
+      argCount: argKeys.length,
+      argKeys,
+    });
 
     if (toolName === 'github_connector') {
       const connector = this.getGithubConnectorTool();
       if (!connector) {
+        log.warn('[ToolManager] GitHub connector unavailable', {}, {
+          nativeModuleLoaded: Boolean(this.nativeModule),
+        });
         return 'GitHub connector tool is not available';
       }
 
@@ -109,9 +157,16 @@ class ToolManager {
         self_contained_javascript_octokit_code_snippet:
           args.self_contained_javascript_octokit_code_snippet,
       };
+      log.debug('[ToolManager] Routing GitHub connector request', {}, summarizeSnippetArgument(
+        args.self_contained_javascript_octokit_code_snippet
+      ));
 
       try {
-        return await connector.execute(params);
+        const result = await connector.execute(params);
+        log.info('[ToolManager] GitHub connector execution succeeded', {}, {
+          resultLength: typeof result === 'string' ? result.length : 0,
+        });
+        return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         log.error('[ToolManager] GitHub connector execution failed', {}, errorMessage);
@@ -122,6 +177,9 @@ class ToolManager {
     if (toolName === 'gdrive_connector') {
       const connector = this.getGDriveConnectorTool();
       if (!connector) {
+        log.warn('[ToolManager] Google Drive connector unavailable', {}, {
+          nativeModuleLoaded: Boolean(this.nativeModule),
+        });
         return 'Google Drive connector tool is not available';
       }
 
@@ -129,9 +187,16 @@ class ToolManager {
         self_contained_javascript_gdrive_code_snippet:
           args.self_contained_javascript_gdrive_code_snippet,
       };
+      log.debug('[ToolManager] Routing Google Drive connector request', {}, summarizeSnippetArgument(
+        args.self_contained_javascript_gdrive_code_snippet
+      ));
 
       try {
-        return await connector.execute(params);
+        const result = await connector.execute(params);
+        log.info('[ToolManager] Google Drive connector execution succeeded', {}, {
+          resultLength: typeof result === 'string' ? result.length : 0,
+        });
+        return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         log.error('[ToolManager] Google Drive connector execution failed', {}, errorMessage);

@@ -1,30 +1,24 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo';
 
 import { log } from '../../../lib/logger';
-import { composePrompt } from '../../../lib/promptStorage';
-import { loadToolPromptAddition } from '../../../lib/toolPrompts';
 import {
   createGithubConnectorTool,
-  githubConnectorDefinition,
   type GithubConnectorNativeModule,
 } from './ToolGithubConnector';
 import { gdriveConnectorDefinition } from './ToolGDriveConnector';
 import {
   createGPT5GDriveFixerTool,
-  gpt5GDriveFixerDefinition,
   type GPT5GDriveFixerNativeModule,
 } from './ToolGPT5GDriveFixer';
 import {
   createGPT5WebSearchTool,
-  gpt5WebSearchDefinition,
   type GPT5WebSearchNativeModule,
 } from './ToolGPT5WebSearch';
 import type { VadMode } from '../../../lib/vadPreference';
-
+import toolManager from './ToolManager';
 import {
     OpenAIConnectionOptions,
     OpenAIConnectionState,
-    ToolDefinition,
     VmWebrtcModuleEvents,
 } from './VmWebrtc.types';
 
@@ -67,68 +61,6 @@ const gpt5WebSearchTool = createGPT5WebSearchTool(
   module as unknown as GPT5WebSearchNativeModule | null,
 );
 
-const defaultToolDefinitions: ToolDefinition[] = [
-  githubConnectorDefinition,
-  gdriveConnectorDefinition,
-  gpt5GDriveFixerDefinition,
-  gpt5WebSearchDefinition,
-];
-
-const summarizeDescription = (value: string): string => {
-  const trimmed = value.trim();
-  if (trimmed.length <= 60) {
-    return trimmed;
-  }
-  const head = trimmed.slice(0, 25);
-  const tail = trimmed.slice(-25);
-  return `${head}…${tail}`;
-};
-
-const applyToolPromptAdditions = async (
-  definitions: ToolDefinition[]
-): Promise<ToolDefinition[]> => {
-  return Promise.all(
-    definitions.map(async (definition) => {
-      const addition = await loadToolPromptAddition(definition.name);
-      const trimmedAddition = addition.trim();
-      const beforeLength = definition.description.length;
-
-      if (trimmedAddition.length === 0) {
-        log.debug(`[${MODULE_NAME}] Tool definition unchanged`, {}, {
-          toolName: definition.name,
-          descriptionLength: beforeLength,
-          description: definition.description,
-          descriptionPreview: summarizeDescription(definition.description),
-        });
-        return { ...definition };
-      }
-
-      const composedDescription = composePrompt(
-        definition.description,
-        trimmedAddition
-      );
-
-      log.info(`[${MODULE_NAME}] Tool definition augmented`, {}, {
-        toolName: definition.name,
-        beforeLength,
-        afterLength: composedDescription.length,
-        beforeDescription: definition.description,
-        afterDescription: composedDescription,
-        addition: trimmedAddition,
-        beforePreview: summarizeDescription(definition.description),
-        additionLength: trimmedAddition.length,
-        additionPreview: summarizeDescription(trimmedAddition),
-        afterPreview: summarizeDescription(composedDescription),
-      });
-
-      return {
-        ...definition,
-        description: composedDescription,
-      };
-    })
-  );
-};
-
 export const helloFromExpoModule = () => {
   if (!module) {
     throw makeUnavailableError();
@@ -150,16 +82,8 @@ export const openOpenAIConnectionAsync = async (
   if (trimmedInstructions.length === 0) {
     throw new Error(`[${MODULE_NAME}] instructions must be a non-empty string.`);
   }
-  const providedToolDefinitions = options.toolDefinitions ?? [];
-  const mergedToolDefinitions = [
-    ...providedToolDefinitions,
-    ...defaultToolDefinitions.filter(
-      (defaultDef) => !providedToolDefinitions.some((providedDef) => providedDef.name === defaultDef.name),
-    ),
-  ];
-
-  const toolDefinitionsWithPrompts = await applyToolPromptAdditions(
-    mergedToolDefinitions
+  const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions(
+    options.toolDefinitions,
   );
 
   log.info(`[${MODULE_NAME}] Tool definitions resolved`, {}, {

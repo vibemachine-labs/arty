@@ -9,6 +9,7 @@ export interface ToolNativeModule {
 
 export interface ToolRequestPayload {
   requestId: string;
+  eventId?: string;
   [key: string]: any;
 }
 

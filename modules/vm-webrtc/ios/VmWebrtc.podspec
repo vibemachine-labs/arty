@@ -17,6 +17,10 @@ Pod::Spec.new do |s|
   # Pinned to older version due to stasel/WebRTC/issues 132
   s.dependency 'WebRTC-lib', '140.0.0'
   s.dependency 'OpenTelemetry-Swift-Sdk', '~> 2.0'
+  s.dependency 'OpenTelemetry-Swift-Protocol-Exporter-Common', '~> 2.0'
+  s.dependency 'OpenTelemetry-Swift-Protocol-Exporter-Http', '~> 2.0'
+  s.dependency 'OpenTelemetry-Swift-Protocol-Exporter-Http', '~> 2.2'
+
 
   # Ensure Swift module visibility + access to WebRTC headers
   s.pod_target_xcconfig = {

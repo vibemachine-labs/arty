@@ -1,7 +1,8 @@
 import Foundation
 import OpenTelemetryApi
 import OpenTelemetrySdk
-import OpenTelemetryProtocolExporter
+import OpenTelemetryProtocolExporterCommon
+import OpenTelemetryProtocolExporterHttp
 
 final class LogfireTracingManager {
   enum Constants {
@@ -88,10 +89,17 @@ final class LogfireTracingManager {
       "telemetry.sdk.language": AttributeValue.string("swift")
     ])
 
-    let configuration = OtlpConfiguration(timeout: .default)
-    configuration.headers = ["Authorization": trimmedApiKey]
+    guard let endpointURL = URL(string: Constants.endpoint) else {
+      throw LogfireTracingError.invalidEndpoint
+    }
 
-    let exporter = try OtlpTraceExporter(configuration: configuration, endpoint: Constants.endpoint)
+    let configuration = OtlpConfiguration(
+      timeout: OtlpConfiguration.DefaultTimeoutInterval,
+      headers: [("Authorization", trimmedApiKey)],
+      exportAsJson: true
+    )
+
+    let exporter = OtlpHttpTraceExporter(endpoint: endpointURL, config: configuration)
     let processor = BatchSpanProcessor(spanExporter: exporter)
 
     let provider = TracerProviderBuilder()
@@ -183,6 +191,7 @@ final class LogfireTracingManager {
 enum LogfireTracingError: LocalizedError {
   case invalidServiceName
   case missingApiKey
+  case invalidEndpoint
 
   var errorDescription: String? {
     switch self {
@@ -190,6 +199,8 @@ enum LogfireTracingError: LocalizedError {
       return "Service name must not be empty."
     case .missingApiKey:
       return "API key must not be empty."
+    case .invalidEndpoint:
+      return "Logfire endpoint URL is invalid."
     }
   }
 }

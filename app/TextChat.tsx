@@ -174,14 +174,20 @@ function getWebSearchToolDefinition(): ToolDefinition | null {
   return gpt5WebSearchDefinition;
 }
 
-async function buildHackerNewsTools(): Promise<ToolDefinition[]> {
+type HackerNewsToolResolution = {
+  tools: ToolDefinition[];
+  enabled: boolean;
+  reason: 'disabled' | 'ready' | 'empty';
+};
+
+async function buildHackerNewsTools(): Promise<HackerNewsToolResolution> {
   const hackerNewsEnabled = await loadHackerNewsSuiteEnabled();
   if (!hackerNewsEnabled) {
     log.info('[TextChat] Hacker News tools excluded (disabled by user)', {}, {
       enabled: false,
       included: false,
     });
-    return [];
+    return { tools: [], enabled: false, reason: 'disabled' };
   }
 
   const augmented = await Promise.all(
@@ -192,14 +198,23 @@ async function buildHackerNewsTools(): Promise<ToolDefinition[]> {
     (definition): definition is ToolDefinition => Boolean(definition)
   );
 
+  if (filtered.length === 0) {
+    log.warn('[TextChat] Hacker News tools enabled but no valid definitions remained', {}, {
+      enabled: true,
+      included: false,
+      count: 0,
+    });
+    return { tools: [], enabled: true, reason: 'empty' };
+  }
+
   log.info('[TextChat] Hacker News tools prepared', {}, {
     enabled: true,
-    included: filtered.length > 0,
+    included: true,
     count: filtered.length,
     names: filtered.map((tool) => tool.name),
   });
 
-  return filtered;
+  return { tools: filtered, enabled: true, reason: 'ready' };
 }
 
 const summarizeDescription = (value: string): string => {
@@ -591,10 +606,21 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         applyPromptAddition(getGDriveToolDefinitionImpl()),
         applyPromptAddition(getWebSearchToolDefinition()),
       ]);
-      const hackerNewsTools = await buildHackerNewsTools();
+      log.info('[TextChat] Core tool definitions resolved', {}, {
+        githubToolName: githubTool?.name ?? null,
+        gdriveToolName: gdriveTool?.name ?? null,
+        webSearchToolName: webSearchTool?.name ?? null,
+      });
+      const {
+        tools: hackerNewsTools,
+        enabled: hackerNewsEnabled,
+        reason: hackerNewsReason,
+      } = await buildHackerNewsTools();
       log.info('[TextChat] Hacker News tool bundle resolved', {}, {
+        enabled: hackerNewsEnabled,
         count: hackerNewsTools.length,
         names: hackerNewsTools.map((tool) => tool.name),
+        reason: hackerNewsReason,
       });
       const tools = [
         githubTool,
@@ -607,7 +633,15 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       const toolNames = tools
         .map((t) => (t && typeof t === 'object' && 'name' in (t as any) ? (t as any).name : '(unknown)'))
         .filter(Boolean);
-      log.info('[TextChat] tools included:', {}, toolNames);
+      log.info('[TextChat] tools included::::', {}, toolNames);
+      log.info('[TextChat] Hacker News tool status', {}, {
+        enabled: hackerNewsEnabled,
+        included: hackerNewsTools.length > 0,
+        reason: hackerNewsReason,
+      });
+      if (!hackerNewsEnabled) {
+        log.warn('[TextChat] Hacker News tools are disabled via settings; prompt will proceed without them');
+      }
 
       const resolvedInstructions = composeMainPrompt(mainPromptAddition);
       log.info('[TextChat] instructions composed', {}, {

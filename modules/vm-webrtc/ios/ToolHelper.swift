@@ -95,17 +95,23 @@ public class ToolHelper {
   ///   - eventName: Name of the event to emit
   ///   - requestId: Unique identifier for the request
   ///   - parameters: Dictionary of parameters to send
-  public func emitToolRequest(eventName: String, requestId: String, parameters: [String: Any]) {
+  /// - Returns: Generated event identifier for correlation
+  @discardableResult
+  public func emitToolRequest(eventName: String, requestId: String, parameters: [String: Any]) -> String {
+    let eventId = ToolHelper.generateEventId()
+    
     guard let module = module else {
-      print("[ToolHelper] Module reference is nil, cannot emit event")
-      return
+      print("[ToolHelper] Module reference is nil, cannot emit event \(eventName) requestId=\(requestId) eventId=\(eventId)")
+      return eventId
     }
     
     var eventData = parameters
     eventData["requestId"] = requestId
+    eventData["eventId"] = eventId
     
     module.sendEvent(eventName, eventData)
-    print("[ToolHelper] Emitted event: \(eventName) with requestId=\(requestId)")
+    print("[ToolHelper] Emitted event: \(eventName) requestId=\(requestId) eventId=\(eventId)")
+    return eventId
   }
   
   // MARK: - Timeout Management
@@ -133,6 +139,12 @@ public class ToolHelper {
   /// Generate a unique request ID
   /// - Returns: UUID string
   public static func generateRequestId() -> String {
+    return UUID().uuidString
+  }
+  
+  /// Generate a unique event ID
+  /// - Returns: UUID string
+  public static func generateEventId() -> String {
     return UUID().uuidString
   }
 }

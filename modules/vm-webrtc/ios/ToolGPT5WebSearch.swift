@@ -103,11 +103,12 @@ public class ToolGPT5WebSearch: BaseTool {
 
     registerStringCallback(requestId: requestId, callback: completion)
 
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: eventName,
       requestId: requestId,
       parameters: ["query": query]
     )
+    print("[ToolGPT5WebSearch] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
 
     setupStringTimeout(for: requestId, errorMessage: "GPT5 web search request timed out")
   }
@@ -129,11 +130,12 @@ public class ToolGPT5WebSearch: BaseTool {
       }
     }
 
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: eventName,
       requestId: requestId,
       parameters: ["query": query]
     )
+    print("[ToolGPT5WebSearch] 🆔 Event emitted (Swift bridge): requestId=\(requestId) eventId=\(eventId)")
 
     setupStringTimeout(for: requestId, errorMessage: "GPT5 web search request timed out")
   }

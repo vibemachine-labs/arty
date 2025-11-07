@@ -391,18 +391,23 @@ export class ToolGDriveConnector {
   /**
    * Handle a gdrive connector request from Swift.
    */
-  private async handleRequest(event: { requestId: string; self_contained_javascript_gdrive_code_snippet: string }) {
-    const { requestId, self_contained_javascript_gdrive_code_snippet } = event;
+  private async handleRequest(event: { requestId: string; self_contained_javascript_gdrive_code_snippet: string; eventId?: string }) {
+    const { requestId, self_contained_javascript_gdrive_code_snippet, eventId } = event;
     log.info(`[${this.toolName}] 📥 Received request from Swift`, {}, {
       requestId,
+      eventId,
       codeSnippet: self_contained_javascript_gdrive_code_snippet,
       snippetLength: self_contained_javascript_gdrive_code_snippet.length,
     });
 
     try {
-      const result = await this.performOperation({ self_contained_javascript_gdrive_code_snippet });
+      const result = await this.performOperation(
+        { self_contained_javascript_gdrive_code_snippet },
+        { eventId }
+      );
       log.info(`[${this.toolName}] ✅ Operation completed`, {}, {
         requestId,
+        eventId,
         resultLength: String(result).length,
         result: result,
       });
@@ -411,6 +416,7 @@ export class ToolGDriveConnector {
         this.module.sendGDriveConnectorResponse(requestId, result);
         log.info(`[${this.toolName}] 📤 Sent response to Swift`, {}, {
           requestId,
+          eventId,
           response: result,
           responseLength: String(result).length,
         });
@@ -420,6 +426,7 @@ export class ToolGDriveConnector {
     } catch (error) {
       log.error(`[${this.toolName}] ❌ Operation failed`, {}, {
         requestId,
+        eventId,
         errorMessage: error instanceof Error ? error.message : String(error),
         errorStack: error instanceof Error ? error.stack : undefined,
         errorName: error instanceof Error ? error.name : undefined,
@@ -430,6 +437,7 @@ export class ToolGDriveConnector {
         this.module.sendGDriveConnectorResponse(requestId, `Error: ${errorMessage}`);
         log.info(`[${this.toolName}] 📤 Sent error response to Swift`, {}, {
           requestId,
+          eventId,
           errorMessage,
         });
       }
@@ -439,16 +447,18 @@ export class ToolGDriveConnector {
   /**
    * Perform the actual gdrive API operation.
    */
-  private async performOperation(params: GDriveConnectorParams): Promise<string> {
+  private async performOperation(params: GDriveConnectorParams, context?: { eventId?: string }): Promise<string> {
     const { self_contained_javascript_gdrive_code_snippet } = params;
     log.info(`[${this.toolName}] 🔧 Performing gdrive operation`, {}, {
       codeSnippet: self_contained_javascript_gdrive_code_snippet,
       snippetLength: self_contained_javascript_gdrive_code_snippet.length,
+      eventId: context?.eventId,
     });
 
     return executeGDriveSnippet({
       snippet: self_contained_javascript_gdrive_code_snippet,
       toolName: this.toolName,
+      eventId: context?.eventId,
     });
   }
 
@@ -479,19 +489,23 @@ export class ToolGDriveConnector {
 export interface ExecuteGDriveSnippetOptions {
   snippet: string;
   toolName: string;
+  eventId?: string;
 }
 
 export const executeGDriveSnippet = async ({
   snippet,
   toolName,
+  eventId,
 }: ExecuteGDriveSnippetOptions): Promise<string> => {
   const trimmedSnippet = (snippet ?? '').trim();
   const accessToken = await getGDriveAccessToken();
+  const eventMeta = eventId ? { eventId } : {};
 
   const tokenLen = accessToken?.length ?? 0;
   log.info(`[${toolName}] 🔑 GDrive access token retrieved`, {}, {
     hasToken: !!accessToken,
     tokenLength: tokenLen,
+    ...eventMeta,
   });
 
   // Make the GDrive access token available in the eval scope
@@ -599,12 +613,12 @@ export const executeGDriveSnippet = async ({
     }
 
     // Attempt one refresh and retry once
-    log.info(`[${toolName}] 🔁 401 Unauthorized - attempting token refresh`, {}, { url: urlStr });
-    const newToken = await refreshDriveAccessToken(toolName);
-    if (!newToken) {
-      log.warn(`[${toolName}] ⚠️ Token refresh failed`, {}, { url: urlStr });
-      return res;
-    }
+  log.info(`[${toolName}] 🔁 401 Unauthorized - attempting token refresh`, {}, { url: urlStr, ...eventMeta });
+  const newToken = await refreshDriveAccessToken(toolName);
+  if (!newToken) {
+    log.warn(`[${toolName}] ⚠️ Token refresh failed`, {}, { url: urlStr, ...eventMeta });
+    return res;
+  }
 
     // Update Authorization header and retry
     try {
@@ -624,7 +638,7 @@ export const executeGDriveSnippet = async ({
         retryInit = applyAuthHeader(retryInit, newToken);
       }
 
-      log.info(`[${toolName}] 🔁 Retrying request with refreshed token`, {}, { url: urlStr });
+      log.info(`[${toolName}] 🔁 Retrying request with refreshed token`, {}, { url: urlStr, ...eventMeta });
       const retryRes = await originalFetch(retryInput, retryInit);
       return retryRes;
     } catch (e) {
@@ -632,6 +646,7 @@ export const executeGDriveSnippet = async ({
         url: urlStr,
         errorMessage: e instanceof Error ? e.message : String(e),
         errorStack: e instanceof Error ? e.stack : undefined,
+        ...eventMeta,
       }, e);
       return res;
     }
@@ -641,7 +656,8 @@ export const executeGDriveSnippet = async ({
   try {
     log.info(`[${toolName}] 🚀 Evaluating code snippet`, {}, {
       codeSnippet: trimmedSnippet,
-      snippetLength: trimmedSnippet.length
+      snippetLength: trimmedSnippet.length,
+      ...eventMeta,
     });
     if (originalFetch) {
       (globalThis as any).fetch = wrappedFetch;
@@ -654,6 +670,7 @@ export const executeGDriveSnippet = async ({
       errorName: e instanceof Error ? e.name : undefined,
       snippetPreview: trimmedSnippet.slice(0, 200),
       fullSnippet: trimmedSnippet,
+      ...eventMeta,
     }, e);
     if (originalFetch) {
       (globalThis as any).fetch = originalFetch;
@@ -663,7 +680,7 @@ export const executeGDriveSnippet = async ({
 
   try {
     if (execResult && typeof execResult.then === 'function') {
-      log.info(`[${toolName}] ⏳ Awaiting promise from snippet`, {});
+      log.info(`[${toolName}] ⏳ Awaiting promise from snippet`, {}, eventMeta);
       execResult = await execResult;
     }
   } catch (e) {
@@ -672,6 +689,7 @@ export const executeGDriveSnippet = async ({
       errorStack: e instanceof Error ? e.stack : undefined,
       errorName: e instanceof Error ? e.name : undefined,
       snippetPreview: trimmedSnippet.slice(0, 200),
+      ...eventMeta,
     }, e);
     return JSON.stringify({ error: String(e), snippet: trimmedSnippet });
   } finally {
@@ -699,6 +717,7 @@ export const executeGDriveSnippet = async ({
   log.info(`[${toolName}] ✅ executeGDriveSnippet() complete.  Response Lenth: ${serialized.length}`, {}, {
     serializedLength: serialized.length,
     response: serialized,
+    ...eventMeta,
   });
   return serialized;
 };

@@ -124,11 +124,12 @@ public class ToolGDriveConnector: BaseTool {
     
     print("[ToolGDriveConnector] 🧭 Emitting event 'onGDriveConnectorRequest' with requestId=\(requestId)")
     // Emit event to JavaScript using helper
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: "onGDriveConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_gdrive_code_snippet": codeSnippet]
     )
+    print("[ToolGDriveConnector] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "GDrive connector request timed out")
@@ -201,11 +202,12 @@ extension ToolGDriveConnector: GDriveConnectorToolDelegate {
     
     // Emit event to JavaScript using helper
     print("[ToolGDriveConnector] 📤 Emitting GDrive connector request to JavaScript")
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: "onGDriveConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_gdrive_code_snippet": codeSnippet]
     )
+    print("[ToolGDriveConnector] 🆔 Event emitted for OpenAI tool call: requestId=\(requestId) eventId=\(eventId)")
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "GDrive connector request timed out")

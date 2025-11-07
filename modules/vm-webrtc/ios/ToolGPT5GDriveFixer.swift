@@ -104,7 +104,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
 
     registerStringCallback(requestId: requestId, callback: completion)
 
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: "onGPT5GDriveFixerRequest",
       requestId: requestId,
       parameters: [
@@ -113,6 +113,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
         "error_message": errorMessage
       ]
     )
+    print("[ToolGPT5GDriveFixer] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
 
     setupStringTimeout(for: requestId, errorMessage: "GPT5 gdrive fixer request timed out")
   }
@@ -145,7 +146,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
       errorMessage = dict["error_message"] as? String ?? ""
     }
 
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: "onGPT5GDriveFixerRequest",
       requestId: requestId,
       parameters: [
@@ -154,6 +155,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
         "error_message": errorMessage
       ]
     )
+    print("[ToolGPT5GDriveFixer] 🆔 Event emitted (Swift bridge): requestId=\(requestId) eventId=\(eventId)")
 
     setupStringTimeout(for: requestId, errorMessage: "GPT5 gdrive fixer request timed out")
   }

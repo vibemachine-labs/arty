@@ -125,11 +125,12 @@ public class ToolGithubConnector: BaseTool {
     
     // Emit event to JavaScript using helper
     print("[ToolGithubConnector] 📤 Emitting onGithubConnectorRequest event to JavaScript")
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: "onGithubConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_octokit_code_snippet": codeSnippet]
     )
+    print("[ToolGithubConnector] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "Github connector request timed out")
@@ -199,11 +200,12 @@ extension ToolGithubConnector: GithubConnectorToolDelegate {
     
     // Emit event to JavaScript using helper
     print("[ToolGithubConnector] 📤 Emitting github connector request to JavaScript")
-    helper.emitToolRequest(
+    let eventId = helper.emitToolRequest(
       eventName: "onGithubConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_octokit_code_snippet": codeSnippet]
     )
+    print("[ToolGithubConnector] 🆔 Event emitted for OpenAI tool call: requestId=\(requestId) eventId=\(eventId)")
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "Github connector request timed out")

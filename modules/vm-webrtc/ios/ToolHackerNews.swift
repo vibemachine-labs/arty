@@ -1,7 +1,7 @@
 import Foundation
 import ExpoModulesCore
 
-enum HackerNewsToolName: String, CaseIterable {
+public enum HackerNewsToolName: String, CaseIterable {
   case hackerNews_item
   case hackerNews_user
   case hackerNews_topstories

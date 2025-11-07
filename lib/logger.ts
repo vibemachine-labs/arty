@@ -9,6 +9,8 @@ const SENSITIVE_KEYWORDS = [
   'secret',
   'apikey',
   'api_key',
+  'access_token',
+  'accessToken',
   'credential',
   'session',
   'cookie',
@@ -16,6 +18,9 @@ const SENSITIVE_KEYWORDS = [
   'authorization',
   'bearer',
 ] as const;
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const KEYWORD_REGEX = new RegExp(SENSITIVE_KEYWORDS.map(escapeRegExp).join('|'), 'gi');
 
 const levelPriority = {
   debug: 10,
@@ -36,10 +41,6 @@ const isLikelySensitiveString = (value: string) => {
     return false;
   }
 
-  if (hasSensitiveKeyword(value)) {
-    return true;
-  }
-
   if (/^bearer\s+\S+/i.test(value)) {
     return true;
   }
@@ -51,13 +52,54 @@ const isLikelySensitiveString = (value: string) => {
   return false;
 };
 
+const redactKeywordMatches = (value: string) => {
+  if (!value || KEYWORD_REGEX.source.length === 0) {
+    return value;
+  }
+  return value.replace(KEYWORD_REGEX, REDACTED_TEXT);
+};
+
+const redactCredentialAssignments = (value: string) => {
+  if (!value) {
+    return value;
+  }
+  let result = value;
+
+  result = result.replace(/(Bearer\s+)([A-Za-z0-9._~\-]+)/gi, `$1${REDACTED_TEXT}`);
+  result = result.replace(/(access[_-]?token)(\s*[:=]\s*)(\S+)/gi, `$1$2${REDACTED_TEXT}`);
+  result = result.replace(/(api[_-]?key)(\s*[:=]\s*)(\S+)/gi, `$1$2${REDACTED_TEXT}`);
+  result = result.replace(/(secret)(\s*[:=]\s*)(\S+)/gi, `$1$2${REDACTED_TEXT}`);
+  result = result.replace(/(authorization)(\s*[:=]\s*)(\S+)/gi, `$1$2${REDACTED_TEXT}`);
+
+  return result;
+};
+
+const sanitizeStringValue = (value: string, keyHint?: string) => {
+  if (!value) {
+    return value;
+  }
+
+  if (keyHint && hasSensitiveKeyword(keyHint)) {
+    return REDACTED_TEXT;
+  }
+
+  if (isLikelySensitiveString(value)) {
+    if (/^bearer\s+/i.test(value.trim())) {
+      return value.replace(/(Bearer\s+)\S+/i, `$1${REDACTED_TEXT}`);
+    }
+    return REDACTED_TEXT;
+  }
+
+  return redactKeywordMatches(redactCredentialAssignments(value));
+};
+
 const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
   if (value === null || value === undefined) {
     return value;
   }
 
   if (typeof value === 'string') {
-    return keyHint && hasSensitiveKeyword(keyHint) ? REDACTED_TEXT : isLikelySensitiveString(value) ? REDACTED_TEXT : value;
+    return sanitizeStringValue(value, keyHint);
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -91,7 +133,7 @@ const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
   return REDACTED_TEXT;
 };
 
-const sanitizeMessage = (message: string) => (isLikelySensitiveString(message) ? REDACTED_TEXT : message);
+const sanitizeMessage = (message: string) => sanitizeStringValue(message);
 
 const sanitizeArgs = (args: unknown[]) => args.map((arg) => sanitizeValue(arg));
 

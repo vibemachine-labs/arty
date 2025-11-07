@@ -109,6 +109,7 @@ const getMinimumLevel = (): LogLevel => {
 };
 
 let minimumLevel = getMinimumLevel();
+let redactionEnabled = true;
 
 const shouldLog = (level: LogLevel) => levelPriority[level] >= levelPriority[minimumLevel];
 
@@ -122,9 +123,9 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
     return;
   }
 
-  const allowSensitiveLogging = options.allowSensitiveLogging === true;
-  const safeMessage = allowSensitiveLogging ? message : sanitizeMessage(message);
-  const safeArgs = allowSensitiveLogging ? args : sanitizeArgs(args);
+  const applyRedaction = redactionEnabled && options.allowSensitiveLogging !== true;
+  const safeMessage = applyRedaction ? sanitizeMessage(message) : message;
+  const safeArgs = applyRedaction ? sanitizeArgs(args) : args;
 
   const timestamp = new Date().toISOString();
   const prefix = `[${LOG_PREFIX}][${level.toUpperCase()}][${timestamp}]`;
@@ -176,6 +177,12 @@ export const log = {
   },
   setLevel(level: LogLevel) {
     minimumLevel = level;
+  },
+  setRedactionEnabled(enabled: boolean) {
+    redactionEnabled = enabled;
+  },
+  isRedactionEnabled() {
+    return redactionEnabled;
   },
   debug(message: string, options: LogOptions = {}, ...args: unknown[]) {
     emit('debug', message, options, ...args);

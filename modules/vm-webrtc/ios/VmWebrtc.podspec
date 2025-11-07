@@ -18,7 +18,6 @@ Pod::Spec.new do |s|
   s.dependency 'WebRTC-lib', '140.0.0'
   s.dependency 'OpenTelemetry-Swift-Sdk', '~> 2.0'
   s.dependency 'OpenTelemetry-Swift-Protocol-Exporter-Common', '~> 2.0'
-  s.dependency 'OpenTelemetry-Swift-Protocol-Exporter-Http', '~> 2.0'
   s.dependency 'OpenTelemetry-Swift-Protocol-Exporter-Http', '~> 2.2'
 
 

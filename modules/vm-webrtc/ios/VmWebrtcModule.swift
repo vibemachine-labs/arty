@@ -46,6 +46,7 @@ public class VmWebrtcModule: Module {
   private var toolGDriveConnector: ToolGDriveConnector?
   private var toolGPT5GDriveFixer: ToolGPT5GDriveFixer?
   private var toolGPT5WebSearch: ToolGPT5WebSearch?
+  private let logfireTracingManager = LogfireTracingManager()
 
   public func helloFromExpoModule() -> String {
     return "Hello world from module"
@@ -196,6 +197,14 @@ public class VmWebrtcModule: Module {
         self.webrtcClient.closeConnection()
       }
       return state
+    }
+
+    AsyncFunction("initializeLogfireTracing") { (serviceName: String, apiKey: String) in
+      try await self.logfireTracingManager.initialize(serviceName: serviceName, apiKey: apiKey)
+    }
+
+    Function("logfireEvent") { (tracerName: String, spanName: String, attributes: [String: Any]?) in
+      self.logfireTracingManager.recordEvent(tracerName: tracerName, spanName: spanName, attributes: attributes)
     }
 
     // JavaScript calls this to send github connector result back

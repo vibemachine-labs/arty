@@ -547,9 +547,9 @@ extension OpenAIWebRTCClient {
 
     if let prettyData = try? JSONSerialization.data(withJSONObject: session, options: [.prettyPrinted]),
        let prettyString = String(data: prettyData, encoding: .utf8) {
-      self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload", attributes: logAttributes(for: .debug, metadata: ["session": prettyString]))
+      self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload", attributes: logAttributes(for: .info, metadata: ["session": prettyString]))
     } else {
-      self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload (fallback formatting)", attributes: logAttributes(for: .debug, metadata: ["session": session]))
+      self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload (fallback formatting)", attributes: logAttributes(for: .info, metadata: ["session": session]))
     }
 
     _ = sendEvent([

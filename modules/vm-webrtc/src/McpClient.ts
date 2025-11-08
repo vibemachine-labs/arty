@@ -3,6 +3,7 @@ import type { ToolDefinition } from './VmWebrtc.types';
 
 const MCP_JSONRPC_VERSION = '2.0';
 const MCP_TOOLS_LIST_METHOD = 'tools/list';
+const MCP_ACCEPT_HEADER = 'text/event-stream, application/json;q=0.9';
 
 type JsonRpcError = {
   code: number;
@@ -98,6 +99,7 @@ export class McpClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: MCP_ACCEPT_HEADER,
         },
         body: JSON.stringify(payload),
         signal: controller.signal,

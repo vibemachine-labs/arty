@@ -29,6 +29,9 @@ final class NativeLogger {
     print(consoleMessage)
 
     guard let tracingManager, let tracerName else { return }
+    guard tracingManager.isInitialized else {
+      return
+    }
     tracingManager.recordEvent(
       tracerName: tracerName,
       spanName: trimmedMessage,

@@ -19,10 +19,17 @@ final class LogfireTracingManager {
   private(set) var isInitialized = false
 
   func initialize(serviceName: String, apiKey: String) async throws {
+    NSLog(
+      "[LogfireTracingManager] initialize requested service=%@ apiKey=%@",
+      serviceName,
+      Self.redactedApiKeyDescription(apiKey)
+    )
+
     try await withCheckedThrowingContinuation { continuation in
       workerQueue.async {
         do {
           try self.initializeIfNeeded(serviceName: serviceName, apiKey: apiKey)
+          NSLog("[LogfireTracingManager] initialize completed (isInitialized=%@)", self.isInitialized.description)
           continuation.resume()
         } catch {
           continuation.resume(throwing: error)
@@ -79,6 +86,7 @@ final class LogfireTracingManager {
     if isInitialized,
        trimmedServiceName == currentServiceName,
        trimmedApiKey == currentApiKey {
+      NSLog("[LogfireTracingManager] initializeIfNeeded reused existing configuration")
       return
     }
 
@@ -115,6 +123,7 @@ final class LogfireTracingManager {
     currentServiceName = trimmedServiceName
     currentApiKey = trimmedApiKey
     isInitialized = true
+    NSLog("[LogfireTracingManager] tracing initialized for service=%@ apiKey=%@", trimmedServiceName, Self.redactedApiKeyDescription(trimmedApiKey))
   }
 
   private func tracer(named name: String) -> Tracer? {
@@ -185,6 +194,14 @@ final class LogfireTracingManager {
     currentServiceName = nil
     currentApiKey = nil
     isInitialized = false
+    NSLog("[LogfireTracingManager] tracing teardown completed")
+  }
+
+  private static func redactedApiKeyDescription(_ apiKey: String) -> String {
+    guard !apiKey.isEmpty else { return "empty" }
+    let prefix = apiKey.prefix(4)
+    let suffix = apiKey.suffix(4)
+    return "\(prefix)…\(suffix) (len=\(apiKey.count))"
   }
 }
 

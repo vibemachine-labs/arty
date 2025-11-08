@@ -7,9 +7,9 @@ extension OpenAIWebRTCClient {
 
   func buildEndpointURL(baseURL: String?, model: String?) throws -> URL {
     let endpoint = (baseURL?.isEmpty == false ? baseURL! : defaultEndpoint)
-    self.logger.log("[VmWebrtc][DEBUG] " + "Building OpenAI endpoint URL", attributes: logAttributes(for: .debug, metadata: ["base": endpoint]))
+    self.logger.log("[VmWebrtc] " + "Building OpenAI endpoint URL", attributes: logAttributes(for: .debug, metadata: ["base": endpoint]))
     guard var components = URLComponents(string: endpoint) else {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to parse OpenAI endpoint", attributes: logAttributes(for: .error, metadata: ["endpoint": endpoint]))
+      self.logger.log("[VmWebrtc] " + "Failed to parse OpenAI endpoint", attributes: logAttributes(for: .error, metadata: ["endpoint": endpoint]))
       throw OpenAIWebRTCError.invalidEndpoint
     }
 
@@ -20,17 +20,17 @@ extension OpenAIWebRTCClient {
     components.queryItems = items
 
     guard let url = components.url else {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to build final OpenAI endpoint URL", attributes: logAttributes(for: .error, metadata: ["endpoint": endpoint]))
+      self.logger.log("[VmWebrtc] " + "Failed to build final OpenAI endpoint URL", attributes: logAttributes(for: .error, metadata: ["endpoint": endpoint]))
       throw OpenAIWebRTCError.invalidEndpoint
     }
-    self.logger.log("[VmWebrtc][DEBUG] " + "OpenAI endpoint URL ready", attributes: logAttributes(for: .debug, metadata: ["url": url.absoluteString]))
+    self.logger.log("[VmWebrtc] " + "OpenAI endpoint URL ready", attributes: logAttributes(for: .debug, metadata: ["url": url.absoluteString]))
     return url
   }
 
   func configureAudioSession(for output: AudioOutputPreference) throws {
     let desiredRoute: OutputRoute = (output == .speakerphone) ? .speaker : .receiver
     let session = AVAudioSession.sharedInstance()
-    self.logger.log("[VmWebrtc][DEBUG] " + "Configuring AVAudioSession route", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Configuring AVAudioSession route", attributes: logAttributes(for: .debug, metadata: [
       "desiredRoute": desiredRoute == .speaker ? "speaker" : "receiver",
       "currentCategory": session.category.rawValue,
       "currentMode": session.mode.rawValue,
@@ -55,7 +55,7 @@ extension OpenAIWebRTCClient {
     configuration.categoryOptions = options
 
     RTCAudioSessionConfiguration.setWebRTC(configuration)
-    self.logger.log("[VmWebrtc][DEBUG] " + "Applied WebRTC audio session defaults", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Applied WebRTC audio session defaults", attributes: logAttributes(for: .debug, metadata: [
       "route": route == .speaker ? "speaker" : "receiver",
       "mode": configuration.mode,
       "category": configuration.category,
@@ -71,7 +71,7 @@ extension OpenAIWebRTCClient {
     let session = AVAudioSession.sharedInstance()
 
     do {
-      self.logger.log("[VmWebrtc][DEBUG] " + "Setting audio session category", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "Setting audio session category", attributes: logAttributes(for: .debug, metadata: [
         "route": route == .speaker ? "speaker" : "receiver",
         "previousCategory": session.category.rawValue,
         "previousMode": session.mode.rawValue,
@@ -90,7 +90,7 @@ extension OpenAIWebRTCClient {
       let overridePort: AVAudioSession.PortOverride = (route == .speaker) ? .speaker : .none
       try session.overrideOutputAudioPort(overridePort)
 
-      self.logger.log("[VmWebrtc][INFO] " + "Audio route updated", attributes: logAttributes(for: .info, metadata: [
+      self.logger.log("[VmWebrtc] " + "Audio route updated", attributes: logAttributes(for: .info, metadata: [
         "override": overridePort == .speaker ? "speaker" : "receiver",
         "category": session.category.rawValue,
         "mode": session.mode.rawValue,
@@ -100,7 +100,7 @@ extension OpenAIWebRTCClient {
         "outputVolume": session.outputVolume
       ]))
     } catch {
-      self.logger.log("[VmWebrtc][ERROR] " + "Audio route switch failed", attributes: logAttributes(for: .error, metadata: [
+      self.logger.log("[VmWebrtc] " + "Audio route switch failed", attributes: logAttributes(for: .error, metadata: [
         "override": route == .speaker ? "speaker" : "receiver",
         "error": error.localizedDescription,
         "category": session.category.rawValue,
@@ -116,7 +116,7 @@ extension OpenAIWebRTCClient {
     RTCAudioSession.sharedInstance().add(self)
     isMonitoringAudioRoute = true
     let session = AVAudioSession.sharedInstance()
-    self.logger.log("[VmWebrtc][DEBUG] " + "Started monitoring audio routes", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Started monitoring audio routes", attributes: logAttributes(for: .debug, metadata: [
       "category": session.category.rawValue,
       "mode": session.mode.rawValue,
       "options": describeCategoryOptions(session.categoryOptions),
@@ -130,7 +130,7 @@ extension OpenAIWebRTCClient {
     RTCAudioSession.sharedInstance().remove(self)
     isMonitoringAudioRoute = false
     let session = AVAudioSession.sharedInstance()
-    self.logger.log("[VmWebrtc][DEBUG] " + "Stopped monitoring audio routes", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Stopped monitoring audio routes", attributes: logAttributes(for: .debug, metadata: [
       "category": session.category.rawValue,
       "mode": session.mode.rawValue,
       "options": describeCategoryOptions(session.categoryOptions),
@@ -142,12 +142,12 @@ extension OpenAIWebRTCClient {
     let session = AVAudioSession.sharedInstance()
     do {
       try session.setActive(false, options: [.notifyOthersOnDeactivation])
-      self.logger.log("[VmWebrtc][DEBUG] " + "AVAudioSession deactivated", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "AVAudioSession deactivated", attributes: logAttributes(for: .debug, metadata: [
         "category": session.category.rawValue,
         "mode": session.mode.rawValue
       ]))
     } catch {
-      self.logger.log("[VmWebrtc][WARN] " + "Failed to deactivate AVAudioSession", attributes: logAttributes(for: .warn, metadata: [
+      self.logger.log("[VmWebrtc] " + "Failed to deactivate AVAudioSession", attributes: logAttributes(for: .warn, metadata: [
           "error": error.localizedDescription,
           "category": session.category.rawValue,
           "mode": session.mode.rawValue
@@ -215,7 +215,7 @@ extension OpenAIWebRTCClient {
 
   func makePeerConnection() throws -> RTCPeerConnection {
     if let existingConnection = peerConnection {
-      self.logger.log("[VmWebrtc][WARN] " + "Disposing existing peer connection before creating a new one", attributes: logAttributes(for: .warn))
+      self.logger.log("[VmWebrtc] " + "Disposing existing peer connection before creating a new one", attributes: logAttributes(for: .warn))
       stopInboundAudioStatsMonitoring()
       stopOutboundAudioStatsMonitoring()
       remoteAudioTrackId = nil
@@ -244,11 +244,11 @@ extension OpenAIWebRTCClient {
       constraints: constraints,
       delegate: self
     ) else {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to create RTCPeerConnection instance", attributes: logAttributes(for: .error))
+      self.logger.log("[VmWebrtc] " + "Failed to create RTCPeerConnection instance", attributes: logAttributes(for: .error))
       throw OpenAIWebRTCError.connectionFailed("peerConnectionFactory returned nil")
     }
 
-    self.logger.log("[VmWebrtc][DEBUG] " + "Created RTCPeerConnection", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Created RTCPeerConnection", attributes: logAttributes(for: .debug, metadata: [
       "iceServers": configuration.iceServers.count,
     ]))
 
@@ -266,14 +266,14 @@ extension OpenAIWebRTCClient {
     let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
 
     guard connection.add(audioTrack, streamIds: ["stream0"]) != nil else {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to attach audio track to peer connection", attributes: logAttributes(for: .error))
+      self.logger.log("[VmWebrtc] " + "Failed to attach audio track to peer connection", attributes: logAttributes(for: .error))
       throw OpenAIWebRTCError.failedToAddAudioTrack
     }
 
 
     self.audioTrack = audioTrack
     audioTrack.isEnabled = !isOutgoingAudioMuted
-    self.logger.log("[VmWebrtc][DEBUG] " + "Attached audio track to peer connection", attributes: logAttributes(for: .debug))
+    self.logger.log("[VmWebrtc] " + "Attached audio track to peer connection", attributes: logAttributes(for: .debug))
 
     let dataChannelConfig = RTCDataChannelConfiguration()
     dataChannelConfig.channelId = 0
@@ -282,13 +282,13 @@ extension OpenAIWebRTCClient {
 
     if let dataChannel {
       dataChannel.delegate = self
-      self.logger.log("[VmWebrtc][DEBUG] " + "Created data channel", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "Created data channel", attributes: logAttributes(for: .debug, metadata: [
         "label": dataChannel.label,
         "isOrdered": dataChannelConfig.isOrdered,
         "channelId": dataChannelConfig.channelId
       ]))
     } else {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to create data channel", attributes: logAttributes(for: .error))
+      self.logger.log("[VmWebrtc] " + "Failed to create data channel", attributes: logAttributes(for: .error))
     }
 
     peerConnection = connection
@@ -305,18 +305,18 @@ extension OpenAIWebRTCClient {
     return try await withCheckedThrowingContinuation { continuation in
       connection.offer(for: constraints) { sdp, error in
         if let error = error {
-          self.logger.log("[VmWebrtc][ERROR] " + "Failed to create local SDP offer", attributes: logAttributes(for: .error, metadata: ["error": error.localizedDescription]))
+          self.logger.log("[VmWebrtc] " + "Failed to create local SDP offer", attributes: logAttributes(for: .error, metadata: ["error": error.localizedDescription]))
           continuation.resume(throwing: error)
           return
         }
 
         guard let sdp = sdp else {
-          self.logger.log("[VmWebrtc][ERROR] " + "Peer connection returned an empty SDP offer", attributes: logAttributes(for: .error))
+          self.logger.log("[VmWebrtc] " + "Peer connection returned an empty SDP offer", attributes: logAttributes(for: .error))
           continuation.resume(throwing: OpenAIWebRTCError.connectionFailed("failed"))
           return
         }
 
-        self.logger.log("[VmWebrtc][DEBUG] " + "Local SDP offer ready", attributes: logAttributes(for: .debug, metadata: ["sdpLength": sdp.sdp.count]))
+        self.logger.log("[VmWebrtc] " + "Local SDP offer ready", attributes: logAttributes(for: .debug, metadata: ["sdpLength": sdp.sdp.count]))
         continuation.resume(returning: sdp)
       }
     }
@@ -326,10 +326,10 @@ extension OpenAIWebRTCClient {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       connection.setLocalDescription(description) { error in
         if let error = error {
-          self.logger.log("[VmWebrtc][ERROR] " + "Failed to set local description", attributes: logAttributes(for: .error, metadata: ["error": error.localizedDescription]))
+          self.logger.log("[VmWebrtc] " + "Failed to set local description", attributes: logAttributes(for: .error, metadata: ["error": error.localizedDescription]))
           continuation.resume(throwing: error)
         } else {
-          self.logger.log("[VmWebrtc][DEBUG] " + "Local description successfully set", attributes: logAttributes(for: .debug))
+          self.logger.log("[VmWebrtc] " + "Local description successfully set", attributes: logAttributes(for: .debug))
           continuation.resume(returning: ())
         }
       }
@@ -340,10 +340,10 @@ extension OpenAIWebRTCClient {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       connection.setRemoteDescription(description) { error in
         if let error = error {
-          self.logger.log("[VmWebrtc][ERROR] " + "Failed to set remote description", attributes: logAttributes(for: .error, metadata: ["error": error.localizedDescription]))
+          self.logger.log("[VmWebrtc] " + "Failed to set remote description", attributes: logAttributes(for: .error, metadata: ["error": error.localizedDescription]))
           continuation.resume(throwing: error)
         } else {
-          self.logger.log("[VmWebrtc][DEBUG] " + "Remote description successfully set", attributes: logAttributes(for: .debug))
+          self.logger.log("[VmWebrtc] " + "Remote description successfully set", attributes: logAttributes(for: .debug))
           continuation.resume(returning: ())
         }
       }
@@ -352,11 +352,11 @@ extension OpenAIWebRTCClient {
 
   func waitForIceGathering(on connection: RTCPeerConnection, timeout: TimeInterval?) async throws -> TimeInterval {
     if connection.iceGatheringState == .complete {
-      self.logger.log("[VmWebrtc][DEBUG] " + "ICE gathering already complete", attributes: logAttributes(for: .debug, metadata: ["state": connection.iceGatheringState.rawValue]))
+      self.logger.log("[VmWebrtc] " + "ICE gathering already complete", attributes: logAttributes(for: .debug, metadata: ["state": connection.iceGatheringState.rawValue]))
       return 0
     }
 
-    self.logger.log("[VmWebrtc][DEBUG] " + "Waiting for ICE gathering to complete", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Waiting for ICE gathering to complete", attributes: logAttributes(for: .debug, metadata: [
       "state": connection.iceGatheringState.rawValue,
       "timeoutSeconds": timeout ?? 0
     ]))
@@ -389,7 +389,7 @@ extension OpenAIWebRTCClient {
           await MainActor.run { [weak self] in
             guard let self else { return }
             guard let continuation = self.iceGatheringContinuation else { return }
-            self.logger.log("[VmWebrtc][WARN] " + "ICE gathering timeout reached; sending offer with partial candidates", attributes: logAttributes(for: .warn, metadata: [
+            self.logger.log("[VmWebrtc] " + "ICE gathering timeout reached; sending offer with partial candidates", attributes: logAttributes(for: .warn, metadata: [
                 "timeoutSeconds": timeout,
                 "currentState": connection.iceGatheringState.rawValue
               ]))
@@ -407,7 +407,7 @@ extension OpenAIWebRTCClient {
   }
 
   func exchangeSDPWithOpenAI(apiKey: String, endpointURL: URL, offerSDP: String) async throws -> String {
-    self.logger.log("[VmWebrtc][DEBUG] " + "Sending SDP offer to OpenAI", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Sending SDP offer to OpenAI", attributes: logAttributes(for: .debug, metadata: [
       "endpoint": endpointURL.absoluteString,
       "sdpLength": offerSDP.count
     ]))
@@ -421,31 +421,31 @@ extension OpenAIWebRTCClient {
     let (data, response) = try await URLSession.shared.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
-      self.logger.log("[VmWebrtc][ERROR] " + "OpenAI response missing HTTP status", attributes: logAttributes(for: .error))
+      self.logger.log("[VmWebrtc] " + "OpenAI response missing HTTP status", attributes: logAttributes(for: .error))
       throw OpenAIWebRTCError.openAIResponseDecoding
     }
 
     guard (200..<300).contains(httpResponse.statusCode) else {
-      self.logger.log("[VmWebrtc][ERROR] " + "OpenAI rejected SDP offer", attributes: logAttributes(for: .error, metadata: ["status": httpResponse.statusCode]))
+      self.logger.log("[VmWebrtc] " + "OpenAI rejected SDP offer", attributes: logAttributes(for: .error, metadata: ["status": httpResponse.statusCode]))
       throw OpenAIWebRTCError.openAIRejected(httpResponse.statusCode)
     }
 
     guard let answer = String(data: data, encoding: .utf8), answer.isEmpty == false else {
-      self.logger.log("[VmWebrtc][ERROR] " + "OpenAI returned an empty SDP answer", attributes: logAttributes(for: .error))
+      self.logger.log("[VmWebrtc] " + "OpenAI returned an empty SDP answer", attributes: logAttributes(for: .error))
       throw OpenAIWebRTCError.openAIResponseDecoding
     }
 
-    self.logger.log("[VmWebrtc][DEBUG] " + "Received SDP answer from OpenAI", attributes: logAttributes(for: .debug, metadata: ["sdpLength": answer.count]))
+    self.logger.log("[VmWebrtc] " + "Received SDP answer from OpenAI", attributes: logAttributes(for: .debug, metadata: ["sdpLength": answer.count]))
     return answer
   }
 
   func waitForConnection(toReach connection: RTCPeerConnection, timeout: TimeInterval) async throws -> String {
     if connection.iceConnectionState == .connected || connection.iceConnectionState == .completed {
-      self.logger.log("[VmWebrtc][INFO] " + "OpenAI WebRTC connection established", attributes: logAttributes(for: .info, metadata: ["state": stringValue(for: connection.iceConnectionState)]))
+      self.logger.log("[VmWebrtc] " + "OpenAI WebRTC connection established", attributes: logAttributes(for: .info, metadata: ["state": stringValue(for: connection.iceConnectionState)]))
       return stringValue(for: connection.iceConnectionState)
     }
 
-    self.logger.log("[VmWebrtc][DEBUG] " + "Waiting for ICE connection state to reach connected", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Waiting for ICE connection state to reach connected", attributes: logAttributes(for: .debug, metadata: [
       "currentState": stringValue(for: connection.iceConnectionState),
       "timeoutSeconds": timeout
     ]))
@@ -464,7 +464,7 @@ extension OpenAIWebRTCClient {
 
         guard let self, !Task.isCancelled else { return }
 
-        self.logger.log("[VmWebrtc][ERROR] " + "Timed out waiting for ICE connection state to reach connected", attributes: logAttributes(for: .error, metadata: [
+        self.logger.log("[VmWebrtc] " + "Timed out waiting for ICE connection state to reach connected", attributes: logAttributes(for: .error, metadata: [
           "lastState": stringValue(for: connection.iceConnectionState),
           "timeoutSeconds": timeout
         ]))
@@ -474,7 +474,7 @@ extension OpenAIWebRTCClient {
   }
 
   private func failPendingConnection(with error: OpenAIWebRTCError) {
-    self.logger.log("[VmWebrtc][ERROR] " + "Failing pending OpenAI WebRTC connection", attributes: logAttributes(for: .error, metadata: ["reason": error.localizedDescription]))
+    self.logger.log("[VmWebrtc] " + "Failing pending OpenAI WebRTC connection", attributes: logAttributes(for: .error, metadata: ["reason": error.localizedDescription]))
     connectionTimeoutTask?.cancel()
     connectionTimeoutTask = nil
     connectionContinuation?.resume(throwing: error)
@@ -485,11 +485,11 @@ extension OpenAIWebRTCClient {
   @MainActor
   func handleIdleTimeoutTriggered() {
     guard peerConnection != nil || dataChannel != nil else {
-      self.logger.log("[VmWebrtc][TRACE] " + "[IdleTimer] Timeout fired without an active session; ignoring", attributes: logAttributes(for: .trace))
+      self.logger.log("[VmWebrtc] " + "[IdleTimer] Timeout fired without an active session; ignoring", attributes: logAttributes(for: .trace))
       return
     }
 
-    self.logger.log("[VmWebrtc][TRACE] " + "[IdleTimer] Inactivity threshold reached, disconnecting session", attributes: logAttributes(for: .trace, metadata: [
+    self.logger.log("[VmWebrtc] " + "[IdleTimer] Inactivity threshold reached, disconnecting session", attributes: logAttributes(for: .trace, metadata: [
         "timeoutSeconds": Constants.idleTimeoutSeconds
       ]))
 
@@ -510,7 +510,7 @@ extension OpenAIWebRTCClient {
     }
 
     guard let dataChannel, dataChannel.readyState == .open else {
-      self.logger.log("[VmWebrtc][WARN] " + "Data channel not ready for initial session configuration", attributes: logAttributes(for: .warn, metadata: [
+      self.logger.log("[VmWebrtc] " + "Data channel not ready for initial session configuration", attributes: logAttributes(for: .warn, metadata: [
           "hasChannel": dataChannel != nil
         ]))
       return
@@ -521,7 +521,7 @@ extension OpenAIWebRTCClient {
 
     for definition in toolDefinitions {
       guard let name = definition["name"] as? String, !name.isEmpty else {
-        self.logger.log("[VmWebrtc][WARN] " + "Encountered tool definition without a valid name. Skipping.", attributes: logAttributes(for: .warn))
+        self.logger.log("[VmWebrtc] " + "Encountered tool definition without a valid name. Skipping.", attributes: logAttributes(for: .warn))
         continue
       }
       definitionsByName[name] = definition
@@ -544,7 +544,7 @@ extension OpenAIWebRTCClient {
     }
 
     if tools.isEmpty && !toolDefinitions.isEmpty {
-      self.logger.log("[VmWebrtc][WARN] " + "Tool definitions were provided from JavaScript but none matched configured delegates", attributes: logAttributes(for: .warn, metadata: [
+      self.logger.log("[VmWebrtc] " + "Tool definitions were provided from JavaScript but none matched configured delegates", attributes: logAttributes(for: .warn, metadata: [
           "definitionCount": toolDefinitions.count
         ]))
     }
@@ -578,9 +578,9 @@ extension OpenAIWebRTCClient {
 
     if let prettyData = try? JSONSerialization.data(withJSONObject: session, options: [.prettyPrinted]),
        let prettyString = String(data: prettyData, encoding: .utf8) {
-      self.logger.log("[VmWebrtc][DEBUG] " + "📑 Sending session.update payload", attributes: logAttributes(for: .debug, metadata: ["session": prettyString]))
+      self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload", attributes: logAttributes(for: .debug, metadata: ["session": prettyString]))
     } else {
-      self.logger.log("[VmWebrtc][DEBUG] " + "📑 Sending session.update payload (fallback formatting)", attributes: logAttributes(for: .debug, metadata: ["session": session]))
+      self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload (fallback formatting)", attributes: logAttributes(for: .debug, metadata: ["session": session]))
     }
 
     _ = sendEvent([
@@ -600,7 +600,7 @@ extension OpenAIWebRTCClient {
   @discardableResult
   func sendEvent(_ payload: [String: Any]) -> Bool {
     guard let dataChannel else {
-      self.logger.log("[VmWebrtc][ERROR] " + "Attempted to send event without an active data channel", attributes: logAttributes(for: .error))
+      self.logger.log("[VmWebrtc] " + "Attempted to send event without an active data channel", attributes: logAttributes(for: .error))
       return false
     }
 
@@ -608,13 +608,13 @@ extension OpenAIWebRTCClient {
       let data = try JSONSerialization.data(withJSONObject: payload, options: [])
       let buffer = RTCDataBuffer(data: data, isBinary: false)
       let success = dataChannel.sendData(buffer)
-      self.logger.log("[VmWebrtc][DEBUG] " + "Sent data channel event", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "Sent data channel event", attributes: logAttributes(for: .debug, metadata: [
         "bytes": data.count,
         "success": success
       ]))
       return success
     } catch {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to encode event payload", attributes: logAttributes(for: .error, metadata: [
+      self.logger.log("[VmWebrtc] " + "Failed to encode event payload", attributes: logAttributes(for: .error, metadata: [
         "error": error.localizedDescription
       ]))
       return false
@@ -636,7 +636,7 @@ extension OpenAIWebRTCClient {
 extension OpenAIWebRTCClient: RTCAudioSessionDelegate {
   func audioSession(_ audioSession: RTCAudioSession, didSetActive active: Bool) {
     let session = AVAudioSession.sharedInstance()
-    self.logger.log("[VmWebrtc][DEBUG] " + "RTCAudioSession didSetActive", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "RTCAudioSession didSetActive", attributes: logAttributes(for: .debug, metadata: [
       "active": active,
       "category": session.category.rawValue,
       "mode": session.mode.rawValue,
@@ -652,7 +652,7 @@ extension OpenAIWebRTCClient: RTCAudioSessionDelegate {
     didChange routeChangeReason: AVAudioSession.RouteChangeReason,
     previousRoute: AVAudioSessionRouteDescription
   ) {
-    self.logger.log("[VmWebrtc][DEBUG] " + "Audio route change detected", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Audio route change detected", attributes: logAttributes(for: .debug, metadata: [
       "reason": describeRouteChangeReason(routeChangeReason),
       "rawReason": routeChangeReason.rawValue,
       "previousOutputs": describeAudioOutputs(previousRoute),
@@ -668,7 +668,7 @@ extension OpenAIWebRTCClient: RTCAudioSessionDelegate {
 
   func audioSession(_ audioSession: RTCAudioSession, didChange canPlayOrRecord: Bool) {
     let session = AVAudioSession.sharedInstance()
-    self.logger.log("[VmWebrtc][DEBUG] " + "RTCAudioSession canPlayOrRecord changed", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "RTCAudioSession canPlayOrRecord changed", attributes: logAttributes(for: .debug, metadata: [
       "canPlayOrRecord": canPlayOrRecord,
       "category": session.category.rawValue,
       "mode": session.mode.rawValue,
@@ -684,7 +684,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
 
   func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
     guard let audioTrack = stream.audioTracks.first else {
-      self.logger.log("[VmWebrtc][DEBUG] " + "Remote stream added without audio tracks", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "Remote stream added without audio tracks", attributes: logAttributes(for: .debug, metadata: [
         "audioTrackCount": stream.audioTracks.count,
         "videoTrackCount": stream.videoTracks.count
       ]))
@@ -694,7 +694,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     remoteAudioTrackId = audioTrack.trackId
     inboundAudioMonitor.reset()
 
-    self.logger.log("[VmWebrtc][INFO] " + "Remote audio track received", attributes: logAttributes(for: .info, metadata: [
+    self.logger.log("[VmWebrtc] " + "Remote audio track received", attributes: logAttributes(for: .info, metadata: [
       "trackId": audioTrack.trackId,
       "streamId": stream.streamId
     ]))
@@ -704,7 +704,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     guard let removedTrack = stream.audioTracks.first else { return }
 
     if removedTrack.trackId == remoteAudioTrackId {
-      self.logger.log("[VmWebrtc][INFO] " + "Remote audio track removed", attributes: logAttributes(for: .info, metadata: [
+      self.logger.log("[VmWebrtc] " + "Remote audio track removed", attributes: logAttributes(for: .info, metadata: [
         "trackId": removedTrack.trackId,
         "streamId": stream.streamId
       ]))
@@ -718,7 +718,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
   func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
 
   func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-    self.logger.log("[VmWebrtc][DEBUG] " + "ICE connection state changed", attributes: logAttributes(for: .debug, metadata: ["state": stringValue(for: newState)]))
+    self.logger.log("[VmWebrtc] " + "ICE connection state changed", attributes: logAttributes(for: .debug, metadata: ["state": stringValue(for: newState)]))
     guard let continuation = connectionContinuation else {
       return
     }
@@ -727,7 +727,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     case .connected, .completed:
       startInboundAudioStatsMonitoring()
       startOutboundAudioStatsMonitoring()
-      self.logger.log("[VmWebrtc][INFO] " + "OpenAI WebRTC connection established", attributes: logAttributes(for: .info, metadata: ["state": stringValue(for: newState)]))
+      self.logger.log("[VmWebrtc] " + "OpenAI WebRTC connection established", attributes: logAttributes(for: .info, metadata: ["state": stringValue(for: newState)]))
       connectionTimeoutTask?.cancel()
       connectionTimeoutTask = nil
       connectionContinuation = nil
@@ -735,7 +735,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     case .failed, .disconnected, .closed:
       stopInboundAudioStatsMonitoring()
       stopOutboundAudioStatsMonitoring()
-      self.logger.log("[VmWebrtc][ERROR] " + "OpenAI WebRTC connection failed", attributes: logAttributes(for: .error, metadata: ["state": stringValue(for: newState)]))
+      self.logger.log("[VmWebrtc] " + "OpenAI WebRTC connection failed", attributes: logAttributes(for: .error, metadata: ["state": stringValue(for: newState)]))
       connectionTimeoutTask?.cancel()
       connectionTimeoutTask = nil
       connectionContinuation = nil
@@ -766,15 +766,15 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
       metadata["elapsedSinceGatherStart"] = Date().timeIntervalSince(start)
     }
 
-    self.logger.log("[VmWebrtc][DEBUG] " + "Generated ICE candidate", attributes: logAttributes(for: .debug, metadata: metadata))
+    self.logger.log("[VmWebrtc] " + "Generated ICE candidate", attributes: logAttributes(for: .debug, metadata: metadata))
   }
 
   func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
-    self.logger.log("[VmWebrtc][DEBUG] " + "Removed ICE candidates", attributes: logAttributes(for: .debug, metadata: ["count": candidates.count]))
+    self.logger.log("[VmWebrtc] " + "Removed ICE candidates", attributes: logAttributes(for: .debug, metadata: ["count": candidates.count]))
   }
 
   func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
-    self.logger.log("[VmWebrtc][DEBUG] " + "ICE gathering state changed", attributes: logAttributes(for: .debug, metadata: ["state": newState.rawValue]))
+    self.logger.log("[VmWebrtc] " + "ICE gathering state changed", attributes: logAttributes(for: .debug, metadata: ["state": newState.rawValue]))
 
     if newState == .complete {
       iceGatheringTimeoutTask?.cancel()
@@ -790,7 +790,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
   }
 
   func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
-    self.logger.log("[VmWebrtc][INFO] " + "Data channel opened", attributes: logAttributes(for: .info, metadata: ["label": dataChannel.label]))
+    self.logger.log("[VmWebrtc] " + "Data channel opened", attributes: logAttributes(for: .info, metadata: ["label": dataChannel.label]))
   }
 
   func stringValue(for state: RTCIceConnectionState) -> String {
@@ -810,7 +810,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
 
 extension OpenAIWebRTCClient: RTCDataChannelDelegate {
   func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-    self.logger.log("[VmWebrtc][DEBUG] " + "Data channel state changed", attributes: logAttributes(for: .debug, metadata: [
+    self.logger.log("[VmWebrtc] " + "Data channel state changed", attributes: logAttributes(for: .debug, metadata: [
       "label": dataChannel.label,
       "state": stringValue(for: dataChannel.readyState)
     ]))
@@ -826,7 +826,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
 
   func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
     if buffer.isBinary {
-      self.logger.log("[VmWebrtc][DEBUG] " + "Received binary data channel message", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "Received binary data channel message", attributes: logAttributes(for: .debug, metadata: [
         "label": dataChannel.label,
         "bytes": buffer.data.count
       ]))
@@ -834,14 +834,14 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
     }
 
     guard let text = String(data: buffer.data, encoding: .utf8) else {
-      self.logger.log("[VmWebrtc][WARN] " + "Received non-UTF8 data channel message", attributes: logAttributes(for: .warn, metadata: [
+      self.logger.log("[VmWebrtc] " + "Received non-UTF8 data channel message", attributes: logAttributes(for: .warn, metadata: [
           "label": dataChannel.label,
           "bytes": buffer.data.count
         ]))
       return
     }
 
-    self.logger.log("[VmWebrtc][TRACE] " + "Received data channel message", attributes: logAttributes(for: .trace, metadata: [
+    self.logger.log("[VmWebrtc] " + "Received data channel message", attributes: logAttributes(for: .trace, metadata: [
       "label": dataChannel.label,
       "payloadLength": text.count
     ]))
@@ -894,12 +894,12 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
         eventHandler.handle(event: eventDict, context: makeEventHandlerContext())
         
       } else {
-        self.logger.log("[VmWebrtc][WARN] " + "Data channel message is not a JSON object", attributes: logAttributes(for: .warn, metadata: [
+        self.logger.log("[VmWebrtc] " + "Data channel message is not a JSON object", attributes: logAttributes(for: .warn, metadata: [
             "payload": text
           ]))
       }
     } catch {
-      self.logger.log("[VmWebrtc][ERROR] " + "Failed to parse data channel message as JSON", attributes: logAttributes(for: .error, metadata: [
+      self.logger.log("[VmWebrtc] " + "Failed to parse data channel message as JSON", attributes: logAttributes(for: .error, metadata: [
         "error": error.localizedDescription,
          "payload": text
       ]))
@@ -936,7 +936,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
     }
 
     if payload.isEmpty {
-      self.logger.log("[VmWebrtc][DEBUG] " + "💵 Token usage event received without recognized counters", attributes: logAttributes(for: .debug, metadata: [
+      self.logger.log("[VmWebrtc] " + "💵 Token usage event received without recognized counters", attributes: logAttributes(for: .debug, metadata: [
         "usageKeys": Array(usage.keys)
       ]))
       return
@@ -948,7 +948,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
 
     payload["timestampMs"] = Int(Date().timeIntervalSince1970 * 1000)
 
-    self.logger.log("[VmWebrtc][DEBUG] " + "Forwarding token usage event to JavaScript", attributes: logAttributes(for: .debug, metadata: payload))
+    self.logger.log("[VmWebrtc] " + "Forwarding token usage event to JavaScript", attributes: logAttributes(for: .debug, metadata: payload))
 
     Task { @MainActor in
         emitModuleEvent("onTokenUsage", payload: payload)

@@ -88,7 +88,7 @@ export const openOpenAIConnectionAsync = async (
     options.toolDefinitions,
   );
 
-  log.info(`[${MODULE_NAME}] Tool definitions resolved`, {}, {
+  log.info(`[${MODULE_NAME}] 🛠️ Tool definitions`, {}, {
     definitionsCount: toolDefinitionsWithPrompts.length,
     definitions: toolDefinitionsWithPrompts,
   });

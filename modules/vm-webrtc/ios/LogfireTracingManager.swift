@@ -6,7 +6,8 @@ import OpenTelemetryProtocolExporterHttp
 
 final class LogfireTracingManager {
   enum Constants {
-    static let endpoint = "https://logfire-us.pydantic.dev/v1/traces"
+    static let traceEndpoint = "https://logfire-us.pydantic.dev/v1/traces"
+    static let logEndpoint = "https://logfire-us.pydantic.dev/v1/logs"
     static let defaultTracerName = "vibemachine-tracer"
   }
   enum Severity: String {
@@ -16,18 +17,22 @@ final class LogfireTracingManager {
     case warn
     case error
 
+    var otelSeverity: OpenTelemetryApi.Severity {
+      switch self {
+      case .trace: return .trace
+      case .debug: return .debug
+      case .info: return .info
+      case .warn: return .warn
+      case .error: return .error
+      }
+    }
+
     var severityText: String {
-      rawValue.uppercased()
+      otelSeverity.description
     }
 
     var severityNumber: Int {
-      switch self {
-      case .trace: return 3   // TRACE3
-      case .debug: return 7   // DEBUG3 per OTLP spec
-      case .info: return 11   // INFO3
-      case .warn: return 15   // WARN3
-      case .error: return 19  // ERROR3
-      }
+      otelSeverity.rawValue
     }
   }
 
@@ -35,6 +40,9 @@ final class LogfireTracingManager {
   private var tracerProvider: TracerProvider?
   private var batchSpanProcessor: BatchSpanProcessor?
   private var tracerCache: [String: Tracer] = [:]
+  private var loggerProvider: LoggerProvider?
+  private var logRecordProcessor: LogRecordProcessor?
+  private var loggerCache: [String: Logger] = [:]
   private var currentServiceName: String?
   private var currentApiKey: String?
   private(set) var isInitialized = false
@@ -79,9 +87,9 @@ final class LogfireTracingManager {
         return
       }
 
-      let resolvedTracerName = tracerName.isEmpty ? Constants.defaultTracerName : tracerName
-      guard let tracer = self.tracer(named: resolvedTracerName) else {
-        NSLog("[LogfireTracingManager] recordEvent skipped: tracer unavailable")
+      let resolvedInstrumentationName = tracerName.isEmpty ? Constants.defaultTracerName : tracerName
+      guard let logger = self.logger(named: resolvedInstrumentationName) else {
+        NSLog("[LogfireTracingManager] recordEvent skipped: logger unavailable")
         return
       }
 
@@ -101,23 +109,17 @@ final class LogfireTracingManager {
         "[LogfireTracingManager] recordEvent span=\(trimmedSpan) severityText=\(resolvedSeverityText) severityNumber=\(resolvedSeverityNumber)"
       )
 
-      let span = tracer.spanBuilder(spanName: trimmedSpan).startSpan()
-      span.setAttribute(key: "otel.log.severity.text", value: AttributeValue.string(resolvedSeverityText))
-      span.setAttribute(key: "otel.log.severity.number", value: AttributeValue.int(resolvedSeverityNumber))
-      span.setAttribute(key: "logfire.level", value: AttributeValue.string(resolvedSeverity.rawValue))
+    var enrichedAttributes = attributes ?? [:]
+    enrichedAttributes["logfire.level"] = resolvedSeverity.rawValue
 
-      if let attributes = attributes {
-        for (key, value) in attributes {
-          guard !key.isEmpty else { continue }
-          if let attributeValue = self.attributeValue(from: value) {
-            span.setAttribute(key: key, value: attributeValue)
-          } else {
-            span.setAttribute(key: key, value: AttributeValue.string(String(describing: value)))
-          }
-        }
-      }
-      span.end()
-    }
+    let otelAttributes = self.otelAttributes(from: enrichedAttributes)
+    logger
+      .logRecordBuilder()
+      .setSeverity(resolvedSeverity.otelSeverity)
+      .setBody(AttributeValue.string(trimmedSpan))
+      .setAttributes(otelAttributes)
+      .emit()
+  }
   }
 
   static func severity(from attributes: [String: Any]?) -> Severity? {
@@ -157,7 +159,10 @@ final class LogfireTracingManager {
       "telemetry.sdk.language": AttributeValue.string("swift")
     ])
 
-    guard let endpointURL = URL(string: Constants.endpoint) else {
+    guard
+      let traceEndpointURL = URL(string: Constants.traceEndpoint),
+      let logEndpointURL = URL(string: Constants.logEndpoint)
+    else {
       throw LogfireTracingError.invalidEndpoint
     }
 
@@ -167,19 +172,29 @@ final class LogfireTracingManager {
       exportAsJson: true
     )
 
-    let exporter = OtlpHttpTraceExporter(endpoint: endpointURL, config: configuration)
-    let processor = BatchSpanProcessor(spanExporter: exporter)
-
-    let provider = TracerProviderBuilder()
-      .add(spanProcessor: processor)
+    let traceExporter = OtlpHttpTraceExporter(endpoint: traceEndpointURL, config: configuration)
+    let traceProcessor = BatchSpanProcessor(spanExporter: traceExporter)
+    let traceProvider = TracerProviderBuilder()
+      .add(spanProcessor: traceProcessor)
       .with(resource: resource)
       .build()
 
-    OpenTelemetry.registerTracerProvider(tracerProvider: provider)
+    let logExporter = OtlpHttpLogExporter(endpoint: logEndpointURL, config: configuration)
+    let logProcessor = BatchLogRecordProcessor(logRecordExporter: logExporter)
+    let loggerProvider = LoggerProviderBuilder()
+      .with(resource: resource)
+      .with(processors: [logProcessor])
+      .build()
 
-    tracerProvider = provider
-    batchSpanProcessor = processor
+    OpenTelemetry.registerTracerProvider(tracerProvider: traceProvider)
+    OpenTelemetry.registerLoggerProvider(loggerProvider: loggerProvider)
+
+    tracerProvider = traceProvider
+    batchSpanProcessor = traceProcessor
     tracerCache.removeAll()
+    self.loggerProvider = loggerProvider
+    logRecordProcessor = logProcessor
+    loggerCache.removeAll()
     currentServiceName = trimmedServiceName
     currentApiKey = trimmedApiKey
     isInitialized = true
@@ -198,6 +213,33 @@ final class LogfireTracingManager {
     let tracer = provider.get(instrumentationName: name)
     tracerCache[name] = tracer
     return tracer
+  }
+
+  private func logger(named name: String) -> Logger? {
+    if let cached = loggerCache[name] {
+      return cached
+    }
+
+    guard let provider = loggerProvider else {
+      return nil
+    }
+
+    let logger = provider.get(instrumentationScopeName: name)
+    loggerCache[name] = logger
+    return logger
+  }
+
+  private func otelAttributes(from dictionary: [String: Any]) -> [String: AttributeValue] {
+    var attributes: [String: AttributeValue] = [:]
+    for (key, value) in dictionary {
+      guard !key.isEmpty else { continue }
+      if let attributeValue = attributeValue(from: value) {
+        attributes[key] = attributeValue
+      } else {
+        attributes[key] = AttributeValue.string(String(describing: value))
+      }
+    }
+    return attributes
   }
 
   private func attributeValue(from anyValue: Any) -> AttributeValue? {
@@ -249,8 +291,14 @@ final class LogfireTracingManager {
       processor.shutdown()
     }
     batchSpanProcessor = nil
+    if let logProcessor = logRecordProcessor {
+      logProcessor.shutdown()
+    }
+    logRecordProcessor = nil
     tracerProvider = nil
+    loggerProvider = nil
     tracerCache.removeAll()
+    loggerCache.removeAll()
     currentServiceName = nil
     currentApiKey = nil
     isInitialized = false

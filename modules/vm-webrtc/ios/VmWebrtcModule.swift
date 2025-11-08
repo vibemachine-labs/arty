@@ -215,7 +215,18 @@ public class VmWebrtcModule: Module {
     }
 
     Function("logfireEvent") { (tracerName: String, spanName: String, attributes: [String: Any]?) in
-      self.logfireTracingManager.recordEvent(tracerName: tracerName, spanName: spanName, attributes: attributes)
+      let resolvedSeverity = LogfireTracingManager.severity(from: attributes) ?? .info
+      print(
+        "[VmWebrtcModule] logfireEvent span=\(spanName) severityText=\(resolvedSeverity.severityText) severityNumber=\(resolvedSeverity.severityNumber)"
+      )
+      self.logfireTracingManager.recordEvent(
+        tracerName: tracerName,
+        spanName: spanName,
+        attributes: attributes,
+        severity: resolvedSeverity,
+        severityText: resolvedSeverity.severityText,
+        severityNumber: resolvedSeverity.severityNumber
+      )
     }
 
     // JavaScript calls this to send github connector result back

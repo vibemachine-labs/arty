@@ -47,7 +47,7 @@ final class WebRTCEventHandler {
     ]
     logger.log(
       "[WebRTCEventHandler] WebRTC event received",
-      attributes: logAttributes(for: .debug, metadata: metadata)
+      attributes: logAttributes(for: .trace, metadata: metadata)
     )
 
     switch eventType {
@@ -70,7 +70,7 @@ final class WebRTCEventHandler {
     default:
       logger.log(
         "[WebRTCEventHandler] Unhandled WebRTC event",
-        attributes: logAttributes(for: .debug, metadata: ["type": eventType])
+        attributes: logAttributes(for: .trace, metadata: ["type": eventType])
       )
     }
   }

@@ -159,7 +159,7 @@ final class OutboundAudioStatsMonitor {
         metadata["audioLevel"] = formattedStatValue(audioLevel)
       }
 
-      logEmitter(.debug, "Outbound audio stats", metadata)
+      logEmitter(.trace, "Outbound audio stats", metadata)
 
       // Emit stats to JS side via module event
       statsEventEmitter(metadata)

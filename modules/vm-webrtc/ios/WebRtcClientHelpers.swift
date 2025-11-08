@@ -891,7 +891,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
       return
     }
 
-    emit(.debug, "Received data channel message", metadata: [
+    emit(.trace, "Received data channel message", metadata: [
       "label": dataChannel.label,
       "payloadLength": text.count
     ])

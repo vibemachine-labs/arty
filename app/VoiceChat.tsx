@@ -17,6 +17,7 @@ import { log } from "../lib/logger";
 import { composeMainPrompt } from "../lib/mainPrompt";
 import { TokenUsageTracker } from "../lib/tokenUsageTracker";
 import type { VadMode } from "../lib/vadPreference";
+import toolManager from "../modules/vm-webrtc/src/ToolManager";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
   muteUnmuteOutgoingAudio,
@@ -24,7 +25,6 @@ import VmWebrtcModule, {
   type AudioMetricsEventPayload,
   type BaseOpenAIConnectionOptions,
   type IdleTimeoutEventPayload,
-  type NativeLogEventPayload,
   type OpenAIConnectionOptions,
   type OpenAIConnectionState,
   type RealtimeErrorEventPayload,
@@ -108,7 +108,7 @@ export function VoiceChat({
           cachedInput: payload.cachedInput ?? 0,
         });
 
-        log.info("Token usage event", {}, {
+        log.info("💵 Token usage event", {}, {
           event: payload,
           totals,
         });
@@ -145,40 +145,6 @@ export function VoiceChat({
         const shouldShowAlert = await loadShowRealtimeErrorAlerts();
         if (shouldShowAlert) {
           Alert.alert("Session Error", message);
-        }
-      }
-    );
-
-    return () => {
-      subscription.remove?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!VmWebrtcModule?.addListener) {
-      return undefined;
-    }
-
-    const subscription = VmWebrtcModule.addListener(
-      "onNativeLog",
-      (payload: NativeLogEventPayload) => {
-        // Forward native logs to JavaScript logger based on level
-        const { level, message, sourceFile, metadata } = payload;
-        const logMessage = `[Native:${sourceFile}] ${message}`;
-
-        switch (level) {
-          case 'debug':
-            log.debug(logMessage, {}, metadata);
-            break;
-          case 'info':
-            log.info(logMessage, {}, metadata);
-            break;
-          case 'warn':
-            log.warn(logMessage, {}, metadata);
-            break;
-          case 'error':
-            log.error(logMessage, {}, metadata);
-            break;
         }
       }
     );
@@ -330,6 +296,9 @@ export function VoiceChat({
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
 
+      const canonicalToolDefinitions = toolManager.getCanonicalToolDefinitions();
+      const voiceToolNames = toolManager.getToolNames(canonicalToolDefinitions);
+
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
 
       log.info("Starting OpenAI voice session", {}, {
@@ -339,6 +308,7 @@ export function VoiceChat({
         voice: selectedVoice,
         hasInstructions: resolvedPrompt.trim().length > 0,
         hasCustomAddition: mainPromptAddition.trim().length > 0,
+        toolNames: voiceToolNames,
       });
       setIsConnecting(true);
       setIsSessionActive(false);
@@ -353,6 +323,7 @@ export function VoiceChat({
         enableRecording: isRecordingEnabled,
         maxConversationTurns,
         retentionRatio,
+        toolDefinitions: canonicalToolDefinitions,
       };
       const state: OpenAIConnectionState = await openOpenAIConnectionAsync(customConnectionOptions);
       log.info("OpenAI voice session resolved", {}, { state });

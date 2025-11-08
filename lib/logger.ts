@@ -1,5 +1,6 @@
-import { initializeLogfire, logfireEvent } from './otel';
+import { initializeLogfire, logfireEvent, registerLogfireLogger } from './otel';
 import { trace } from '@opentelemetry/api';
+import { loadLogRedactionDisabled, saveLogRedactionDisabled } from './developerSettings';
 
 const LOG_PREFIX = 'VmConsoleLog';
 const REDACTED_TEXT = '[REDACTED]';
@@ -7,7 +8,6 @@ const SENSITIVE_KEYWORDS = [
   'password',
   'passwd',
   'secret',
-  'token',
   'apikey',
   'api_key',
   'credential',
@@ -16,7 +16,6 @@ const SENSITIVE_KEYWORDS = [
   'auth',
   'authorization',
   'bearer',
-  'key',
 ] as const;
 
 const levelPriority = {
@@ -111,6 +110,38 @@ const getMinimumLevel = (): LogLevel => {
 };
 
 let minimumLevel = getMinimumLevel();
+let redactionEnabled = true;
+
+type RedactionChangePayload = {
+  enabled: boolean;
+  disabled: boolean;
+  updatedAt: string;
+};
+
+type RedactionChangeListener = (payload: RedactionChangePayload) => void;
+const redactionListeners = new Set<RedactionChangeListener>();
+
+const buildRedactionPayload = (): RedactionChangePayload => ({
+  enabled: redactionEnabled,
+  disabled: !redactionEnabled,
+  updatedAt: new Date().toISOString(),
+});
+
+const notifyRedactionListeners = () => {
+  const payload = buildRedactionPayload();
+  redactionListeners.forEach((listener) => {
+    try {
+      listener(payload);
+    } catch (error) {
+      console.error(`[${LOG_PREFIX}] Failed to notify redaction listener`, error);
+    }
+  });
+};
+
+type SetRedactionOptions = {
+  persist?: boolean;
+  silent?: boolean;
+};
 
 const shouldLog = (level: LogLevel) => levelPriority[level] >= levelPriority[minimumLevel];
 
@@ -124,9 +155,9 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
     return;
   }
 
-  const allowSensitiveLogging = options.allowSensitiveLogging === true;
-  const safeMessage = allowSensitiveLogging ? message : sanitizeMessage(message);
-  const safeArgs = allowSensitiveLogging ? args : sanitizeArgs(args);
+  const applyRedaction = redactionEnabled && options.allowSensitiveLogging !== true;
+  const safeMessage = applyRedaction ? sanitizeMessage(message) : message;
+  const safeArgs = applyRedaction ? sanitizeArgs(args) : args;
 
   const timestamp = new Date().toISOString();
   const prefix = `[${LOG_PREFIX}][${level.toUpperCase()}][${timestamp}]`;
@@ -168,9 +199,25 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
       });
     }
 
+    if (attrs.is_native_logger === undefined) {
+      attrs.is_native_logger = false;
+    }
+
     logfireEvent(safeMessage, attrs);
   }
 };
+
+const hydrateRedactionPreference = async () => {
+  try {
+    const disabled = await loadLogRedactionDisabled();
+    redactionEnabled = !disabled;
+    notifyRedactionListeners();
+  } catch (error) {
+    console.warn(`[${LOG_PREFIX}] Failed to hydrate log redaction preference`, error);
+  }
+};
+
+void hydrateRedactionPreference();
 
 export const log = {
   async initialize() {
@@ -178,6 +225,32 @@ export const log = {
   },
   setLevel(level: LogLevel) {
     minimumLevel = level;
+  },
+  async setRedactionEnabled(enabled: boolean, options: SetRedactionOptions = {}) {
+    redactionEnabled = enabled;
+
+    if (options.silent !== true) {
+      notifyRedactionListeners();
+    }
+
+    if (options.persist) {
+      try {
+        await saveLogRedactionDisabled(!enabled);
+      } catch (error) {
+        console.warn(`[${LOG_PREFIX}] Failed to persist log redaction preference`, error);
+      }
+    }
+  },
+  isRedactionEnabled() {
+    return redactionEnabled;
+  },
+  onRedactionPreferenceChange(listener: RedactionChangeListener) {
+    redactionListeners.add(listener);
+    // Immediately inform listener of current state
+    listener(buildRedactionPayload());
+    return () => {
+      redactionListeners.delete(listener);
+    };
   },
   debug(message: string, options: LogOptions = {}, ...args: unknown[]) {
     emit('debug', message, options, ...args);
@@ -219,5 +292,7 @@ export const log = {
     }
   },
 };
+
+registerLogfireLogger(log);
 
 export type Logger = typeof log;

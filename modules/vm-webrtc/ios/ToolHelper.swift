@@ -22,6 +22,7 @@ public class ToolHelper {
   private weak var module: Module?
   private var callbacks: [String: (Int?, Error?) -> Void] = [:]
   private let timeoutDuration: TimeInterval
+  private let logger = VmWebrtcLogging.logger
   
   // MARK: - Initialization
   
@@ -40,7 +41,7 @@ public class ToolHelper {
   public func parseOperands(from argumentsJSON: String, keys: [String] = ["a", "b"]) -> [Int]? {
     guard let argsData = argumentsJSON.data(using: .utf8),
           let argsDict = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
-      print("[ToolHelper] Failed to parse JSON arguments")
+      self.logger.log("[ToolHelper] Failed to parse JSON arguments")
       return nil
     }
     
@@ -52,7 +53,7 @@ public class ToolHelper {
       } else if let doubleValue = argsDict[key] as? Double {
         operands.append(Int(doubleValue))
       } else {
-        print("[ToolHelper] Missing or invalid parameter: \(key)")
+        self.logger.log("[ToolHelper] Missing or invalid parameter: \(key)")
         return nil
       }
     }
@@ -79,7 +80,7 @@ public class ToolHelper {
   @discardableResult
   public func executeCallback(requestId: String, result: Int? = nil, error: Error? = nil) -> Bool {
     guard let callback = callbacks[requestId] else {
-      print("[ToolHelper] No callback found for requestId=\(requestId)")
+      self.logger.log("[ToolHelper] No callback found for requestId=\(requestId)")
       return false
     }
     
@@ -95,17 +96,31 @@ public class ToolHelper {
   ///   - eventName: Name of the event to emit
   ///   - requestId: Unique identifier for the request
   ///   - parameters: Dictionary of parameters to send
-  public func emitToolRequest(eventName: String, requestId: String, parameters: [String: Any]) {
+  /// - Returns: Generated event identifier for correlation
+  @discardableResult
+  public func emitToolRequest(eventName: String, requestId: String, parameters: [String: Any]) -> String {
+    let eventId = ToolHelper.generateEventId()
+    
     guard let module = module else {
-      print("[ToolHelper] Module reference is nil, cannot emit event")
-      return
+      self.logger.log("[ToolHelper] Module reference is nil, cannot emit event \(eventName) requestId=\(requestId) eventId=\(eventId)")
+      return eventId
     }
     
     var eventData = parameters
     eventData["requestId"] = requestId
+    eventData["eventId"] = eventId
     
     module.sendEvent(eventName, eventData)
-    print("[ToolHelper] Emitted event: \(eventName) with requestId=\(requestId)")
+    self.logger.log(
+      "[ToolHelper] Emitted event",
+      attributes: [
+        "eventName": eventName,
+        "requestId": requestId,
+        "eventId": eventId,
+        "parameter_keys": Array(parameters.keys)
+      ]
+    )
+    return eventId
   }
   
   // MARK: - Timeout Management
@@ -119,7 +134,7 @@ public class ToolHelper {
       guard let self = self else { return }
       
       if self.callbacks[requestId] != nil {
-        print("[ToolHelper] Request timed out: requestId=\(requestId)")
+        self.logger.log("[ToolHelper] Request timed out: requestId=\(requestId)")
         let error = NSError(domain: "ToolHelper", code: -1, userInfo: [
           NSLocalizedDescriptionKey: errorMessage
         ])
@@ -133,6 +148,12 @@ public class ToolHelper {
   /// Generate a unique request ID
   /// - Returns: UUID string
   public static func generateRequestId() -> String {
+    return UUID().uuidString
+  }
+  
+  /// Generate a unique event ID
+  /// - Returns: UUID string
+  public static func generateEventId() -> String {
     return UUID().uuidString
   }
 }

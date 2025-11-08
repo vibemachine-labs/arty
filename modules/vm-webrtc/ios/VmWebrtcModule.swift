@@ -47,7 +47,7 @@ public class VmWebrtcModule: Module {
   private var toolGPT5GDriveFixer: ToolGPT5GDriveFixer?
   private var toolGPT5WebSearch: ToolGPT5WebSearch?
   private let logfireTracingManager = LogfireTracingManager()
-  private lazy var logger = NativeLogger(category: "VmWebrtc", tracingManager: logfireTracingManager)
+  private var logger: NativeLogger { VmWebrtcLogging.logger }
 
   public func helloFromExpoModule() -> String {
     return "Hello world from module"
@@ -88,6 +88,7 @@ public class VmWebrtcModule: Module {
 
     // Initialize native tool delegates used by the module
     OnCreate {
+      VmWebrtcLogging.configureTracingManager(self.logfireTracingManager)
       self.logger.log("OnCreate: initializing tool delegates")
       self.webrtcClient.setEventEmitter { [weak self] eventName, payload in
         guard let self else { return }
@@ -108,33 +109,35 @@ public class VmWebrtcModule: Module {
 
       // Initialize GPT5 gdrive fixer tool
       self.toolGPT5GDriveFixer = ToolGPT5GDriveFixer(module: self, responder: self.webrtcClient)
-      print("[VmWebrtc] ToolGPT5GDriveFixer initialized =", self.toolGPT5GDriveFixer != nil)
+      let fixerInitialized = self.toolGPT5GDriveFixer != nil
+      self.logger.log("ToolGPT5GDriveFixer initialized = \(fixerInitialized)")
 
       // Initialize GPT5 web search tool
       self.toolGPT5WebSearch = ToolGPT5WebSearch(module: self, responder: self.webrtcClient)
-      print("[VmWebrtc] ToolGPT5WebSearch initialized =", self.toolGPT5WebSearch != nil)
+      let webSearchInitialized = self.toolGPT5WebSearch != nil
+      self.logger.log("ToolGPT5WebSearch initialized = \(webSearchInitialized)")
 
       // Wire delegates into the WebRTC client
       self.webrtcClient.setGithubConnectorDelegate(self.toolGithubConnector!)
       if let gdrive = self.toolGDriveConnector {
         self.webrtcClient.setGDriveConnectorDelegate(gdrive)
-        print("[VmWebrtc] Delegate set: gdrive")
+        self.logger.log("Delegate set: gdrive")
       } else {
-        print("[VmWebrtc] Delegate set NOT: gdrive")
+        self.logger.log("Delegate set NOT: gdrive")
       }
       if let fixer = self.toolGPT5GDriveFixer {
         self.webrtcClient.setGPT5GDriveFixerDelegate(fixer)
-        print("[VmWebrtc] Delegate set: GPT5 fixer")
+        self.logger.log("Delegate set: GPT5 fixer")
       } else {
-        print("[VmWebrtc] Delegate set NOT: GPT5 fixer")
+        self.logger.log("Delegate set NOT: GPT5 fixer")
       }
       if let webSearch = self.toolGPT5WebSearch {
         self.webrtcClient.setGPT5WebSearchDelegate(webSearch)
-        print("[VmWebrtc] Delegate set: GPT5 web search")
+        self.logger.log("Delegate set: GPT5 web search")
       } else {
-        print("[VmWebrtc] Delegate set NOT: GPT5 web search")
+        self.logger.log("Delegate set NOT: GPT5 web search")
       }
-      print("[VmWebrtc] Delegates set: github, possibly GDrive")
+      self.logger.log("Delegates set: github, possibly GDrive")
     }
 
     // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
@@ -156,7 +159,12 @@ public class VmWebrtcModule: Module {
     }
 
     AsyncFunction("openOpenAIConnectionAsync") { (options: OpenAIConnectionOptions) -> String in
-      print("[VmWebrtc] openOpenAIConnectionAsync called with model=\(options.model ?? "nil"), audioOutput=\(options.audioOutput ?? "nil"), voice=\(options.voice ?? "nil"), vadMode=\(options.vadMode ?? "nil")")
+      self.logger.log("openOpenAIConnectionAsync called", attributes: [
+        "model": options.model ?? "nil",
+        "audioOutput": options.audioOutput ?? "nil",
+        "voice": options.voice ?? "nil",
+        "vadMode": options.vadMode ?? "nil"
+      ])
       let outputPreference = OpenAIWebRTCClient.AudioOutputPreference(
         rawValue: options.audioOutput ?? "handset"
       ) ?? .handset
@@ -212,29 +220,43 @@ public class VmWebrtcModule: Module {
 
     // JavaScript calls this to send github connector result back
     Function("sendGithubConnectorResponse") { (requestId: String, result: String) in
-      print("[VmWebrtc] JS→Native sendGithubConnectorResponse requestId=\(requestId) resultLen=\(result.count)")
+      self.logger.log("JS→Native sendGithubConnectorResponse", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
       self.toolGithubConnector?.handleResponse(requestId: requestId, result: result)
     }
 
     // Add: JavaScript calls this to send GDrive connector result back
     Function("sendGDriveConnectorResponse") { (requestId: String, result: String) in
-      print("[VmWebrtc] JS→Native sendGDriveConnectorResponse requestId=\(requestId) resultLen=\(result.count)")
+      self.logger.log("JS→Native sendGDriveConnectorResponse", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
       self.toolGDriveConnector?.handleResponse(requestId: requestId, result: result)
     }
 
     Function("sendGPT5GDriveFixerResponse") { (requestId: String, result: String) in
-      print("[VmWebrtc] JS→Native sendGPT5GDriveFixerResponse requestId=\(requestId) resultLen=\(result.count)")
+      self.logger.log("JS→Native sendGPT5GDriveFixerResponse", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
       self.toolGPT5GDriveFixer?.handleResponse(requestId: requestId, result: result)
     }
 
     Function("sendGPT5WebSearchResponse") { (requestId: String, result: String) in
-      print("[VmWebrtc] JS→Native sendGPT5WebSearchResponse requestId=\(requestId) resultLen=\(result.count)")
+      self.logger.log("JS→Native sendGPT5WebSearchResponse", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
       self.toolGPT5WebSearch?.handleResponse(requestId: requestId, result: result)
     }
 
     // Github Connector function - calls JavaScript github connector via events
     AsyncFunction("githubOperationFromSwift") { (codeSnippet: String, promise: Promise) in
-      print("[VmWebrtc] Swift→JS githubOperationFromSwift snippetLen=\(codeSnippet.count)")
+      self.logger.log("Swift→JS githubOperationFromSwift", attributes: [
+        "snippet_length": codeSnippet.count
+      ])
       self.toolGithubConnector?.githubOperationFromSwift(codeSnippet: codeSnippet, promise: promise)
     }
 

@@ -3,18 +3,17 @@ import Foundation
 /// Simple logger that mirrors console output to Logfire tracing events.
 final class NativeLogger {
   private let category: String
-  private let tracerName: String?
+  private let tracerName = LogfireTracingManager.Constants.defaultTracerName
   private weak var tracingManager: LogfireTracingManager?
 
   init(category: String, tracingManager: LogfireTracingManager?) {
     let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
     self.category = trimmedCategory.isEmpty ? "VmWebrtc" : trimmedCategory
     self.tracingManager = tracingManager
-    if tracingManager != nil {
-      self.tracerName = LogfireTracingManager.Constants.defaultTracerName
-    } else {
-      self.tracerName = nil
-    }
+  }
+
+  func attachTracingManager(_ tracingManager: LogfireTracingManager?) {
+    self.tracingManager = tracingManager
   }
 
   func log(_ message: String, attributes: [String: Any]? = nil) {
@@ -28,7 +27,7 @@ final class NativeLogger {
     }
     print(consoleMessage)
 
-    guard let tracingManager, let tracerName else { return }
+    guard let tracingManager else { return }
     guard tracingManager.isInitialized else {
       return
     }

@@ -31,6 +31,7 @@ public class ToolGithubConnector: BaseTool {
   private weak var module: Module?
   private weak var responder: ToolCallResponder?
   private let helper: ToolHelper
+  private let logger = VmWebrtcLogging.logger
   
   // MARK: - Initialization
   
@@ -47,20 +48,24 @@ public class ToolGithubConnector: BaseTool {
   ///   - callId: The tool call identifier
   ///   - argumentsJSON: JSON string containing the arguments
   public func handleToolCall(callId: String, argumentsJSON: String) {
-    print("[VmWebrtc] Processing github connector tool call handleToolCall: callId=\(callId)")
-    print("[VmWebrtc] Raw argumentsJSON received: '\(argumentsJSON)'")
-    print("[VmWebrtc] ArgumentsJSON length: \(argumentsJSON.count)")
+    self.logger.log("Processing github connector tool call handleToolCall", attributes: [
+      "callId": callId,
+      "arguments_length": argumentsJSON.count
+    ])
+    self.logger.log("Raw argumentsJSON received", attributes: [
+      "argumentsJSON": argumentsJSON
+    ])
     
     // Parse arguments to extract self_contained_javascript_octokit_code_snippet parameter
     guard let argsData = argumentsJSON.data(using: .utf8) else {
-      print("[VmWebrtc] Failed to convert argumentsJSON to UTF8 data")
+      self.logger.log("Failed to convert argumentsJSON to UTF8 data")
       responder?.sendToolCallError(callId: callId, error: "Failed to convert arguments to data")
       return
     }
-    
+
     guard let argsDict = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
-      print("[VmWebrtc] Failed to parse argumentsJSON as JSON dictionary")
-      print("[VmWebrtc] Attempting to decode as raw string...")
+      self.logger.log("Failed to parse argumentsJSON as JSON dictionary")
+      self.logger.log("Attempting to decode as raw string...")
       
       // If it's not valid JSON, maybe it's the raw code snippet?
       // Try using it directly as the code snippet
@@ -68,11 +73,11 @@ public class ToolGithubConnector: BaseTool {
       return
     }
     
-    print("[VmWebrtc] Parsed argsDict keys: \(argsDict.keys)")
+    self.logger.log("Parsed argsDict keys", attributes: ["keys": Array(argsDict.keys)])
     
     guard let codeSnippet = argsDict["self_contained_javascript_octokit_code_snippet"] as? String else {
-      print("[VmWebrtc] Failed to extract 'self_contained_javascript_octokit_code_snippet' from argsDict")
-      print("[VmWebrtc] Available keys: \(argsDict.keys)")
+      self.logger.log("Failed to extract 'self_contained_javascript_octokit_code_snippet' from argsDict")
+      self.logger.log("Available keys for failed extraction", attributes: ["keys": Array(argsDict.keys)])
       responder?.sendToolCallError(callId: callId, error: "Missing parameter 'self_contained_javascript_octokit_code_snippet'")
       return
     }
@@ -85,20 +90,23 @@ public class ToolGithubConnector: BaseTool {
   ///   - requestId: The unique request identifier
   ///   - result: The response string
   public func handleResponse(requestId: String, result: String) {
-    print("[ToolGithubConnector] 📥 Received github connector response from JavaScript: requestId=\(requestId), result=\(result)")
+    self.logger.log("📥 Received github connector response from JavaScript", attributes: [
+      "requestId": requestId,
+      "result": result
+    ])
     
     if let callback = stringCallbacks[requestId] {
       callback(result, nil)
       stringCallbacks.removeValue(forKey: requestId)
-      print("[ToolGithubConnector] ✅ Github connector callback executed successfully")
+      self.logger.log("✅ Github connector callback executed successfully")
     } else {
-      print("[ToolGithubConnector] ⚠️ No callback found for requestId=\(requestId)")
+      self.logger.log("⚠️ No callback found for requestId", attributes: ["requestId": requestId])
     }
   }
   
   // Override the default handleResponse to handle Int (not used for github connector)
   public func handleResponse(requestId: String, result: Int) {
-    print("[ToolGithubConnector] ⚠️ Received int result, but github connector expects string")
+    self.logger.log("⚠️ Received int result, but github connector expects string")
   }
   
   /// Perform a github operation via JavaScript (for direct Swift-to-JS testing)
@@ -107,30 +115,33 @@ public class ToolGithubConnector: BaseTool {
   ///   - promise: Promise to resolve with result
   public func githubOperationFromSwift(codeSnippet: String, promise: Promise) {
     let requestId = ToolHelper.generateRequestId()
-    print("[ToolGithubConnector] 📱 githubOperationFromSwift called: snippet length=\(codeSnippet.count), requestId=\(requestId)")
+    self.logger.log("📱 githubOperationFromSwift called", attributes: [
+      "snippet_length": codeSnippet.count,
+      "requestId": requestId
+    ])
     
     // Register string callback
     registerStringCallback(requestId: requestId) { result, error in
       if let error = error {
-        print("[ToolGithubConnector] ❌ Github connector error: \(error.localizedDescription)")
+        self.logger.log("❌ Github connector error", attributes: ["error": error.localizedDescription])
         promise.reject("E_GITHUB_CONNECTOR_ERROR", error.localizedDescription)
       } else if let result = result {
-        print("[ToolGithubConnector] ✅ Github connector success: result=\(result)")
+        self.logger.log("✅ Github connector success", attributes: ["result": result])
         promise.resolve(result)
       } else {
-        print("[ToolGithubConnector] ❌ No result received from github connector")
+        self.logger.log("❌ No result received from github connector")
         promise.reject("E_GITHUB_CONNECTOR_ERROR", "No result received")
       }
     }
-    
+
     // Emit event to JavaScript using helper
-    print("[ToolGithubConnector] 📤 Emitting onGithubConnectorRequest event to JavaScript")
+    self.logger.log("📤 Emitting onGithubConnectorRequest event to JavaScript")
     let eventId = helper.emitToolRequest(
       eventName: "onGithubConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_octokit_code_snippet": codeSnippet]
     )
-    print("[ToolGithubConnector] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log("🆔 Event emitted", attributes: ["requestId": requestId, "eventId": eventId])
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "Github connector request timed out")
@@ -149,7 +160,7 @@ public class ToolGithubConnector: BaseTool {
       guard let self = self else { return }
       
       if let callback = self.stringCallbacks[requestId] {
-        print("[ToolGithubConnector] Request timed out: requestId=\(requestId)")
+        self.logger.log("Request timed out", attributes: ["requestId": requestId])
         let error = NSError(domain: "ToolGithubConnector", code: -1, userInfo: [
           NSLocalizedDescriptionKey: errorMessage
         ])
@@ -160,23 +171,33 @@ public class ToolGithubConnector: BaseTool {
   }
   
   private func executeGithubOperation(callId: String, codeSnippet: String) {
-    print("[VmWebrtc] Executing github connector tool call: callId=\(callId) snippet length=\(codeSnippet.count)")
+    self.logger.log("Executing github connector tool call", attributes: [
+      "callId": callId,
+      "snippet_length": codeSnippet.count
+    ])
     
     // Call JavaScript github connector via delegate (self)
     requestGithubOperation(codeSnippet: codeSnippet) { result, error in
       if let error = error {
-        print("[VmWebrtc] Github connector request failed: callId=\(callId) error=\(error.localizedDescription)")
+        self.logger.log("Github connector request failed", attributes: [
+          "callId": callId,
+          "error": error.localizedDescription
+        ])
         self.responder?.sendToolCallError(callId: callId, error: error.localizedDescription)
         return
       }
-      
+
       guard let result = result else {
-        print("[VmWebrtc] Github connector returned no result: callId=\(callId)")
+        self.logger.log("Github connector returned no result", attributes: ["callId": callId])
         self.responder?.sendToolCallError(callId: callId, error: "No result from github connector")
         return
       }
-      
-      print("[VmWebrtc] Github connector result received: callId=\(callId) snippet length=\(codeSnippet.count) result=\(result)")
+
+      self.logger.log("Github connector result received", attributes: [
+        "callId": callId,
+        "snippet_length": codeSnippet.count,
+        "result": result
+      ])
       // Send the actual JSON result string to OpenAI
       self.responder?.sendToolCallResult(callId: callId, result: result)
     }
@@ -193,19 +214,22 @@ extension ToolGithubConnector: GithubConnectorToolDelegate {
   ///   - completion: Callback with result or error
   public func requestGithubOperation(codeSnippet: String, completion: @escaping (String?, Error?) -> Void) {
     let requestId = ToolHelper.generateRequestId()
-    print("[ToolGithubConnector] 🤖 OpenAI tool call requesting github operation: snippet length=\(codeSnippet.count), requestId=\(requestId)")
+    self.logger.log("🤖 OpenAI tool call requesting github operation", attributes: [
+      "snippet_length": codeSnippet.count,
+      "requestId": requestId
+    ])
     
     // Register string callback
     registerStringCallback(requestId: requestId, callback: completion)
     
     // Emit event to JavaScript using helper
-    print("[ToolGithubConnector] 📤 Emitting github connector request to JavaScript")
+    self.logger.log("📤 Emitting github connector request to JavaScript")
     let eventId = helper.emitToolRequest(
       eventName: "onGithubConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_octokit_code_snippet": codeSnippet]
     )
-    print("[ToolGithubConnector] 🆔 Event emitted for OpenAI tool call: requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log("🆔 Event emitted for OpenAI tool call", attributes: ["requestId": requestId, "eventId": eventId])
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "Github connector request timed out")

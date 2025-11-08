@@ -134,6 +134,14 @@ export async function initializeLogfire(): Promise<void> {
       try {
         await initializeNativeTracer(apiKey);
         log.info("✅ Logfire native tracing initialized", { emit2logfire: false });
+        try {
+          nativeTracingModule.logfireEvent(TRACER_NAME, "native_tracing_initialized", {
+            source: "initializeLogfire",
+            is_native_logger: true,
+          });
+        } catch (eventError) {
+          log.warn("Failed to emit native tracing init event", { emit2logfire: false }, eventError);
+        }
       } catch (nativeError) {
         log.error(
           "Native Logfire initialization failed, falling back to JS exporter",

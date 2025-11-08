@@ -112,11 +112,7 @@ final class OpenAIWebRTCClient: NSObject {
   weak var gpt5WebSearchDelegate: BaseTool?
 
   var toolDefinitions: [[String: Any]] = []
-  lazy var eventHandler: WebRTCEventHandler = {
-    WebRTCEventHandler { [weak self] level, message, metadata in
-      self?.emit(level, message, metadata: metadata)
-    }
-  }()
+  lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
     InboundAudioStatsMonitor(
       peerConnectionProvider: { [weak self] in

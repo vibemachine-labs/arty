@@ -1,7 +1,6 @@
 import Foundation
 
 final class WebRTCEventHandler {
-  typealias Logger = (_ level: OpenAIWebRTCClient.NativeLogLevel, _ message: String, _ metadata: [String: Any]?) -> Void
 
   // Default inactivity threshold (seconds) before auto-disconnect
   static let defaultIdleTimeout: TimeInterval = 60
@@ -15,7 +14,7 @@ final class WebRTCEventHandler {
     let emitModuleEvent: (_ name: String, _ payload: [String: Any]) -> Void
   }
 
-  private let logger: Logger
+  private let logger = VmWebrtcLogging.logger
   private let idleQueue = DispatchQueue(label: "com.vibemachine.webrtc.idle-monitor")
   private var idleTimer: DispatchSourceTimer?
   private var idleDebugTimer: DispatchSourceTimer?
@@ -25,24 +24,18 @@ final class WebRTCEventHandler {
   private var isIdleMonitoringActive = false
   private let idleDebugInterval: TimeInterval = 2
 
-  init(logger: @escaping Logger) {
-    self.logger = logger
-  }
-
   func handle(event: [String: Any], context: ToolContext) {
     guard let eventType = event["type"] as? String else {
       log(
         .warn,
         "Received event without type",
-        metadata: ["event": String(describing: event)],
-        context: context,
-        propagateToReactNative: true
+        metadata: ["event": String(describing: event)]
       )
       return
     }
 
     if shouldResetIdleTimer(for: eventType) {
-      logger(.debug, "[IdleTimer] Event activity detected", ["eventType": eventType])
+      log(.debug, "[IdleTimer] Event activity detected", metadata: ["eventType": eventType])
       recordIdleActivity(source: "event:\(eventType)")
     }
 
@@ -50,18 +43,7 @@ final class WebRTCEventHandler {
       "type": eventType,
       "payloadDescription": String(describing: event)
     ]
-    logger(.debug, "WebRTC event received", metadata)
-
-    // Emit native log event to JavaScript for Logfire (but skip noisy delta events)
-    if shouldEmitToJS(eventType: eventType) {
-      emitNativeLog(
-        level: .debug,
-        message: "WebRTC event received",
-        metadata: metadata,
-        sourceFile: "WebRTCEventHandler.swift",
-        context: context
-      )
-    }
+    log(.debug, "WebRTC event received", metadata: metadata)
 
     switch eventType {
     case "error":
@@ -81,56 +63,18 @@ final class WebRTCEventHandler {
     case "response.text.done":
       handleTranscriptDoneEvent(event, context: context, type: "text")
     default:
-      logger(.debug, "Unhandled WebRTC event", ["type": eventType])
+      log(.debug, "Unhandled WebRTC event", metadata: ["type": eventType])
     }
-  }
-
-  private func emitNativeLog(
-    level: OpenAIWebRTCClient.NativeLogLevel,
-    message: String,
-    metadata: [String: Any]?,
-    sourceFile: String,
-    context: ToolContext
-  ) {
-    var payload: [String: Any] = [
-      "level": level.rawValue,
-      "message": message,
-      "sourceFile": sourceFile,
-      "timestampMs": Int(Date().timeIntervalSince1970 * 1000)
-    ]
-
-    if let metadata = metadata {
-      payload["metadata"] = metadata
-    }
-
-    context.emitModuleEvent("onNativeLog", payload)
   }
 
   private func log(
     _ level: OpenAIWebRTCClient.NativeLogLevel,
     _ message: String,
-    metadata: [String: Any]? = nil,
-    context: ToolContext? = nil,
-    propagateToReactNative: Bool = false
+    metadata: [String: Any]? = nil
   ) {
-    logger(level, message, metadata)
-    guard propagateToReactNative, let context else { return }
-    emitNativeLog(
-      level: level,
-      message: message,
-      metadata: metadata,
-      sourceFile: "WebRTCEventHandler.swift",
-      context: context
-    )
-  }
-
-  private func shouldEmitToJS(eventType: String) -> Bool {
-    // for now, filter it all except errors and tool calls
-    let importantEvents: Set<String> = [
-      "error",
-      "response.function_call_arguments.done"
-    ]
-    return importantEvents.contains(eventType)
+    var attributes = metadata ?? [:]
+    attributes["level"] = level.rawValue
+    logger.log("[WebRTCEventHandler] \(message)", attributes: attributes)
   }
 
   func startIdleMonitoring(timeout: TimeInterval = WebRTCEventHandler.defaultIdleTimeout, onTimeout: @escaping () -> Void) {
@@ -139,10 +83,10 @@ final class WebRTCEventHandler {
       self.idleTimeoutHandler = onTimeout
       self.isIdleMonitoringActive = true
       self.lastActivityAt = Date()
-      self.logger(
+      self.log(
         .info,
         "[IdleTimer] Monitoring started",
-        ["timeoutSeconds": self.idleTimeoutSeconds]
+        metadata: ["timeoutSeconds": self.idleTimeoutSeconds]
       )
       self.scheduleIdleTimerLocked(reason: "monitoring_started")
       self.scheduleIdleDebugTimerLocked()
@@ -157,17 +101,17 @@ final class WebRTCEventHandler {
       self.cancelIdleDebugTimerLocked()
       self.idleTimeoutHandler = nil
       self.lastActivityAt = nil
-      self.logger(.debug, "[IdleTimer] Monitoring stopped", ["reason": reason])
+      self.log(.debug, "[IdleTimer] Monitoring stopped", metadata: ["reason": reason])
     }
   }
 
   func recordExternalActivity(reason: String) {
-    logger(.debug, "[IdleTimer] External activity detected", ["reason": reason])
+    log(.debug, "[IdleTimer] External activity detected", metadata: ["reason": reason])
     recordIdleActivity(source: "external:\(reason)")
   }
 
   func recordRemoteSpeakingActivity() {
-    logger(.debug, "[IdleTimer] Remote speaking activity detected", nil)
+    log(.debug, "[IdleTimer] Remote speaking activity detected")
     recordIdleActivity(source: "remote_speaking")
   }
 
@@ -216,7 +160,7 @@ final class WebRTCEventHandler {
     idleQueue.async {
       guard self.isIdleMonitoringActive else { return }
       self.lastActivityAt = Date()
-      self.logger(.debug, "[IdleTimer] Timer reset", [
+      self.log(.debug, "[IdleTimer] Timer reset", metadata: [
         "source": source,
         "timeoutSeconds": self.idleTimeoutSeconds
       ])
@@ -238,7 +182,7 @@ final class WebRTCEventHandler {
     timer.resume()
     idleTimer = timer
 
-    logger(.debug, "[IdleTimer] Timer scheduled", [
+    log(.debug, "[IdleTimer] Timer scheduled", metadata: [
       "reason": reason,
       "timeoutSeconds": idleTimeoutSeconds
     ])
@@ -281,7 +225,7 @@ final class WebRTCEventHandler {
       remaining = idleTimeoutSeconds
     }
 
-    logger(.debug, "[IdleTimer] Countdown update", [
+    log(.debug, "[IdleTimer] Countdown update", metadata: [
       "isMonitoring": isIdleMonitoringActive,
       "lastActivityAt": lastActivityAt as Any,
       "secondsRemaining": "\(Int(remaining))/\(Int(idleTimeoutSeconds))"
@@ -296,7 +240,7 @@ final class WebRTCEventHandler {
     idleTimeoutHandler = nil
     let lastActivity = lastActivityAt
 
-    logger(.warn, "[IdleTimer] Timeout reached", [
+    log(.warn, "[IdleTimer] Timeout reached", metadata: [
       "timeoutSeconds": idleTimeoutSeconds,
       "lastActivityAt": lastActivity as Any
     ])
@@ -317,14 +261,12 @@ final class WebRTCEventHandler {
       log(
         .warn,
         "Tool call event missing required fields",
-        metadata: ["event": String(describing: event)],
-        context: context,
-        propagateToReactNative: true
+        metadata: ["event": String(describing: event)]
       )
       return
     }
 
-    logger(.info, "Tool call received", [
+    log(.info, "Tool call received", metadata: [
       "callId": callId,
       "name": toolName
     ])
@@ -338,15 +280,13 @@ final class WebRTCEventHandler {
       log(
         .warn,
         "response.usage event missing response.usage field",
-        metadata: ["event": String(describing: event)],
-        context: context,
-        propagateToReactNative: true
+        metadata: ["event": String(describing: event)]
       )
       return
     }
 
     let responseId = response["id"] as? String
-    logger(.debug, "Incremental token usage received", [
+    log(.debug, "Incremental token usage received", metadata: [
       "responseId": responseId as Any,
       "usage": String(describing: usage)
     ])
@@ -359,9 +299,7 @@ final class WebRTCEventHandler {
       log(
         .warn,
         "response.done event missing response field",
-        metadata: ["event": String(describing: event)],
-        context: context,
-        propagateToReactNative: true
+        metadata: ["event": String(describing: event)]
       )
       return
     }
@@ -369,13 +307,13 @@ final class WebRTCEventHandler {
     let responseId = response["id"] as? String
     let status = response["status"] as? String
 
-    logger(.debug, "Response done", [
+    log(.debug, "Response done", metadata: [
       "responseId": responseId as Any,
       "status": status as Any
     ])
 
     if let usage = response["usage"] as? [String: Any] {
-      logger(.debug, "Token usage received", [
+      log(.debug, "Token usage received", metadata: [
         "responseId": responseId as Any,
         "usage": String(describing: usage)
       ])
@@ -444,7 +382,7 @@ final class WebRTCEventHandler {
       payload["contentIndex"] = contentIndex
     }
 
-    logger(.debug, "Transcript delta received", [
+    log(.debug, "Transcript delta received", metadata: [
       "type": type,
       "delta": payload["delta"] as Any,
       "responseId": payload["responseId"] as Any
@@ -479,7 +417,7 @@ final class WebRTCEventHandler {
       payload["contentIndex"] = contentIndex
     }
 
-    logger(.info, "Transcript complete", [
+    log(.info, "Transcript complete", metadata: [
       "type": type,
       "transcriptLength": (payload["transcript"] as? String)?.count as Any,
       "responseId": payload["responseId"] as Any
@@ -496,7 +434,7 @@ final class WebRTCEventHandler {
     let errorMessage = errorDetails?["message"] as? String
     let errorParam = errorDetails?["param"] as? String
 
-    logger(.error, "❌ WebRTC event error", [
+    log(.error, "❌ WebRTC event error", metadata: [
       "eventId": eventId as Any,
       "errorType": errorType as Any,
       "errorCode": errorCode as Any,
@@ -514,7 +452,7 @@ final class WebRTCEventHandler {
     argumentsJSON: String,
     context: ToolContext
   ) {
-    logger(.info, "Dispatching tool call", [
+    log(.info, "Dispatching tool call", metadata: [
       "callId": callId,
       "tool": toolName,
       "argsLen": argumentsJSON.count
@@ -525,9 +463,7 @@ final class WebRTCEventHandler {
       guard let delegate = context.githubConnectorDelegate else {
         log(
           .warn,
-          "Github connector tool requested but no delegate configured",
-          context: context,
-          propagateToReactNative: true
+          "Github connector tool requested but no delegate configured"
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -538,9 +474,7 @@ final class WebRTCEventHandler {
       guard let delegate = context.gdriveConnectorDelegate else {
         log(
           .warn,
-          "GDrive connector tool requested but no delegate configured",
-          context: context,
-          propagateToReactNative: true
+          "GDrive connector tool requested but no delegate configured"
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -551,9 +485,7 @@ final class WebRTCEventHandler {
       guard let delegate = context.gpt5GDriveFixerDelegate else {
         log(
           .warn,
-          "GPT5 GDrive fixer tool requested but no delegate configured",
-          context: context,
-          propagateToReactNative: true
+          "GPT5 GDrive fixer tool requested but no delegate configured"
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -564,9 +496,7 @@ final class WebRTCEventHandler {
       guard let delegate = context.gpt5WebSearchDelegate else {
         log(
           .warn,
-          "GPT5 web search tool requested but no delegate configured",
-          context: context,
-          propagateToReactNative: true
+          "GPT5 web search tool requested but no delegate configured"
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -577,9 +507,7 @@ final class WebRTCEventHandler {
       log(
         .warn,
         "Unknown tool requested",
-        metadata: ["tool": toolName],
-        context: context,
-        propagateToReactNative: true
+        metadata: ["tool": toolName]
       )
       context.sendToolCallError(callId, "Unknown tool: \(toolName)")
     }

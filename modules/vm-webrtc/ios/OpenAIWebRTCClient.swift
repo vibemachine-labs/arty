@@ -287,7 +287,7 @@ final class OpenAIWebRTCClient: NSObject {
       metaText = ""
     }
     // Always print, even in Release builds
-    self.logger.log("[VmWebrtc][\(level.rawValue.uppercased())] \(message)\(metaText)", attributes: resolvedMetadata)
+    self.logger.log("[VmWebrtc] \(message)\(metaText)", attributes: resolvedMetadata)
   }
 
   @MainActor

@@ -105,7 +105,23 @@ export class McpClient {
         signal: controller.signal,
       });
 
-      const rawText = await response.text();
+      let rawText = await response.text();
+      const contentType = response.headers.get('content-type') ?? '';
+
+      if (contentType.includes('text/event-stream')) {
+        const extracted = this.extractJsonFromEventStream(rawText);
+        if (extracted) {
+          log.debug('[McpClient] Parsed SSE payload', {}, {
+            serverName: this.serverName,
+            payloadPreview: extracted.slice(0, 200),
+          });
+          rawText = extracted;
+        } else {
+          log.warn('[McpClient] SSE payload did not contain data lines', {}, {
+            serverName: this.serverName,
+          });
+        }
+      }
       log.debug('[McpClient] Received tools payload', {}, {
         serverName: this.serverName,
         status: response.status,
@@ -121,7 +137,9 @@ export class McpClient {
       try {
         parsed = JSON.parse(rawText) as ToolsListResponse;
       } catch (parseError) {
-        log.warn('[McpClient] Failed to parse MCP tools response', {}, { parseError });
+        log.warn('[McpClient] Failed to parse MCP tools response', {}, {
+          errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+        });
         throw new Error('MCP server returned malformed JSON during tools/list.');
       }
 
@@ -209,6 +227,35 @@ export class McpClient {
   private buildRequestId(): string {
     const randomSuffix = Math.random().toString(36).slice(2, 8);
     return `${this.serverName}-${Date.now()}-${randomSuffix}`;
+  }
+
+  private extractJsonFromEventStream(payload: string): string | null {
+    const chunks = payload
+      .split(/\r?\n\r?\n/)
+      .map((chunk) => chunk.split(/\r?\n/).filter((line) => line.startsWith('data:')));
+
+    for (const dataLines of chunks) {
+      if (dataLines.length === 0) {
+        continue;
+      }
+      const candidate = dataLines
+        .map((line) => line.slice(5).trimStart())
+        .join('\n')
+        .trim();
+
+      if (!candidate) {
+        continue;
+      }
+
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
   }
 }
 

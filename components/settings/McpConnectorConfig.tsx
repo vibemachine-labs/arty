@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 
 import {
   listMcpServers,
@@ -122,22 +123,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
       >
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.header}>
-            <View style={styles.headerTextGroup}>
-              <Text style={styles.headerTitle}>Model Context Protocol</Text>
-              <Text style={styles.headerSubtitle}>
-                Maintain trusted MCP endpoints for your connector tools.
-              </Text>
-            </View>
-            <View style={styles.headerActions}>
-              <Pressable
-                onPress={() => setAddModalVisible(true)}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  pressed && styles.iconButtonPressed,
-                ]}
-              >
-                <Text style={styles.iconButtonText}>＋</Text>
-              </Pressable>
+            <View style={styles.headerTopRow}>
               <Pressable
                 onPress={onClose}
                 style={({ pressed }) => [
@@ -147,6 +133,21 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
               >
                 <Text style={styles.doneButtonText}>Done</Text>
               </Pressable>
+              <Pressable
+                onPress={() => setAddModalVisible(true)}
+                style={({ pressed }) => [
+                  styles.addButton,
+                  pressed && styles.addButtonPressed,
+                ]}
+                accessibilityLabel="Add MCP server"
+                accessibilityRole="button"
+              >
+                <Text style={styles.addButtonText}>＋</Text>
+              </Pressable>
+            </View>
+            <View style={styles.headerTextGroup}>
+              <Text style={styles.headerTitle}>MCP Servers</Text>
+              <Text style={styles.headerSubtitle}>Manage MCP servers</Text>
             </View>
           </View>
 
@@ -209,51 +210,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
           />
 
           <View style={styles.addModalCard}>
-            <Text style={styles.addModalTitle}>New MCP Server</Text>
-            <Text style={styles.addModalSubtitle}>
-              Give the server a friendly name and paste the full URL.
-            </Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="Internal Tools"
-                placeholderTextColor="#C7C7CC"
-                style={styles.textInput}
-                value={form.name}
-                onChangeText={(value) => {
-                  setForm((prev) => ({ ...prev, name: value }));
-                  if (formError) {
-                    setFormError(null);
-                  }
-                }}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>URL</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="https://server.example.com/mcp"
-                placeholderTextColor="#C7C7CC"
-                keyboardType="url"
-                style={styles.textInput}
-                value={form.url}
-                onChangeText={(value) => {
-                  setForm((prev) => ({ ...prev, url: value }));
-                  if (formError) {
-                    setFormError(null);
-                  }
-                }}
-              />
-            </View>
-
-            {formError && <Text style={styles.formError}>{formError}</Text>}
-
-            <View style={styles.addModalActions}>
+            <View style={styles.modalNavBar}>
               <Pressable
                 onPress={() => {
                   setForm(initialFormState);
@@ -261,26 +218,91 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
                   setAddModalVisible(false);
                 }}
                 style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
+                  styles.navTextButton,
+                  pressed && styles.navTextButtonPressed,
                 ]}
               >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.navTextButtonLabel}>Cancel</Text>
               </Pressable>
+              <Text style={styles.modalTitle}>New MCP Server</Text>
               <Pressable
                 onPress={handleSaveServer}
                 disabled={isSaving}
                 style={({ pressed }) => [
-                  styles.primaryButton,
-                  (pressed || isSaving) && styles.primaryButtonPressed,
+                  styles.navTextButton,
+                  (pressed || isSaving) && styles.navTextButtonPressed,
                 ]}
               >
                 {isSaving ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#0A84FF" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Save</Text>
+                  <Text style={styles.navTextButtonPrimary}>Done</Text>
                 )}
               </Pressable>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.addModalSubtitle}>
+                Give the server a friendly name and paste the full URL.
+              </Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Name</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Internal Tools"
+                  placeholderTextColor="#C7C7CC"
+                  style={styles.textInput}
+                  value={form.name}
+                  onChangeText={(value) => {
+                    setForm((prev) => ({ ...prev, name: value }));
+                    if (formError) {
+                      setFormError(null);
+                    }
+                  }}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <View style={styles.urlLabelRow}>
+                  <Text style={styles.inputLabel}>URL</Text>
+                  <Pressable
+                    onPress={async () => {
+                      const clipboardContent = await Clipboard.getStringAsync();
+                      if (clipboardContent) {
+                        setForm((prev) => ({ ...prev, url: clipboardContent }));
+                        if (formError) {
+                          setFormError(null);
+                        }
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.pasteButton,
+                      pressed && styles.pasteButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.pasteButtonText}>Paste</Text>
+                  </Pressable>
+                </View>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="https://server.example.com/mcp"
+                  placeholderTextColor="#C7C7CC"
+                  keyboardType="url"
+                  style={styles.textInput}
+                  value={form.url}
+                  onChangeText={(value) => {
+                    setForm((prev) => ({ ...prev, url: value }));
+                    if (formError) {
+                      setFormError(null);
+                    }
+                  }}
+                />
+              </View>
+
+              {formError && <Text style={styles.formError}>{formError}</Text>}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -298,15 +320,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 16,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5EA",
+    gap: 12,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerTextGroup: {
     flex: 1,
-    paddingRight: 16,
   },
   headerTitle: {
     fontSize: 22,
@@ -318,29 +342,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#636366",
     lineHeight: 20,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#D1D1D6",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  iconButtonPressed: {
-    backgroundColor: "#F2F2F7",
-  },
-  iconButtonText: {
-    fontSize: 24,
-    lineHeight: 24,
-    color: "#0A84FF",
   },
   doneButton: {
     paddingHorizontal: 12,
@@ -355,13 +356,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  addButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  addButtonPressed: {
+    backgroundColor: "rgba(10, 132, 255, 0.08)",
+  },
+  addButtonText: {
+    color: "#0A84FF",
+    fontSize: 22,
+    fontWeight: "600",
+    lineHeight: 22,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingVertical: 16,
     gap: 12,
+    flexGrow: 1,
   },
   loadingState: {
     paddingVertical: 64,
@@ -374,13 +390,16 @@ const styles = StyleSheet.create({
     color: "#636366",
   },
   emptyState: {
-    paddingVertical: 64,
-    paddingHorizontal: 16,
+    flex: 1,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#E5E5EA",
+    gap: 6,
   },
   emptyTitle: {
     fontSize: 18,
@@ -436,22 +455,54 @@ const styles = StyleSheet.create({
   addModalContainer: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.35)",
-    justifyContent: "flex-end",
+    justifyContent: "center",
+    paddingHorizontal: 20,
   },
   addModalBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   addModalCard: {
     backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    gap: 16,
+    borderRadius: 24,
+    paddingBottom: 12,
   },
-  addModalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+  modalNavBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E5E5EA",
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: "600",
     color: "#1C1C1E",
+  },
+  navTextButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  navTextButtonPressed: {
+    backgroundColor: "rgba(10, 132, 255, 0.08)",
+  },
+  navTextButtonLabel: {
+    color: "#0A84FF",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  navTextButtonPrimary: {
+    color: "#0A84FF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 16,
   },
   addModalSubtitle: {
     fontSize: 14,
@@ -483,41 +534,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
   },
-  addModalActions: {
+  urlLabelRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    marginTop: 8,
-  },
-  secondaryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#D1D1D6",
-  },
-  secondaryButtonPressed: {
-    backgroundColor: "#F2F2F7",
-  },
-  secondaryButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1C1C1E",
-  },
-  primaryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "#0A84FF",
-    minWidth: 96,
     alignItems: "center",
+    justifyContent: "space-between",
   },
-  primaryButtonPressed: {
-    opacity: 0.8,
+  pasteButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "#E5F1FF",
   },
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
+  pasteButtonPressed: {
+    backgroundColor: "#D7E9FF",
+  },
+  pasteButtonText: {
+    color: "#0A84FF",
+    fontSize: 13,
     fontWeight: "600",
   },
 });

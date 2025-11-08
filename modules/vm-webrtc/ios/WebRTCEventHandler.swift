@@ -306,7 +306,9 @@ final class WebRTCEventHandler {
       "[WebRTCEventHandler] Tool call received",
       attributes: logAttributes(for: .info, metadata: [
         "callId": callId,
-        "name": toolName
+        "name": toolName,
+        "arguments_length": argumentsJSON.count,
+        "arguments_preview": String(argumentsJSON.prefix(200))
       ])
     )
 
@@ -512,7 +514,8 @@ final class WebRTCEventHandler {
       attributes: logAttributes(for: .info, metadata: [
         "callId": callId,
         "tool": toolName,
-        "argsLen": argumentsJSON.count
+        "arguments_length": argumentsJSON.count,
+        "arguments_preview": String(argumentsJSON.prefix(200))
       ])
     )
 

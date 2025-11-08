@@ -76,8 +76,10 @@ public class ToolGithubConnector: BaseTool {
     self.logger.log("Parsed argsDict keys", attributes: ["keys": Array(argsDict.keys)])
     
     guard let codeSnippet = argsDict["self_contained_javascript_octokit_code_snippet"] as? String else {
-      self.logger.log("Failed to extract 'self_contained_javascript_octokit_code_snippet' from argsDict")
-      self.logger.log("Available keys for failed extraction", attributes: ["keys": Array(argsDict.keys)])
+      self.logger.log("Failed to extract octokit code snippet from argsDict", attributes: [
+        "missing_key": "self_contained_javascript_octokit_code_snippet",
+        "available_keys": Array(argsDict.keys)
+      ])
       responder?.sendToolCallError(callId: callId, error: "Missing parameter 'self_contained_javascript_octokit_code_snippet'")
       return
     }

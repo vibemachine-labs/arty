@@ -239,7 +239,8 @@ public class VmWebrtcModule: Module {
     Function("sendGDriveConnectorResponse") { (requestId: String, result: String) in
       self.logger.log("JS→Native sendGDriveConnectorResponse", attributes: [
         "requestId": requestId,
-        "result_length": result.count
+        "result_length": result.count,
+        "result_preview": String(result.prefix(200))
       ])
       self.toolGDriveConnector?.handleResponse(requestId: requestId, result: result)
     }

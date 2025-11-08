@@ -54,7 +54,8 @@ public class ToolGDriveConnector: BaseTool {
       attributes: [
         "callId": callId,
         "arguments_json": argumentsJSON,
-        "arguments_length": argumentsJSON.count
+        "arguments_length": argumentsJSON.count,
+        "arguments_preview": String(argumentsJSON.prefix(200))
       ]
     )
     
@@ -73,11 +74,21 @@ public class ToolGDriveConnector: BaseTool {
       return
     }
     
-    self.logger.log("[VmWebrtc] Parsed argsDict keys: \(argsDict.keys)")
+    self.logger.log(
+      "[VmWebrtc] Parsed GDrive argument keys",
+      attributes: [
+        "keys": Array(argsDict.keys)
+      ]
+    )
     
     guard let codeSnippet = argsDict["self_contained_javascript_gdrive_code_snippet"] as? String else {
-      self.logger.log("[VmWebrtc] Failed to extract 'self_contained_javascript_gdrive_code_snippet' from argsDict")
-      self.logger.log("[VmWebrtc] Available keys: \(argsDict.keys)")
+      self.logger.log(
+        "[VmWebrtc] Failed to extract required GDrive code snippet",
+        attributes: [
+          "missing_key": "self_contained_javascript_gdrive_code_snippet",
+          "available_keys": Array(argsDict.keys)
+        ]
+      )
       responder?.sendToolCallError(callId: callId, error: "Missing parameter 'self_contained_javascript_gdrive_code_snippet'")
       return
     }
@@ -125,7 +136,14 @@ public class ToolGDriveConnector: BaseTool {
   ///   - promise: Promise to resolve with result
   public func gdriveOperationFromSwift(codeSnippet: String, promise: Promise) {
     let requestId = ToolHelper.generateRequestId()
-    self.logger.log("[ToolGDriveConnector] 📱 gdriveOperationFromSwift called: snippet length=\(codeSnippet.count), requestId=\(requestId)")
+    self.logger.log(
+      "[ToolGDriveConnector] 📱 gdriveOperationFromSwift invoked",
+      attributes: [
+        "requestId": requestId,
+        "snippet_length": codeSnippet.count,
+        "snippet_preview": String(codeSnippet.prefix(200))
+      ]
+    )
     
     // Register string callback
     registerStringCallback(requestId: requestId) { result, error in
@@ -141,14 +159,26 @@ public class ToolGDriveConnector: BaseTool {
       }
     }
     
-    self.logger.log("[ToolGDriveConnector] 🧭 Emitting event 'onGDriveConnectorRequest' with requestId=\(requestId)")
+    self.logger.log(
+      "[ToolGDriveConnector] 🧭 Emitting event to JavaScript",
+      attributes: [
+        "eventName": "onGDriveConnectorRequest",
+        "requestId": requestId
+      ]
+    )
     // Emit event to JavaScript using helper
     let eventId = helper.emitToolRequest(
       eventName: "onGDriveConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_gdrive_code_snippet": codeSnippet]
     )
-    self.logger.log("[ToolGDriveConnector] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log(
+      "[ToolGDriveConnector] 🆔 Event emitted",
+      attributes: [
+        "requestId": requestId,
+        "eventId": eventId
+      ]
+    )
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "GDrive connector request timed out")
@@ -159,7 +189,12 @@ public class ToolGDriveConnector: BaseTool {
   private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
   
   private func registerStringCallback(requestId: String, callback: @escaping (String?, Error?) -> Void) {
-    self.logger.log("[ToolGDriveConnector] 🔐 registerStringCallback for requestId=\(requestId)")
+    self.logger.log(
+      "[ToolGDriveConnector] 🔐 registerStringCallback",
+      attributes: [
+        "requestId": requestId
+      ]
+    )
     stringCallbacks[requestId] = callback
   }
   
@@ -197,7 +232,15 @@ public class ToolGDriveConnector: BaseTool {
         return
       }
       
-      self.logger.log("[VmWebrtc] GDrive connector result received: callId=\(callId) snippet length=\(codeSnippet.count) result=\(result)")
+      self.logger.log(
+        "[VmWebrtc] GDrive connector result received",
+        attributes: [
+          "callId": callId,
+          "snippet_length": codeSnippet.count,
+          "result_length": result.count,
+          "result_preview": String(result.prefix(200))
+        ]
+      )
       // Send the actual JSON result string to OpenAI
       self.responder?.sendToolCallResult(callId: callId, result: result)
     }
@@ -214,13 +257,27 @@ extension ToolGDriveConnector: GDriveConnectorToolDelegate {
   ///   - completion: Callback with result or error
   public func requestGDriveOperation(codeSnippet: String, completion: @escaping (String?, Error?) -> Void) {
     let requestId = ToolHelper.generateRequestId()
-    self.logger.log("[ToolGDriveConnector] 🤖 OpenAI tool call requesting GDrive operation: snippet length=\(codeSnippet.count), requestId=\(requestId)")
+    self.logger.log(
+      "[ToolGDriveConnector] 🤖 OpenAI tool call requesting GDrive operation",
+      attributes: [
+        "requestId": requestId,
+        "snippet_length": codeSnippet.count,
+        "snippet_preview": String(codeSnippet.prefix(200))
+      ]
+    )
     
     // Register string callback
     registerStringCallback(requestId: requestId, callback: completion)
     
     // Emit event to JavaScript using helper
-    self.logger.log("[ToolGDriveConnector] 📤 Emitting GDrive connector request to JavaScript")
+    self.logger.log(
+      "[ToolGDriveConnector] 📤 Emitting GDrive connector request to JavaScript",
+      attributes: [
+        "eventName": "onGDriveConnectorRequest",
+        "requestId": requestId,
+        "snippet_length": codeSnippet.count
+      ]
+    )
     let eventId = helper.emitToolRequest(
       eventName: "onGDriveConnectorRequest",
       requestId: requestId,

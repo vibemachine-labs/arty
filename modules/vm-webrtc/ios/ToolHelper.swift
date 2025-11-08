@@ -111,7 +111,15 @@ public class ToolHelper {
     eventData["eventId"] = eventId
     
     module.sendEvent(eventName, eventData)
-    self.logger.log("[ToolHelper] Emitted event: \(eventName) requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log(
+      "[ToolHelper] Emitted event",
+      attributes: [
+        "eventName": eventName,
+        "requestId": requestId,
+        "eventId": eventId,
+        "parameter_keys": Array(parameters.keys)
+      ]
+    )
     return eventId
   }
   

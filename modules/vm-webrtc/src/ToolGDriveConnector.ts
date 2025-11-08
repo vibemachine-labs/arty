@@ -419,6 +419,7 @@ export class ToolGDriveConnector {
           eventId,
           response: result,
           responseLength: String(result).length,
+          is_native_logger: false,
         });
       } else {
         log.warn(`[${this.toolName}] ⚠️ Cannot send response; native module missing`, {}, { requestId });
@@ -439,6 +440,7 @@ export class ToolGDriveConnector {
           requestId,
           eventId,
           errorMessage,
+          is_native_logger: false,
         });
       }
     }

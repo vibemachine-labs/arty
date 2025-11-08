@@ -42,7 +42,10 @@ public class ToolGPT5WebSearch: BaseTool {
       guard let self = self else { return }
 
       if let error = error {
-        self.logger.log("[ToolGPT5WebSearch] ❌ Web search operation error:", error.localizedDescription)
+        self.logger.log(
+          "[ToolGPT5WebSearch] ❌ Web search operation error",
+          attributes: ["error": error.localizedDescription]
+        )
         self.responder?.sendToolCallError(callId: callId, error: error.localizedDescription)
         return
       }

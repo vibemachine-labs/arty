@@ -5,23 +5,62 @@ import { composePrompt } from '../../../lib/promptStorage';
 import { loadToolPromptAddition } from '../../../lib/toolPrompts';
 import {
   ToolGDriveConnector,
-  gdriveConnectorDefinition,
   type GDriveConnectorNativeModule,
   type GDriveConnectorParams,
 } from './ToolGDriveConnector';
 import {
   ToolGithubConnector,
-  githubConnectorDefinition,
   type GithubConnectorNativeModule,
   type GithubConnectorParams,
 } from './ToolGithubConnector';
-import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
-import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
+import { defaultToolDefinitions } from './ToolGroups';
 import type { ToolDefinition } from './VmWebrtc.types';
 
 type ToolCallArguments = Record<string, any>;
 
 const MODULE_NAME = 'VmWebrtc';
+
+const GITHUB_LIST_ORGANIZATIONS_SNIPPET = `(() => {
+  console.log('Listing organizations for', authenticated_github_user);
+  return octokit
+    .paginate(octokit.rest.orgs.listForAuthenticatedUser, { per_page: 50 })
+    .then((orgs) => orgs.map((org) => ({
+      id: org.id,
+      login: org.login,
+      description: org.description,
+      url: org.html_url,
+    })));
+})()`;
+
+const GDRIVE_LIST_FOLDERS_SNIPPET = `(() => {
+  console.log('Listing top-level folders in Drive');
+  const params = new URLSearchParams({
+    q: "mimeType='application/vnd.google-apps.folder' and 'root' in parents",
+    fields: "files(id,name,modifiedTime,ownedByMe)",
+    orderBy: "name",
+    pageSize: "25",
+    includeItemsFromAllDrives: "true",
+    supportsAllDrives: "true",
+  });
+
+  return fetch("https://www.googleapis.com/drive/v3/files?" + params.toString(), {
+    headers: { Authorization: "Bearer " + accessToken },
+  })
+    .then((res) => {
+      if (!res.ok) {
+        return res.text().then((txt) => {
+          throw new Error('Drive API error: ' + res.status + ' ' + txt);
+        });
+      }
+      return res.json();
+    })
+    .then((json) => (json.files || []).map((file) => ({
+      id: file.id,
+      name: file.name,
+      modifiedTime: file.modifiedTime,
+      ownedByMe: file.ownedByMe,
+    })));
+})()`;
 
 const summarizeDescription = (value: string): string => {
   const trimmed = value.trim();
@@ -58,12 +97,6 @@ const cloneDefinition = (definition: ToolDefinition): ToolDefinition => ({
 });
 
 class ToolManager {
-  private readonly defaultDefinitions: ToolDefinition[] = [
-    githubConnectorDefinition,
-    gdriveConnectorDefinition,
-    gpt5GDriveFixerDefinition,
-    gpt5WebSearchDefinition,
-  ];
 
   private githubConnectorTool: ToolGithubConnector | null | undefined;
   private gdriveConnectorTool: ToolGDriveConnector | null | undefined;
@@ -118,7 +151,7 @@ class ToolManager {
     const provided = overrides ? overrides.map(cloneDefinition) : [];
     const merged = [
       ...provided,
-      ...this.defaultDefinitions
+      ...defaultToolDefinitions
         .map(cloneDefinition)
         .filter((def) => !provided.some((p) => p.name === def.name)),
     ];
@@ -174,6 +207,35 @@ class ToolManager {
       }
     }
 
+    if (toolName === 'github_list_organizations') {
+      const connector = this.getGithubConnectorTool();
+      if (!connector) {
+        log.warn('[ToolManager] GitHub list organizations unavailable', {}, {
+          nativeModuleLoaded: Boolean(this.nativeModule),
+        });
+        return 'GitHub list organizations tool is not available';
+      }
+
+      const params: GithubConnectorParams = {
+        self_contained_javascript_octokit_code_snippet: GITHUB_LIST_ORGANIZATIONS_SNIPPET,
+      };
+      log.debug('[ToolManager] Executing GitHub organization inventory helper', {}, summarizeSnippetArgument(
+        GITHUB_LIST_ORGANIZATIONS_SNIPPET
+      ));
+
+      try {
+        const result = await connector.execute(params);
+        log.info('[ToolManager] GitHub organization inventory completed', {}, {
+          resultLength: typeof result === 'string' ? result.length : 0,
+        });
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        log.error('[ToolManager] GitHub organization inventory failed', {}, errorMessage);
+        return `Error executing GitHub organization inventory: ${errorMessage}`;
+      }
+    }
+
     if (toolName === 'gdrive_connector') {
       const connector = this.getGDriveConnectorTool();
       if (!connector) {
@@ -201,6 +263,35 @@ class ToolManager {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         log.error('[ToolManager] Google Drive connector execution failed', {}, errorMessage);
         return `Error executing Google Drive connector: ${errorMessage}`;
+      }
+    }
+
+    if (toolName === 'gdrive_list_folders') {
+      const connector = this.getGDriveConnectorTool();
+      if (!connector) {
+        log.warn('[ToolManager] Google Drive list folders unavailable', {}, {
+          nativeModuleLoaded: Boolean(this.nativeModule),
+        });
+        return 'Google Drive list folders tool is not available';
+      }
+
+      const params: GDriveConnectorParams = {
+        self_contained_javascript_gdrive_code_snippet: GDRIVE_LIST_FOLDERS_SNIPPET,
+      };
+      log.debug('[ToolManager] Executing Google Drive folder inventory helper', {}, summarizeSnippetArgument(
+        GDRIVE_LIST_FOLDERS_SNIPPET
+      ));
+
+      try {
+        const result = await connector.execute(params);
+        log.info('[ToolManager] Google Drive folder inventory completed', {}, {
+          resultLength: typeof result === 'string' ? result.length : 0,
+        });
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        log.error('[ToolManager] Google Drive folder inventory failed', {}, errorMessage);
+        return `Error executing Google Drive folder inventory: ${errorMessage}`;
       }
     }
 

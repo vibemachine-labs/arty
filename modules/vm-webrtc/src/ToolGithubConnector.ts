@@ -140,6 +140,36 @@ Example code snippets:
   },
 };
 
+export const githubListOrganizationsDefinition: ToolDefinition = {
+  type: 'function',
+  name: 'github_list_organizations',
+  description: `Use this tool when the user simply needs to know which organizations their authenticated GitHub account can access.
+
+It executes a pre-built Octokit snippet that lists up to 50 organizations via octokit.rest.orgs.listForAuthenticatedUser
+and returns an array of { id, login, description, url } objects. No extra parameters are required.
+
+Example snippet:
+
+(() => {
+  console.log('Listing organizations for', authenticated_github_user);
+  return octokit
+    .paginate(octokit.rest.orgs.listForAuthenticatedUser, { per_page: 50 })
+    .then((orgs) => orgs.map((org) => ({
+      id: org.id,
+      login: org.login,
+      description: org.description,
+      url: org.html_url,
+    })));
+})()
+
+This snippet uses the pre-injected octokit client and authenticated_github_user variables provided by the connector.`,
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
 // MARK: - Types
 
 export interface GithubConnectorParams {

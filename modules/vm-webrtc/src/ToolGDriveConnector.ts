@@ -314,6 +314,47 @@ Example:
 
 const GOOGLE_REVOCATION_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 
+export const gdriveListFoldersDefinition: ToolDefinition = {
+  type: 'function',
+  name: 'gdrive_list_folders',
+  description: `Use this tool when the user just needs a quick summary of the folders that live at the root of their Google Drive.
+
+It executes a pre-built snippet that retrieves lightweight metadata for up to 25 top-level folders and returns an
+array of { id, name, modifiedTime, ownedByMe } objects. No additional parameters are required.
+
+Example snippet:
+
+(() => {
+  console.log('Listing top-level folders in Drive');
+  const params = new URLSearchParams({
+    q: "mimeType='application/vnd.google-apps.folder' and 'root' in parents",
+    fields: "files(id,name,modifiedTime,ownedByMe)",
+    orderBy: "name",
+    pageSize: "25",
+    includeItemsFromAllDrives: "true",
+    supportsAllDrives: "true",
+  });
+
+  return fetch("https://www.googleapis.com/drive/v3/files?" + params.toString(), {
+    headers: { Authorization: "Bearer " + accessToken },
+  })
+  .then((res) => res.json())
+  .then((json) => (json.files || []).map((file) => ({
+    id: file.id,
+    name: file.name,
+    modifiedTime: file.modifiedTime,
+    ownedByMe: file.ownedByMe,
+  })));
+})()
+
+This snippet relies on the pre-injected accessToken variable that the connector provides for every request.`,
+  parameters: {
+    type: 'object',
+    properties: {},
+    required: [],
+  },
+};
+
 // MARK: - Helpers
 
 export const revokeGDriveAccess = async (): Promise<void> => {

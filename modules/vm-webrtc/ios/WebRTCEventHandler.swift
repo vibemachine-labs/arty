@@ -26,16 +26,18 @@ final class WebRTCEventHandler {
 
   func handle(event: [String: Any], context: ToolContext) {
     guard let eventType = event["type"] as? String else {
-      log(
-        .warn,
-        "Received event without type",
-        metadata: ["event": String(describing: event)]
+      logger.log(
+        "[WebRTCEventHandler] Received event without type",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
       )
       return
     }
 
     if shouldResetIdleTimer(for: eventType) {
-      log(.debug, "[IdleTimer] Event activity detected", metadata: ["eventType": eventType])
+      logger.log(
+        "[WebRTCEventHandler] [IdleTimer] Event activity detected",
+        attributes: logAttributes(for: .debug, metadata: ["eventType": eventType])
+      )
       recordIdleActivity(source: "event:\(eventType)")
     }
 
@@ -43,7 +45,10 @@ final class WebRTCEventHandler {
       "type": eventType,
       "payloadDescription": String(describing: event)
     ]
-    log(.debug, "WebRTC event received", metadata: metadata)
+    logger.log(
+      "[WebRTCEventHandler] WebRTC event received",
+      attributes: logAttributes(for: .debug, metadata: metadata)
+    )
 
     switch eventType {
     case "error":
@@ -63,18 +68,20 @@ final class WebRTCEventHandler {
     case "response.text.done":
       handleTranscriptDoneEvent(event, context: context, type: "text")
     default:
-      log(.debug, "Unhandled WebRTC event", metadata: ["type": eventType])
+      logger.log(
+        "[WebRTCEventHandler] Unhandled WebRTC event",
+        attributes: logAttributes(for: .debug, metadata: ["type": eventType])
+      )
     }
   }
 
-  private func log(
-    _ level: OpenAIWebRTCClient.NativeLogLevel,
-    _ message: String,
+  private func logAttributes(
+    for level: OpenAIWebRTCClient.NativeLogLevel,
     metadata: [String: Any]? = nil
-  ) {
+  ) -> [String: Any] {
     var attributes = metadata ?? [:]
     attributes["level"] = level.rawValue
-    logger.log("[WebRTCEventHandler] \(message)", attributes: attributes)
+    return attributes
   }
 
   func startIdleMonitoring(timeout: TimeInterval = WebRTCEventHandler.defaultIdleTimeout, onTimeout: @escaping () -> Void) {
@@ -83,10 +90,9 @@ final class WebRTCEventHandler {
       self.idleTimeoutHandler = onTimeout
       self.isIdleMonitoringActive = true
       self.lastActivityAt = Date()
-      self.log(
-        .info,
-        "[IdleTimer] Monitoring started",
-        metadata: ["timeoutSeconds": self.idleTimeoutSeconds]
+      self.logger.log(
+        "[WebRTCEventHandler] [IdleTimer] Monitoring started",
+        attributes: self.logAttributes(for: .info, metadata: ["timeoutSeconds": self.idleTimeoutSeconds])
       )
       self.scheduleIdleTimerLocked(reason: "monitoring_started")
       self.scheduleIdleDebugTimerLocked()
@@ -101,17 +107,26 @@ final class WebRTCEventHandler {
       self.cancelIdleDebugTimerLocked()
       self.idleTimeoutHandler = nil
       self.lastActivityAt = nil
-      self.log(.debug, "[IdleTimer] Monitoring stopped", metadata: ["reason": reason])
+      self.logger.log(
+        "[WebRTCEventHandler] [IdleTimer] Monitoring stopped",
+        attributes: self.logAttributes(for: .debug, metadata: ["reason": reason])
+      )
     }
   }
 
   func recordExternalActivity(reason: String) {
-    log(.debug, "[IdleTimer] External activity detected", metadata: ["reason": reason])
+    logger.log(
+      "[WebRTCEventHandler] [IdleTimer] External activity detected",
+      attributes: logAttributes(for: .debug, metadata: ["reason": reason])
+    )
     recordIdleActivity(source: "external:\(reason)")
   }
 
   func recordRemoteSpeakingActivity() {
-    log(.debug, "[IdleTimer] Remote speaking activity detected")
+    logger.log(
+      "[WebRTCEventHandler] [IdleTimer] Remote speaking activity detected",
+      attributes: logAttributes(for: .debug)
+    )
     recordIdleActivity(source: "remote_speaking")
   }
 
@@ -160,10 +175,16 @@ final class WebRTCEventHandler {
     idleQueue.async {
       guard self.isIdleMonitoringActive else { return }
       self.lastActivityAt = Date()
-      self.log(.debug, "[IdleTimer] Timer reset", metadata: [
-        "source": source,
-        "timeoutSeconds": self.idleTimeoutSeconds
-      ])
+      self.logger.log(
+        "[WebRTCEventHandler] [IdleTimer] Timer reset",
+        attributes: self.logAttributes(
+          for: .debug,
+          metadata: [
+            "source": source,
+            "timeoutSeconds": self.idleTimeoutSeconds
+          ]
+        )
+      )
       self.scheduleIdleTimerLocked(reason: source)
       self.scheduleIdleDebugTimerLocked()
     }
@@ -182,10 +203,16 @@ final class WebRTCEventHandler {
     timer.resume()
     idleTimer = timer
 
-    log(.debug, "[IdleTimer] Timer scheduled", metadata: [
-      "reason": reason,
-      "timeoutSeconds": idleTimeoutSeconds
-    ])
+    logger.log(
+      "[WebRTCEventHandler] [IdleTimer] Timer scheduled",
+      attributes: logAttributes(
+        for: .debug,
+        metadata: [
+          "reason": reason,
+          "timeoutSeconds": idleTimeoutSeconds
+        ]
+      )
+    )
   }
 
   private func cancelIdleTimerLocked() {
@@ -225,11 +252,17 @@ final class WebRTCEventHandler {
       remaining = idleTimeoutSeconds
     }
 
-    log(.debug, "[IdleTimer] Countdown update", metadata: [
-      "isMonitoring": isIdleMonitoringActive,
-      "lastActivityAt": lastActivityAt as Any,
-      "secondsRemaining": "\(Int(remaining))/\(Int(idleTimeoutSeconds))"
-    ])
+    logger.log(
+      "[WebRTCEventHandler] [IdleTimer] Countdown update",
+      attributes: logAttributes(
+        for: .debug,
+        metadata: [
+          "isMonitoring": isIdleMonitoringActive,
+          "lastActivityAt": lastActivityAt as Any,
+          "secondsRemaining": "\(Int(remaining))/\(Int(idleTimeoutSeconds))"
+        ]
+      )
+    )
   }
 
   private func handleIdleTimeoutLocked() {
@@ -240,10 +273,16 @@ final class WebRTCEventHandler {
     idleTimeoutHandler = nil
     let lastActivity = lastActivityAt
 
-    log(.warn, "[IdleTimer] Timeout reached", metadata: [
-      "timeoutSeconds": idleTimeoutSeconds,
-      "lastActivityAt": lastActivity as Any
-    ])
+    logger.log(
+      "[WebRTCEventHandler] [IdleTimer] Timeout reached",
+      attributes: logAttributes(
+        for: .warn,
+        metadata: [
+          "timeoutSeconds": idleTimeoutSeconds,
+          "lastActivityAt": lastActivity as Any
+        ]
+      )
+    )
 
     DispatchQueue.main.async {
       handler?()
@@ -258,18 +297,20 @@ final class WebRTCEventHandler {
     guard let callId = event["call_id"] as? String,
           let toolName = event["name"] as? String,
           let argumentsJSON = event["arguments"] as? String else {
-      log(
-        .warn,
-        "Tool call event missing required fields",
-        metadata: ["event": String(describing: event)]
+      logger.log(
+        "[WebRTCEventHandler] Tool call event missing required fields",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
       )
       return
     }
 
-    log(.info, "Tool call received", metadata: [
-      "callId": callId,
-      "name": toolName
-    ])
+    logger.log(
+      "[WebRTCEventHandler] Tool call received",
+      attributes: logAttributes(for: .info, metadata: [
+        "callId": callId,
+        "name": toolName
+      ])
+    )
 
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }
@@ -277,29 +318,30 @@ final class WebRTCEventHandler {
   private func handleTokenUsageEvent(_ event: [String: Any], context: ToolContext) {
     guard let response = event["response"] as? [String: Any],
           let usage = response["usage"] as? [String: Any] else {
-      log(
-        .warn,
-        "response.usage event missing response.usage field",
-        metadata: ["event": String(describing: event)]
+      logger.log(
+        "[WebRTCEventHandler] response.usage event missing response.usage field",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
       )
       return
     }
 
     let responseId = response["id"] as? String
-    log(.debug, "Incremental token usage received", metadata: [
-      "responseId": responseId as Any,
-      "usage": String(describing: usage)
-    ])
+    logger.log(
+      "[WebRTCEventHandler] Incremental token usage received",
+      attributes: logAttributes(for: .debug, metadata: [
+        "responseId": responseId as Any,
+        "usage": String(describing: usage)
+      ])
+    )
 
     emitTokenUsage(usage: usage, responseId: responseId, context: context)
   }
 
   private func handleResponseDoneEvent(_ event: [String: Any], context: ToolContext) {
     guard let response = event["response"] as? [String: Any] else {
-      log(
-        .warn,
-        "response.done event missing response field",
-        metadata: ["event": String(describing: event)]
+      logger.log(
+        "[WebRTCEventHandler] response.done event missing response field",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
       )
       return
     }
@@ -307,16 +349,22 @@ final class WebRTCEventHandler {
     let responseId = response["id"] as? String
     let status = response["status"] as? String
 
-    log(.debug, "Response done", metadata: [
-      "responseId": responseId as Any,
-      "status": status as Any
-    ])
+    logger.log(
+      "[WebRTCEventHandler] Response done",
+      attributes: logAttributes(for: .debug, metadata: [
+        "responseId": responseId as Any,
+        "status": status as Any
+      ])
+    )
 
     if let usage = response["usage"] as? [String: Any] {
-      log(.debug, "Token usage received", metadata: [
-        "responseId": responseId as Any,
-        "usage": String(describing: usage)
-      ])
+      logger.log(
+        "[WebRTCEventHandler] Token usage received",
+        attributes: logAttributes(for: .debug, metadata: [
+          "responseId": responseId as Any,
+          "usage": String(describing: usage)
+        ])
+      )
       emitTokenUsage(usage: usage, responseId: responseId, context: context)
     }
   }
@@ -382,11 +430,14 @@ final class WebRTCEventHandler {
       payload["contentIndex"] = contentIndex
     }
 
-    log(.debug, "Transcript delta received", metadata: [
-      "type": type,
-      "delta": payload["delta"] as Any,
-      "responseId": payload["responseId"] as Any
-    ])
+    logger.log(
+      "[WebRTCEventHandler] Transcript delta received",
+      attributes: logAttributes(for: .debug, metadata: [
+        "type": type,
+        "delta": payload["delta"] as Any,
+        "responseId": payload["responseId"] as Any
+      ])
+    )
 
     context.emitModuleEvent("onTranscript", payload)
   }
@@ -417,11 +468,14 @@ final class WebRTCEventHandler {
       payload["contentIndex"] = contentIndex
     }
 
-    log(.info, "Transcript complete", metadata: [
-      "type": type,
-      "transcriptLength": (payload["transcript"] as? String)?.count as Any,
-      "responseId": payload["responseId"] as Any
-    ])
+    logger.log(
+      "[WebRTCEventHandler] Transcript complete",
+      attributes: logAttributes(for: .info, metadata: [
+        "type": type,
+        "transcriptLength": (payload["transcript"] as? String)?.count as Any,
+        "responseId": payload["responseId"] as Any
+      ])
+    )
 
     context.emitModuleEvent("onTranscript", payload)
   }
@@ -434,14 +488,17 @@ final class WebRTCEventHandler {
     let errorMessage = errorDetails?["message"] as? String
     let errorParam = errorDetails?["param"] as? String
 
-    log(.error, "❌ WebRTC event error", metadata: [
-      "eventId": eventId as Any,
-      "errorType": errorType as Any,
-      "errorCode": errorCode as Any,
-      "errorParam": errorParam as Any,
-      "message": errorMessage as Any,
-      "rawPayload": String(describing: event)
-    ])
+    logger.log(
+      "[WebRTCEventHandler] ❌ WebRTC event error",
+      attributes: logAttributes(for: .error, metadata: [
+        "eventId": eventId as Any,
+        "errorType": errorType as Any,
+        "errorCode": errorCode as Any,
+        "errorParam": errorParam as Any,
+        "message": errorMessage as Any,
+        "rawPayload": String(describing: event)
+      ])
+    )
 
     context.emitModuleEvent("onRealtimeError", event)
   }
@@ -452,18 +509,21 @@ final class WebRTCEventHandler {
     argumentsJSON: String,
     context: ToolContext
   ) {
-    log(.info, "Dispatching tool call", metadata: [
-      "callId": callId,
-      "tool": toolName,
-      "argsLen": argumentsJSON.count
-    ])
+    logger.log(
+      "[WebRTCEventHandler] Dispatching tool call",
+      attributes: logAttributes(for: .info, metadata: [
+        "callId": callId,
+        "tool": toolName,
+        "argsLen": argumentsJSON.count
+      ])
+    )
 
     switch toolName {
     case "github_connector":
       guard let delegate = context.githubConnectorDelegate else {
-        log(
-          .warn,
-          "Github connector tool requested but no delegate configured"
+        logger.log(
+          "[WebRTCEventHandler] Github connector tool requested but no delegate configured",
+          attributes: logAttributes(for: .warn)
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -472,9 +532,9 @@ final class WebRTCEventHandler {
 
     case "gdrive_connector":
       guard let delegate = context.gdriveConnectorDelegate else {
-        log(
-          .warn,
-          "GDrive connector tool requested but no delegate configured"
+        logger.log(
+          "[WebRTCEventHandler] GDrive connector tool requested but no delegate configured",
+          attributes: logAttributes(for: .warn)
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -483,9 +543,9 @@ final class WebRTCEventHandler {
 
     case "GPT5-gdrive-fixer":
       guard let delegate = context.gpt5GDriveFixerDelegate else {
-        log(
-          .warn,
-          "GPT5 GDrive fixer tool requested but no delegate configured"
+        logger.log(
+          "[WebRTCEventHandler] GPT5 GDrive fixer tool requested but no delegate configured",
+          attributes: logAttributes(for: .warn)
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -494,9 +554,9 @@ final class WebRTCEventHandler {
 
     case "GPT5-web-search":
       guard let delegate = context.gpt5WebSearchDelegate else {
-        log(
-          .warn,
-          "GPT5 web search tool requested but no delegate configured"
+        logger.log(
+          "[WebRTCEventHandler] GPT5 web search tool requested but no delegate configured",
+          attributes: logAttributes(for: .warn)
         )
         context.sendToolCallError(callId, "Tool not configured: \(toolName)")
         return
@@ -504,10 +564,9 @@ final class WebRTCEventHandler {
       delegate.handleToolCall(callId: callId, argumentsJSON: argumentsJSON)
 
     default:
-      log(
-        .warn,
-        "Unknown tool requested",
-        metadata: ["tool": toolName]
+      logger.log(
+        "[WebRTCEventHandler] Unknown tool requested",
+        attributes: logAttributes(for: .warn, metadata: ["tool": toolName])
       )
       context.sendToolCallError(callId, "Unknown tool: \(toolName)")
     }

@@ -75,15 +75,6 @@ final class WebRTCEventHandler {
     }
   }
 
-  private func logAttributes(
-    for level: OpenAIWebRTCClient.NativeLogLevel,
-    metadata: [String: Any]? = nil
-  ) -> [String: Any] {
-    var attributes = metadata ?? [:]
-    attributes["level"] = level.rawValue
-    return attributes
-  }
-
   func startIdleMonitoring(timeout: TimeInterval = WebRTCEventHandler.defaultIdleTimeout, onTimeout: @escaping () -> Void) {
     idleQueue.async {
       self.idleTimeoutSeconds = max(timeout, 1)
@@ -92,7 +83,7 @@ final class WebRTCEventHandler {
       self.lastActivityAt = Date()
       self.logger.log(
         "[WebRTCEventHandler] [IdleTimer] Monitoring started",
-        attributes: self.logAttributes(for: .info, metadata: ["timeoutSeconds": self.idleTimeoutSeconds])
+        attributes: logAttributes(for: .info, metadata: ["timeoutSeconds": self.idleTimeoutSeconds])
       )
       self.scheduleIdleTimerLocked(reason: "monitoring_started")
       self.scheduleIdleDebugTimerLocked()
@@ -109,7 +100,7 @@ final class WebRTCEventHandler {
       self.lastActivityAt = nil
       self.logger.log(
         "[WebRTCEventHandler] [IdleTimer] Monitoring stopped",
-        attributes: self.logAttributes(for: .info, metadata: ["reason": reason])
+        attributes: logAttributes(for: .info, metadata: ["reason": reason])
       )
     }
   }
@@ -175,7 +166,7 @@ final class WebRTCEventHandler {
     idleQueue.async {
       guard self.isIdleMonitoringActive else { return }
       self.lastActivityAt = Date()
-      let attributes = self.logAttributes(
+      let attributes = logAttributes(
         for: .trace,
         metadata: [
           "source": source,

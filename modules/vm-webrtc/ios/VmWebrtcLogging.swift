@@ -7,3 +7,12 @@ enum VmWebrtcLogging {
     logger.attachTracingManager(tracingManager)
   }
 }
+
+func logAttributes(
+  for level: OpenAIWebRTCClient.NativeLogLevel,
+  metadata: [String: Any]? = nil
+) -> [String: Any] {
+  var attributes = metadata ?? [:]
+  attributes["level"] = level.rawValue
+  return attributes
+}

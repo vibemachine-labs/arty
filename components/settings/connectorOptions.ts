@@ -1,4 +1,10 @@
-export type ConnectorId = "github" | "gdrive" | "gmail" | "web" | "mcp";
+export type ConnectorId =
+  | "github"
+  | "gdrive"
+  | "hackernews"
+  | "gmail"
+  | "web"
+  | "mcp";
 
 export type ConnectorOption = {
   id: ConnectorId;
@@ -23,6 +29,13 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     icon: "📂",
     backgroundColor: "#FFF8EF",
     iconBackgroundColor: "#FFF3E6",
+  },
+  {
+    id: "hackernews",
+    name: "Hacker News",
+    icon: "🗞️",
+    backgroundColor: "#FDF2EC",
+    iconBackgroundColor: "#FBE7DA",
   },
   {
     id: "gmail",

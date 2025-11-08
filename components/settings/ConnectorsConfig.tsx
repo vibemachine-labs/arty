@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
@@ -18,6 +18,8 @@ import {
   type ConnectorOption,
 } from "./connectorOptions";
 import { WebConnectorInfo } from "./WebConnectorInfo";
+import { HackerNewsConnectorConfig } from "./HackerNewsConnectorConfig";
+import { loadHackerNewsEnabled } from "../../lib/hackerNewsPreference";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -32,12 +34,36 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const [githubConfigVisible, setGithubConfigVisible] = useState(false);
   const [gdriveConfigVisible, setGDriveConfigVisible] = useState(false);
   const [webInfoVisible, setWebInfoVisible] = useState(false);
+  const [hackerNewsConfigVisible, setHackerNewsConfigVisible] = useState(false);
+  const [isHackerNewsEnabled, setIsHackerNewsEnabled] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (visible) {
+      loadHackerNewsEnabled()
+        .then((enabled) => {
+          if (isMounted) {
+            setIsHackerNewsEnabled(enabled);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setIsHackerNewsEnabled(false);
+          }
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [visible]);
 
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
       setGithubConfigVisible(true);
     } else if (connectorId === "gdrive") {
       setGDriveConfigVisible(true);
+    } else if (connectorId === "hackernews") {
+      setHackerNewsConfigVisible(true);
     } else if (connectorId === "web") {
       setWebInfoVisible(true);
     } else if (connectorId === "gmail") {
@@ -87,32 +113,38 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
           </Text>
 
           <View style={styles.grid}>
-            {CONNECTOR_OPTIONS.map((connector: ConnectorOption) => (
-              <Pressable
-                key={connector.id}
-                onPress={() => handleConnectorPress(connector.id)}
-                style={({ pressed }) => [
-                  styles.card,
-                  { backgroundColor: connector.backgroundColor },
-                  pressed && styles.cardPressed,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: connector.iconBackgroundColor },
+            {CONNECTOR_OPTIONS.map((connector: ConnectorOption) => {
+              const isConfigured =
+                connector.id === "hackernews"
+                  ? isHackerNewsEnabled
+                  : connector.isConfigured;
+              return (
+                <Pressable
+                  key={connector.id}
+                  onPress={() => handleConnectorPress(connector.id)}
+                  style={({ pressed }) => [
+                    styles.card,
+                    { backgroundColor: connector.backgroundColor },
+                    pressed && styles.cardPressed,
                   ]}
                 >
-                  <Text style={styles.icon}>{connector.icon}</Text>
-                </View>
-                <Text style={styles.cardTitle}>{connector.name}</Text>
-                {connector.isConfigured && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>✓</Text>
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: connector.iconBackgroundColor },
+                    ]}
+                  >
+                    <Text style={styles.icon}>{connector.icon}</Text>
                   </View>
-                )}
-              </Pressable>
-            ))}
+                  <Text style={styles.cardTitle}>{connector.name}</Text>
+                  {isConfigured && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>✓</Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -140,6 +172,13 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       <WebConnectorInfo
         visible={webInfoVisible}
         onClose={() => setWebInfoVisible(false)}
+      />
+
+      <HackerNewsConnectorConfig
+        visible={hackerNewsConfigVisible}
+        enabled={isHackerNewsEnabled}
+        onClose={() => setHackerNewsConfigVisible(false)}
+        onStatusChange={setIsHackerNewsEnabled}
       />
     </Modal>
   );

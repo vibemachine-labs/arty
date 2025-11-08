@@ -22,33 +22,34 @@ class ConversationRecorder {
     private var callStartTime: Date?
     private var turns: [ConversationTurn] = []
     private weak var audioRecorder: AVAudioRecorder?  // Reference to mic recorder
+    private let logger = VmWebrtcLogging.logger
     
     // MARK: - Public Methods
     
     /// Set reference to the audio recorder
     func setAudioRecorder(_ recorder: AVAudioRecorder?) {
         self.audioRecorder = recorder
-        print("[ConversationRecorder] 📹 Audio recorder reference set")
+        self.logger.log("[ConversationRecorder] 📹 Audio recorder reference set")
     }
     
     /// Call this when the WebRTC connection opens
     func startCall() {
         callStartTime = Date()
         turns.removeAll()
-        print("[ConversationRecorder] ✅ Call started at \(callStartTime!)")
+        self.logger.log("[ConversationRecorder] ✅ Call started at \(callStartTime!)")
     }
     
     /// Get current recording time
     private func getCurrentRecordingTime() -> TimeInterval {
         if let recorder = audioRecorder, recorder.isRecording {
             let recordingTime = recorder.currentTime
-            print("[ConversationRecorder] ⏱️ Current recording time: \(String(format: "%.2f", recordingTime))s")
+            self.logger.log("[ConversationRecorder] ⏱️ Current recording time: \(String(format: "%.2f", recordingTime))s")
             return recordingTime
         } else {
             // Fallback to Date-based calculation
             guard let startTime = callStartTime else { return 0 }
             let fallbackTime = Date().timeIntervalSince(startTime)
-            print("[ConversationRecorder] ⚠️ Using fallback time calculation: \(String(format: "%.2f", fallbackTime))s")
+            self.logger.log("[ConversationRecorder] ⚠️ Using fallback time calculation: \(String(format: "%.2f", fallbackTime))s")
             return fallbackTime
         }
     }
@@ -56,12 +57,12 @@ class ConversationRecorder {
     /// Call this when user's transcript arrives from OpenAI
     func addUserTranscript(_ text: String) {
         guard callStartTime != nil else {
-            print("[ConversationRecorder] ⚠️ Cannot add user transcript - call not started")
+            self.logger.log("[ConversationRecorder] ⚠️ Cannot add user transcript - call not started")
             return
         }
         
         guard !text.isEmpty else {
-            print("[ConversationRecorder] ⚠️ Empty user transcript, skipping")
+            self.logger.log("[ConversationRecorder] ⚠️ Empty user transcript, skipping")
             return
         }
         
@@ -77,18 +78,18 @@ class ConversationRecorder {
         
         turns.append(turn)
         
-        print("[ConversationRecorder] 👤 User [+\(String(format: "%.2f", relativeTime))s]: \(text)")
+        self.logger.log("[ConversationRecorder] 👤 User [+\(String(format: "%.2f", relativeTime))s]: \(text)")
     }
     
     /// Call this when AI's transcript arrives from OpenAI
     func addAITranscript(_ text: String) {
         guard callStartTime != nil else {
-            print("[ConversationRecorder] ⚠️ Cannot add AI transcript - call not started")
+            self.logger.log("[ConversationRecorder] ⚠️ Cannot add AI transcript - call not started")
             return
         }
         
         guard !text.isEmpty else {
-            print("[ConversationRecorder] ⚠️ Empty AI transcript, skipping")
+            self.logger.log("[ConversationRecorder] ⚠️ Empty AI transcript, skipping")
             return
         }
         
@@ -104,18 +105,18 @@ class ConversationRecorder {
         
         turns.append(turn)
         
-        print("[ConversationRecorder] 🤖 AI [+\(String(format: "%.2f", relativeTime))s]: \(text)")
+        self.logger.log("[ConversationRecorder] 🤖 AI [+\(String(format: "%.2f", relativeTime))s]: \(text)")
     }
     
     /// Add AI transcript with custom timestamp
     func addAITranscriptWithTime(_ text: String, relativeTime: TimeInterval) {
         guard callStartTime != nil else {
-            print("[ConversationRecorder] ⚠️ Cannot add AI transcript - call not started")
+            self.logger.log("[ConversationRecorder] ⚠️ Cannot add AI transcript - call not started")
             return
         }
         
         guard !text.isEmpty else {
-            print("[ConversationRecorder] ⚠️ Empty AI transcript, skipping")
+            self.logger.log("[ConversationRecorder] ⚠️ Empty AI transcript, skipping")
             return
         }
         
@@ -130,7 +131,7 @@ class ConversationRecorder {
         
         turns.append(turn)
         
-        print("[ConversationRecorder] 🤖 AI [CUSTOM +\(String(format: "%.2f", relativeTime))s]: \(text)")
+        self.logger.log("[ConversationRecorder] 🤖 AI [CUSTOM +\(String(format: "%.2f", relativeTime))s]: \(text)")
     }
     
     /// Get all conversation turns sorted by time
@@ -148,7 +149,7 @@ class ConversationRecorder {
         callStartTime = nil
         turns.removeAll()
         audioRecorder = nil
-        print("[ConversationRecorder] 🔄 Reset")
+        self.logger.log("[ConversationRecorder] 🔄 Reset")
     }
     
     /// Check if recording is active

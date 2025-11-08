@@ -104,14 +104,6 @@ export type TranscriptEventPayload = {
   timestampMs: number;
 };
 
-export type NativeLogEventPayload = {
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-  sourceFile: string;
-  timestampMs: number;
-  metadata?: Record<string, any>;
-};
-
 export type OutboundAudioStatsEventPayload = {
   localSpeaking: boolean;
   audioLevel?: string;
@@ -131,6 +123,5 @@ export type VmWebrtcModuleEvents = {
   onRealtimeError: (params: RealtimeErrorEventPayload) => void;
   onAudioMetrics: (params: AudioMetricsEventPayload) => void;
   onTranscript: (params: TranscriptEventPayload) => void;
-  onNativeLog: (params: NativeLogEventPayload) => void;
   onOutboundAudioStats: (params: OutboundAudioStatsEventPayload) => void;
 };

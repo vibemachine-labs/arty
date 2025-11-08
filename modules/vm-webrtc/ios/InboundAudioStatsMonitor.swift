@@ -163,7 +163,7 @@ final class InboundAudioStatsMonitor {
         metadata["audioLevel"] = formattedStatValue(audioLevel)
       }
 
-      logEmitter(.debug, "Inbound audio stats", metadata)
+      logEmitter(.trace, "Inbound audio stats", metadata)
     }
   }
 

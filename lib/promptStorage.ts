@@ -19,6 +19,7 @@ export const loadPromptAddition = async (storageKey: string): Promise<string> =>
       storageKey,
       hasAddition: addition.length > 0,
       length: addition.length,
+      additionPreview: addition.slice(0, 500),
     });
     return addition;
   } catch (error) {

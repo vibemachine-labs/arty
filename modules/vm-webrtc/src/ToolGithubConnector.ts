@@ -199,6 +199,7 @@ export class ToolGithubConnector {
           requestId,
           response: result,
           responseLength: String(result).length,
+          is_native_logger: false,
         });
       }
     } catch (error) {
@@ -215,6 +216,7 @@ export class ToolGithubConnector {
         log.info(`[${this.toolName}] 📤 Sent error response to Swift`, {}, {
           requestId,
           errorMessage,
+          is_native_logger: false,
         });
       }
     }

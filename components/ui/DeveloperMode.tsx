@@ -17,7 +17,11 @@ import * as Clipboard from "expo-clipboard";
 
 import { OnboardingWizard } from "../../app/OnboardingWizard";
 import { RecordingScreen } from "./RecordingScreen";
-import { loadShowRealtimeErrorAlerts, saveShowRealtimeErrorAlerts } from "../../lib/developerSettings";
+import {
+  loadLogRedactionDisabled,
+  loadShowRealtimeErrorAlerts,
+  saveShowRealtimeErrorAlerts,
+} from "../../lib/developerSettings";
 import {
   getLogfireApiKey,
   getLogfireEnabled,
@@ -201,15 +205,48 @@ const LogfireTracingSection: React.FC<{
   );
 };
 
+const LogRedactionSection: React.FC<{
+  redactionDisabled: boolean;
+  onToggle: (value: boolean) => void;
+}> = ({ redactionDisabled, onToggle }) => {
+  return (
+    <View style={styles.sectionCard}>
+      <View style={styles.settingRow}>
+        <View style={styles.settingTextContainer}>
+          <Text style={styles.sectionTitle}>Disable Log Redaction</Text>
+          <Text style={styles.sectionSubtitle}>
+            Show the exact payloads captured in logs to debug connector issues. Only turn this off on trusted devices because sensitive data may appear.
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel="Toggle log redaction"
+          value={redactionDisabled}
+          onValueChange={onToggle}
+          ios_backgroundColor="#D1D1D6"
+          trackColor={{ false: "#D1D1D6", true: "#FF3B30" }}
+          thumbColor={redactionDisabled ? "#FFFFFF" : undefined}
+        />
+      </View>
+      {redactionDisabled && (
+        <Text style={styles.warningText}>
+          Warning: Secrets such as API keys and bearer tokens will be visible in console output while this is enabled.
+        </Text>
+      )}
+    </View>
+  );
+};
+
 export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }) => {
   const [recordingManagerVisible, setRecordingManagerVisible] = useState(false);
   const [showErrorAlerts, setShowErrorAlerts] = useState(true);
   const [logfireEnabled, setLogfireEnabled] = useState(false);
   const [logfireApiKey, setLogfireApiKey] = useState("");
+  const [logRedactionDisabled, setLogRedactionDisabled] = useState(false);
   const [initialSettings, setInitialSettings] = useState<{
     showErrorAlerts: boolean;
     logfireEnabled: boolean;
     logfireApiKey: string;
+    logRedactionDisabled: boolean;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isReady = initialSettings !== null;
@@ -225,16 +262,22 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       return;
     }
     const loadSettings = async () => {
-      const setting = await loadShowRealtimeErrorAlerts();
-      const enabled = await getLogfireEnabled();
-      const apiKey = (await getLogfireApiKey()) || "";
+      const [setting, enabled, apiKeyValue, redactionDisabled] = await Promise.all([
+        loadShowRealtimeErrorAlerts(),
+        getLogfireEnabled(),
+        getLogfireApiKey(),
+        loadLogRedactionDisabled(),
+      ]);
+      const apiKey = apiKeyValue || "";
       setShowErrorAlerts(setting);
       setLogfireEnabled(enabled);
       setLogfireApiKey(apiKey);
+      setLogRedactionDisabled(redactionDisabled);
       setInitialSettings({
         showErrorAlerts: setting,
         logfireEnabled: enabled,
         logfireApiKey: apiKey,
+        logRedactionDisabled: redactionDisabled,
       });
     };
     void loadSettings();
@@ -250,6 +293,10 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
 
   const handleToggleLogfireEnabled = useCallback((value: boolean) => {
     setLogfireEnabled(value);
+  }, []);
+
+  const handleToggleLogRedactionDisabled = useCallback((value: boolean) => {
+    setLogRedactionDisabled(value);
   }, []);
 
   const handleLogfireApiKeyChange = useCallback((value: string) => {
@@ -273,10 +320,12 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       setShowErrorAlerts(initialSettings.showErrorAlerts);
       setLogfireEnabled(initialSettings.logfireEnabled);
       setLogfireApiKey(initialSettings.logfireApiKey);
+      setLogRedactionDisabled(initialSettings.logRedactionDisabled);
     } else {
       setShowErrorAlerts(false);
       setLogfireEnabled(false);
       setLogfireApiKey("");
+      setLogRedactionDisabled(false);
     }
     setRecordingManagerVisible(false);
   }, [initialSettings]);
@@ -290,6 +339,7 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       showErrorAlerts: false,
       logfireEnabled: false,
       logfireApiKey: "",
+      logRedactionDisabled: false,
     };
     const trimmedApiKey = logfireApiKey.trim();
     try {
@@ -308,10 +358,14 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       ) {
         await log.initialize();
       }
+      if (logRedactionDisabled !== previous.logRedactionDisabled) {
+        await log.setRedactionEnabled(!logRedactionDisabled, { persist: true });
+      }
       setInitialSettings({
         showErrorAlerts,
         logfireEnabled,
         logfireApiKey: trimmedApiKey,
+        logRedactionDisabled,
       });
       setLogfireApiKey(trimmedApiKey);
       setRecordingManagerVisible(false);
@@ -332,6 +386,7 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
     logfireEnabled,
     onClose,
     showErrorAlerts,
+    logRedactionDisabled,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -381,6 +436,10 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
             <ErrorAlertsSection
               showErrorAlerts={showErrorAlerts}
               onToggle={handleToggleErrorAlerts}
+            />
+            <LogRedactionSection
+              redactionDisabled={logRedactionDisabled}
+              onToggle={handleToggleLogRedactionDisabled}
             />
             <ManagerRecordingSection
               onOpenManager={handleOpenRecordingManager}
@@ -550,5 +609,11 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "600",
+  },
+  warningText: {
+    fontSize: 13,
+    color: "#FF3B30",
+    marginTop: 12,
+    lineHeight: 18,
   },
 });

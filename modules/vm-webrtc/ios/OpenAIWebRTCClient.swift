@@ -101,6 +101,7 @@ final class OpenAIWebRTCClient: NSObject {
   private var maxConversationTurns: Int?
   var retentionRatio: Double?
   private let retentionRatioScale: Int = 2
+  private let logger = VmWebrtcLogging.logger
 
   // Reference to the github connector tool delegate
   weak var githubConnectorDelegate: BaseTool?
@@ -293,7 +294,7 @@ final class OpenAIWebRTCClient: NSObject {
       metaText = ""
     }
     // Always print, even in Release builds
-    print("[VmWebrtc][\(level.rawValue.uppercased())] \(message)\(metaText)")
+    self.logger.log("[VmWebrtc][\(level.rawValue.uppercased())] \(message)\(metaText)", attributes: metadata)
 
     let shouldPropagate = propagateToReactNative || level == .error
 

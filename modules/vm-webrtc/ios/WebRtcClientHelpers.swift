@@ -990,7 +990,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
     }
 
     if payload.isEmpty {
-      emit(.debug, "Token usage event received without recognized counters", metadata: [
+      emit(.debug, "💵 Token usage event received without recognized counters", metadata: [
         "usageKeys": Array(usage.keys)
       ])
       return

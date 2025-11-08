@@ -49,9 +49,14 @@ public class ToolGDriveConnector: BaseTool {
   ///   - callId: The tool call identifier
   ///   - argumentsJSON: JSON string containing the arguments
   public func handleToolCall(callId: String, argumentsJSON: String) {
-    self.logger.log("[VmWebrtc] Processing GDrive connector tool call handleToolCall: callId=\(callId)")
-    self.logger.log("[VmWebrtc] Raw argumentsJSON received: '\(argumentsJSON)'")
-    self.logger.log("[VmWebrtc] ArgumentsJSON length: \(argumentsJSON.count)")
+    self.logger.log(
+      "[VmWebrtc] Processing GDrive connector tool call",
+      attributes: [
+        "callId": callId,
+        "arguments_json": argumentsJSON,
+        "arguments_length": argumentsJSON.count
+      ]
+    )
     
     // Parse arguments to extract self_contained_javascript_gdrive_code_snippet parameter
     guard let argsData = argumentsJSON.data(using: .utf8) else {

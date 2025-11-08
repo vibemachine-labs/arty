@@ -108,7 +108,7 @@ export function VoiceChat({
           cachedInput: payload.cachedInput ?? 0,
         });
 
-        log.info("Token usage event", {}, {
+        log.info("💵 Token usage event", {}, {
           event: payload,
           totals,
         });

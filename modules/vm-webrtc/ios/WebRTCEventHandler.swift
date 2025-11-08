@@ -125,7 +125,7 @@ final class WebRTCEventHandler {
   func recordRemoteSpeakingActivity() {
     logger.log(
       "[WebRTCEventHandler] [IdleTimer] Remote speaking activity detected",
-      attributes: logAttributes(for: .debug)
+      attributes: logAttributes(for: .trace)
     )
     recordIdleActivity(source: "remote_speaking")
   }
@@ -430,7 +430,7 @@ final class WebRTCEventHandler {
 
     logger.log(
       "[WebRTCEventHandler] Transcript delta received",
-      attributes: logAttributes(for: .debug, metadata: [
+      attributes: logAttributes(for: .trace, metadata: [
         "type": type,
         "delta": payload["delta"] as Any,
         "responseId": payload["responseId"] as Any

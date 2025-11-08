@@ -516,38 +516,7 @@ extension OpenAIWebRTCClient {
       return
     }
 
-    var tools: [[String: Any]] = []
-    var definitionsByName: [String: [String: Any]] = [:]
-
-    for definition in toolDefinitions {
-      guard let name = definition["name"] as? String, !name.isEmpty else {
-        self.logger.log("[VmWebrtc] " + "Encountered tool definition without a valid name. Skipping.", attributes: logAttributes(for: .warn))
-        continue
-      }
-      definitionsByName[name] = definition
-    }
-
-    let delegateWarnings: [(BaseTool?, String)] = [
-      (githubConnectorDelegate, "No JavaScript-provided definition found for github connector tool"),
-      (gdriveConnectorDelegate, "No JavaScript-provided definition found for gdrive connector tool"),
-      (gpt5GDriveFixerDelegate, "No JavaScript-provided definition found for GPT5 gdrive fixer tool"),
-      (gpt5WebSearchDelegate, "No JavaScript-provided definition found for GPT5 web search tool")
-    ]
-
-    for (delegate, warning) in delegateWarnings {
-      appendToolDefinition(
-        for: delegate,
-        warningMessage: warning,
-        definitionsByName: definitionsByName,
-        tools: &tools
-      )
-    }
-
-    if tools.isEmpty && !toolDefinitions.isEmpty {
-      self.logger.log("[VmWebrtc] " + "Tool definitions were provided from JavaScript but none matched configured delegates", attributes: logAttributes(for: .warn, metadata: [
-          "definitionCount": toolDefinitions.count
-        ]))
-    }
+    let tools = buildInitialToolPayload()
 
     var session: [String: Any] = [
       "instructions": sessionInstructions,
@@ -595,6 +564,43 @@ extension OpenAIWebRTCClient {
 
       strongSelf.sendEvent(["type": "response.create"])
     }
+  }
+
+  private func buildInitialToolPayload() -> [[String: Any]] {
+    guard !toolDefinitions.isEmpty else {
+      return []
+    }
+
+    let definitionsByName = toolDefinitions.reduce(into: [String: [String: Any]]()) { result, definition in
+      guard let name = definition["name"] as? String, !name.isEmpty else {
+        self.logger.log("[VmWebrtc] " + "Encountered tool definition without a valid name. Skipping.", attributes: logAttributes(for: .warn))
+        return
+      }
+      result[name] = definition
+    }
+
+    let toolCallbacks: [(BaseTool?, String)] = [
+      (githubConnectorDelegate, "No JavaScript-provided definition found for github connector tool"),
+      (gdriveConnectorDelegate, "No JavaScript-provided definition found for gdrive connector tool"),
+      (gpt5GDriveFixerDelegate, "No JavaScript-provided definition found for GPT5 gdrive fixer tool"),
+      (gpt5WebSearchDelegate, "No JavaScript-provided definition found for GPT5 web search tool")
+    ]
+
+    let resolvedTools = toolCallbacks.compactMap { toolCallback, warning in
+      toolDefinition(
+        for: toolCallback,
+        warningMessage: warning,
+        definitionsByName: definitionsByName
+      )
+    }
+
+    if resolvedTools.isEmpty {
+      self.logger.log("[VmWebrtc] " + "Tool definitions were provided from JavaScript but none matched configured delegates", attributes: logAttributes(for: .warn, metadata: [
+          "definitionCount": toolDefinitions.count
+        ]))
+    }
+
+    return resolvedTools
   }
 
   @discardableResult

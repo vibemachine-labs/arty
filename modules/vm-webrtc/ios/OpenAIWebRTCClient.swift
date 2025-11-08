@@ -241,25 +241,26 @@ final class OpenAIWebRTCClient: NSObject {
     )
   }
 
-  func appendToolDefinition(
-    for delegate: BaseTool?,
+  func toolDefinition(
+    for toolCallback: BaseTool?,
     warningMessage: String,
-    definitionsByName: [String: [String: Any]],
-    tools: inout [[String: Any]]
-  ) {
-    guard let delegate else { return }
-    let toolName = delegate.toolName
+    definitionsByName: [String: [String: Any]]
+  ) -> [String: Any]? {
+    guard let toolCallback else { return nil }
+    let toolName = toolCallback.toolName
     if let definition = definitionsByName[toolName] {
-      tools.append(definition)
-    } else {
-      self.logger.log(
-        "[VmWebrtc] " + warningMessage,
-        attributes: logAttributes(for: .warn, metadata: [
-          "toolName": toolName,
-          "availableDefinitions": Array(definitionsByName.keys)
-        ])
-      )
+      return definition
     }
+
+    self.logger.log(
+      "[VmWebrtc] " + warningMessage,
+      attributes: logAttributes(for: .warn, metadata: [
+        "toolName": toolName,
+        "availableDefinitions": Array(definitionsByName.keys)
+      ])
+    )
+
+    return nil
   }
 
   let defaultEndpoint = "https://api.openai.com/v1/realtime"

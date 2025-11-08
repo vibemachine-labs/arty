@@ -238,8 +238,7 @@ final class OpenAIWebRTCClient: NSObject {
         metadata: [
           "toolName": toolName,
           "availableDefinitions": Array(definitionsByName.keys)
-        ],
-        propagateToReactNative: true
+        ]
       )
     }
   }
@@ -274,15 +273,16 @@ final class OpenAIWebRTCClient: NSObject {
   public func emit(
     _ level: NativeLogLevel,
     _ message: String,
-    metadata: [String: Any]? = nil,
-    propagateToReactNative: Bool = false,
-    sourceFile: StaticString = #fileID
+    metadata: [String: Any]? = nil
   ) {
     guard shouldLog(level) else { return }
 
+    var resolvedMetadata = metadata ?? [:]
+    resolvedMetadata["level"] = level.rawValue
+
     let metaText: String
-    if let metadata, !metadata.isEmpty {
-      let rendered = metadata.map { entry in
+    if !resolvedMetadata.isEmpty {
+      let rendered = resolvedMetadata.map { entry in
         "\(entry.key)=\(String(describing: entry.value))"
       }.joined(separator: " ")
       metaText = " " + rendered
@@ -290,29 +290,7 @@ final class OpenAIWebRTCClient: NSObject {
       metaText = ""
     }
     // Always print, even in Release builds
-    self.logger.log("[VmWebrtc][\(level.rawValue.uppercased())] \(message)\(metaText)", attributes: metadata)
-
-    let shouldPropagate = propagateToReactNative || level == .error
-
-    guard shouldPropagate else { return }
-
-    var payload: [String: Any] = [
-      "level": level.rawValue,
-      "message": message,
-      "sourceFile": String(describing: sourceFile),
-      "timestampMs": Int(Date().timeIntervalSince1970 * 1000)
-    ]
-
-    if let metadata, !metadata.isEmpty {
-      payload["metadata"] = metadata
-    }
-
-    Task { [weak self] in
-      guard let self else { return }
-      await MainActor.run {
-        self.emitModuleEvent("onNativeLog", payload: payload)
-      }
-    }
+    self.logger.log("[VmWebrtc][\(level.rawValue.uppercased())] \(message)\(metaText)", attributes: resolvedMetadata)
   }
 
   @MainActor
@@ -410,8 +388,7 @@ final class OpenAIWebRTCClient: NSObject {
         "audioOutput": audioOutput.rawValue,
         "voice": sessionVoice,
         "recordingEnabled": enableRecording
-      ],
-      propagateToReactNative: true
+      ]
     )
     // Persist recording preferences
     self.isRecordingEnabled = enableRecording
@@ -455,8 +432,7 @@ final class OpenAIWebRTCClient: NSObject {
           "Failed to start recording",
           metadata: [
             "error": error.localizedDescription
-          ],
-          propagateToReactNative: true
+          ]
         )
       }
     } else {
@@ -494,8 +470,7 @@ final class OpenAIWebRTCClient: NSObject {
     self.emit(
       .info,
       "OpenAI WebRTC connection flow finished",
-      metadata: ["state": state],
-      propagateToReactNative: true
+      metadata: ["state": state]
     )
 
     if enableRecording {
@@ -530,8 +505,7 @@ final class OpenAIWebRTCClient: NSObject {
   func closeConnection() -> String {
       self.emit(
         .info,
-        "Closing OpenAI WebRTC connection",
-        propagateToReactNative: true
+        "Closing OpenAI WebRTC connection"
       )
 
       eventHandler.stopIdleMonitoring(reason: "connection_closed")
@@ -596,8 +570,7 @@ final class OpenAIWebRTCClient: NSObject {
 
       self.emit(
         .info,
-        "OpenAI WebRTC connection teardown completed",
-        propagateToReactNative: true
+        "OpenAI WebRTC connection teardown completed"
       )
 
       return "closed"

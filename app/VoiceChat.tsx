@@ -25,7 +25,6 @@ import VmWebrtcModule, {
   type AudioMetricsEventPayload,
   type BaseOpenAIConnectionOptions,
   type IdleTimeoutEventPayload,
-  type NativeLogEventPayload,
   type OpenAIConnectionOptions,
   type OpenAIConnectionState,
   type RealtimeErrorEventPayload,
@@ -146,40 +145,6 @@ export function VoiceChat({
         const shouldShowAlert = await loadShowRealtimeErrorAlerts();
         if (shouldShowAlert) {
           Alert.alert("Session Error", message);
-        }
-      }
-    );
-
-    return () => {
-      subscription.remove?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!VmWebrtcModule?.addListener) {
-      return undefined;
-    }
-
-    const subscription = VmWebrtcModule.addListener(
-      "onNativeLog",
-      (payload: NativeLogEventPayload) => {
-        // Forward native logs to JavaScript logger based on level
-        const { level, message, sourceFile, metadata } = payload;
-        const logMessage = `[Native:${sourceFile}] ${message}`;
-
-        switch (level) {
-          case 'debug':
-            log.debug(logMessage, {}, metadata);
-            break;
-          case 'info':
-            log.info(logMessage, {}, metadata);
-            break;
-          case 'warn':
-            log.warn(logMessage, {}, metadata);
-            break;
-          case 'error':
-            log.error(logMessage, {}, metadata);
-            break;
         }
       }
     );

@@ -154,8 +154,7 @@ extension OpenAIWebRTCClient {
           "error": error.localizedDescription,
           "category": session.category.rawValue,
           "mode": session.mode.rawValue
-        ],
-        propagateToReactNative: true
+        ]
       )
     }
   }
@@ -222,8 +221,7 @@ extension OpenAIWebRTCClient {
     if let existingConnection = peerConnection {
       self.emit(
         .warn,
-        "Disposing existing peer connection before creating a new one",
-        propagateToReactNative: true
+        "Disposing existing peer connection before creating a new one"
       )
       stopInboundAudioStatsMonitoring()
       stopOutboundAudioStatsMonitoring()
@@ -404,8 +402,7 @@ extension OpenAIWebRTCClient {
               metadata: [
                 "timeoutSeconds": timeout,
                 "currentState": connection.iceGatheringState.rawValue
-              ],
-              propagateToReactNative: true
+              ]
             )
             self.iceGatheringTimeoutTask = nil
             self.iceGatheringContinuation = nil
@@ -458,8 +455,7 @@ extension OpenAIWebRTCClient {
       self.emit(
         .info,
         "OpenAI WebRTC connection established",
-        metadata: ["state": stringValue(for: connection.iceConnectionState)],
-        propagateToReactNative: true
+        metadata: ["state": stringValue(for: connection.iceConnectionState)]
       )
       return stringValue(for: connection.iceConnectionState)
     }
@@ -513,8 +509,7 @@ extension OpenAIWebRTCClient {
       "[IdleTimer] Inactivity threshold reached, disconnecting session",
       metadata: [
         "timeoutSeconds": Constants.idleTimeoutSeconds
-      ],
-      propagateToReactNative: true
+      ]
     )
 
     let previousState = closeConnection()
@@ -539,8 +534,7 @@ extension OpenAIWebRTCClient {
         "Data channel not ready for initial session configuration",
         metadata: [
           "hasChannel": dataChannel != nil
-        ],
-        propagateToReactNative: true
+        ]
       )
       return
     }
@@ -552,8 +546,7 @@ extension OpenAIWebRTCClient {
       guard let name = definition["name"] as? String, !name.isEmpty else {
         emit(
           .warn,
-          "Encountered tool definition without a valid name. Skipping.",
-          propagateToReactNative: true
+          "Encountered tool definition without a valid name. Skipping."
         )
         continue
       }
@@ -582,8 +575,7 @@ extension OpenAIWebRTCClient {
         "Tool definitions were provided from JavaScript but none matched configured delegates",
         metadata: [
           "definitionCount": toolDefinitions.count
-        ],
-        propagateToReactNative: true
+        ]
       )
     }
 
@@ -619,15 +611,13 @@ extension OpenAIWebRTCClient {
       emit(
         .debug,
         "📑 Sending session.update payload",
-        metadata: ["session": prettyString],
-        propagateToReactNative: true
+        metadata: ["session": prettyString]
       )
     } else {
       emit(
         .debug,
         "📑 Sending session.update payload (fallback formatting)",
-        metadata: ["session": session],
-        propagateToReactNative: true
+        metadata: ["session": session]
       )
     }
 
@@ -778,8 +768,7 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
       self.emit(
         .info,
         "OpenAI WebRTC connection established",
-        metadata: ["state": stringValue(for: newState)],
-        propagateToReactNative: true
+        metadata: ["state": stringValue(for: newState)]
       )
       connectionTimeoutTask?.cancel()
       connectionTimeoutTask = nil
@@ -897,8 +886,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
         metadata: [
           "label": dataChannel.label,
           "bytes": buffer.data.count
-        ],
-        propagateToReactNative: true
+        ]
       )
       return
     }
@@ -961,8 +949,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
           "Data channel message is not a JSON object",
           metadata: [
             "payload": text
-          ],
-          propagateToReactNative: true
+          ]
         )
       }
     } catch {

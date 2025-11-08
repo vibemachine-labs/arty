@@ -82,8 +82,7 @@ public class VmWebrtcModule: Module {
       "onIdleTimeout",
       "onTokenUsage",
       "onRealtimeError",
-      "onAudioMetrics",
-      "onNativeLog"
+      "onAudioMetrics"
     )
 
     // Initialize native tool delegates used by the module

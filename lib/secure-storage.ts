@@ -5,6 +5,7 @@ import { log } from './logger';
 
 const OPENAI_API_KEY = 'VIBEFLUENT_OPENAI_API_KEY';
 const GITHUB_TOKEN_KEY = 'VIBEMACHINE_GITHUB_TOKEN';
+const MCP_SERVERS_KEY = 'VIBEMACHINE_MCP_SERVERS';
 
 // Google Drive Keys
 const GDRIVE_CLIENT_ID_OVERRIDE_KEY = 'VIBEMACHINE_GDRIVE_CLIENT_ID_OVERRIDE';
@@ -190,6 +191,110 @@ export async function hasGithubToken(): Promise<boolean> {
 
 export function isValidGithubToken(token: string): boolean {
   return !!token && (token.startsWith('ghp_') || token.startsWith('github_pat_')) && token.length > 20;
+}
+
+export type McpServerDefinition = {
+  name: string;
+  url: string;
+};
+
+type McpServerStore = Record<string, { url: string }>;
+
+const sanitizeMcpServerName = (name: string): string => name.trim();
+
+async function readMcpServerStore(): Promise<McpServerStore> {
+  log.info('🔄 Attempting to retrieve MCP servers from SecureStore...', {});
+
+  try {
+    const raw = await SecureStore.getItemAsync(MCP_SERVERS_KEY);
+    if (!raw) {
+      log.info('ℹ️ No MCP servers found in SecureStore', {});
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as McpServerStore;
+    if (parsed && typeof parsed === 'object') {
+      log.info('✅ MCP servers retrieved from SecureStore', {}, {
+        count: Object.keys(parsed).length,
+      });
+      return parsed;
+    }
+
+    log.warn('⚠️ MCP servers payload malformed, returning empty dictionary', {});
+    return {};
+  } catch (error) {
+    const errorDetails = {
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    };
+    log.warn('⚠️ Failed to parse MCP servers payload, returning empty dictionary', {}, errorDetails);
+    return {};
+  }
+}
+
+async function writeMcpServerStore(store: McpServerStore): Promise<void> {
+  log.info('🔄 Attempting to persist MCP servers to SecureStore...', {}, {
+    count: Object.keys(store).length,
+  });
+
+  try {
+    await SecureStore.setItemAsync(MCP_SERVERS_KEY, JSON.stringify(store));
+    log.info('✅ MCP servers saved to SecureStore', {});
+  } catch (error) {
+    const errorDetails = {
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
+    };
+    log.error('❌ SecureStore failed to save MCP servers', {}, errorDetails);
+    throw error;
+  }
+}
+
+export async function listMcpServers(): Promise<McpServerDefinition[]> {
+  const store = await readMcpServerStore();
+  return Object.entries(store)
+    .map(([name, values]) => ({
+      name,
+      url: values.url,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function upsertMcpServer(name: string, url: string): Promise<McpServerDefinition[]> {
+  const sanitizedName = sanitizeMcpServerName(name);
+  const sanitizedUrl = url.trim();
+
+  if (!sanitizedName) {
+    throw new Error('Server name must not be empty.');
+  }
+
+  if (!sanitizedUrl) {
+    throw new Error('Server URL must not be empty.');
+  }
+
+  const store = await readMcpServerStore();
+  store[sanitizedName] = { url: sanitizedUrl };
+  await writeMcpServerStore(store);
+  return listMcpServers();
+}
+
+export async function removeMcpServer(name: string): Promise<McpServerDefinition[]> {
+  const sanitizedName = sanitizeMcpServerName(name);
+  if (!sanitizedName) {
+    throw new Error('Server name must not be empty.');
+  }
+
+  const store = await readMcpServerStore();
+  if (store[sanitizedName]) {
+    delete store[sanitizedName];
+    await writeMcpServerStore(store);
+  } else {
+    log.info('ℹ️ Attempted to delete non-existent MCP server', {}, { name: sanitizedName });
+  }
+
+  return listMcpServers();
 }
 
 // Google Drive Client ID (override and effective getter)
@@ -514,6 +619,7 @@ export async function clearAllStoredSecrets(): Promise<void> {
   const secureStoreKeys = [
     OPENAI_API_KEY,
     GITHUB_TOKEN_KEY,
+    MCP_SERVERS_KEY,
     GDRIVE_CLIENT_ID_OVERRIDE_KEY,
     GDRIVE_ACCESS_TOKEN_KEY,
     GDRIVE_REFRESH_TOKEN_KEY,

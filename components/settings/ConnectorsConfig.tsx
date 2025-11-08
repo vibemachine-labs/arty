@@ -18,6 +18,7 @@ import {
   type ConnectorOption,
 } from "./connectorOptions";
 import { WebConnectorInfo } from "./WebConnectorInfo";
+import { McpConnectorConfig } from "./McpConnectorConfig";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const [githubConfigVisible, setGithubConfigVisible] = useState(false);
   const [gdriveConfigVisible, setGDriveConfigVisible] = useState(false);
   const [webInfoVisible, setWebInfoVisible] = useState(false);
+  const [mcpConfigVisible, setMcpConfigVisible] = useState(false);
 
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
@@ -45,9 +47,7 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
         { text: "OK", style: "default" },
       ]);
     } else if (connectorId === "mcp") {
-      Alert.alert("Coming soon", "MCP connector support is on the way.", [
-        { text: "OK", style: "default" },
-      ]);
+      setMcpConfigVisible(true);
     } else {
       // TODO: Navigate to other connector config screens
       console.log(`Configure ${connectorId}`);
@@ -140,6 +140,11 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       <WebConnectorInfo
         visible={webInfoVisible}
         onClose={() => setWebInfoVisible(false)}
+      />
+
+      <McpConnectorConfig
+        visible={mcpConfigVisible}
+        onClose={() => setMcpConfigVisible(false)}
       />
     </Modal>
   );

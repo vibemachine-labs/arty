@@ -20,6 +20,8 @@ final class NativeLogger {
     let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedMessage.isEmpty else { return }
 
+    let resolvedSeverity = LogfireTracingManager.severity(from: attributes) ?? .info
+
     var consoleMessage = "[\(category)] \(trimmedMessage)"
     if let attributes, !attributes.isEmpty {
       let attributeSummary = attributes.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
@@ -37,7 +39,8 @@ final class NativeLogger {
     tracingManager.recordEvent(
       tracerName: tracerName,
       spanName: trimmedMessage,
-      attributes: resolvedAttributes
+      attributes: resolvedAttributes,
+      severity: resolvedSeverity
     )
   }
 }

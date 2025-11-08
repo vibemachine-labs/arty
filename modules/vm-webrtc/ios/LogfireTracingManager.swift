@@ -9,6 +9,25 @@ final class LogfireTracingManager {
     static let endpoint = "https://logfire-us.pydantic.dev/v1/traces"
     static let defaultTracerName = "vibemachine-tracer"
   }
+  enum Severity: String {
+    case debug
+    case info
+    case warn
+    case error
+
+    var severityText: String {
+      rawValue.uppercased()
+    }
+
+    var severityNumber: Int {
+      switch self {
+      case .debug: return 7   // DEBUG3 per OTLP spec
+      case .info: return 11   // INFO3
+      case .warn: return 15   // WARN3
+      case .error: return 19  // ERROR3
+      }
+    }
+  }
 
   private let workerQueue = DispatchQueue(label: "com.vibemachine.logfire.queue", qos: .utility)
   private var tracerProvider: TracerProvider?
@@ -38,7 +57,12 @@ final class LogfireTracingManager {
     }
   }
 
-  func recordEvent(tracerName: String, spanName: String, attributes: [String: Any]?) {
+  func recordEvent(
+    tracerName: String,
+    spanName: String,
+    attributes: [String: Any]?,
+    severity: Severity? = nil
+  ) {
     workerQueue.async {
       guard self.isInitialized else {
         NSLog("[LogfireTracingManager] recordEvent skipped: tracing not initialized")
@@ -57,7 +81,12 @@ final class LogfireTracingManager {
         return
       }
 
+      let resolvedSeverity = severity ?? Self.severity(from: attributes) ?? .info
       let span = tracer.spanBuilder(spanName: trimmedSpan).startSpan()
+      span.setAttribute(key: "log.severity_text", value: AttributeValue.string(resolvedSeverity.severityText))
+      span.setAttribute(key: "log.severity_number", value: AttributeValue.int(resolvedSeverity.severityNumber))
+      span.setAttribute(key: "logfire.level", value: AttributeValue.string(resolvedSeverity.rawValue))
+
       if let attributes = attributes {
         for (key, value) in attributes {
           guard !key.isEmpty else { continue }
@@ -70,6 +99,18 @@ final class LogfireTracingManager {
       }
       span.end()
     }
+  }
+
+  static func severity(from attributes: [String: Any]?) -> Severity? {
+    guard let attributes else { return nil }
+    let candidateKeys = ["severity", "level", "logLevel"]
+    for key in candidateKeys {
+      guard let value = attributes[key] else { continue }
+      if let severity = Severity(anyValue: value) {
+        return severity
+      }
+    }
+    return nil
   }
 
   private func initializeIfNeeded(serviceName: String, apiKey: String) throws {
@@ -219,5 +260,23 @@ enum LogfireTracingError: LocalizedError {
     case .invalidEndpoint:
       return "Logfire endpoint URL is invalid."
     }
+  }
+}
+
+extension LogfireTracingManager.Severity {
+  init?(anyValue: Any) {
+    if let severity = anyValue as? LogfireTracingManager.Severity {
+      self = severity
+      return
+    }
+    if let string = anyValue as? String {
+      self.init(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+      return
+    }
+    if let string = anyValue as? NSString {
+      self.init(rawValue: String(string).trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+      return
+    }
+    self.init(rawValue: String(describing: anyValue).lowercased())
   }
 }

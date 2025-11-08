@@ -169,6 +169,10 @@ public class ToolGithubConnector: BaseTool {
   
   private func registerStringCallback(requestId: String, callback: @escaping (String?, Error?) -> Void) {
     stringCallbacks[requestId] = callback
+    self.logger.log("registerStringCallback", attributes: [
+      "requestId": requestId,
+      "pendingCallbacks": stringCallbacks.count
+    ])
   }
   
   private func setupStringTimeout(for requestId: String, errorMessage: String) {
@@ -252,7 +256,7 @@ extension ToolGithubConnector: GithubConnectorToolDelegate {
       "requestId": requestId,
       "eventId": eventId,
       "snippet_length": codeSnippet.count,
-      "snippet_preview": String(codeSnippet.prefix(200))
+      "snippet_preview": String(codeSnippet.prefix(1000))
     ])
     
     // Set up timeout

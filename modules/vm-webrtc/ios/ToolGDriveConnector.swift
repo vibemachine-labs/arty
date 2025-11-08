@@ -53,7 +53,6 @@ public class ToolGDriveConnector: BaseTool {
       "[VmWebrtc] Processing GDrive connector tool call",
       attributes: [
         "callId": callId,
-        "arguments_json": argumentsJSON,
         "arguments_length": argumentsJSON.count,
         "arguments_preview": String(argumentsJSON.prefix(1000))
       ]
@@ -61,14 +60,20 @@ public class ToolGDriveConnector: BaseTool {
     
     // Parse arguments to extract self_contained_javascript_gdrive_code_snippet parameter
     guard let argsData = argumentsJSON.data(using: .utf8) else {
-      self.logger.log("[VmWebrtc] Failed to convert argumentsJSON to UTF8 data")
+      self.logger.log("[VmWebrtc] Failed to convert argumentsJSON to UTF8 data", attributes: [
+        "callId": callId
+      ])
       responder?.sendToolCallError(callId: callId, error: "Failed to convert arguments to data")
       return
     }
     
     guard let argsDict = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
-      self.logger.log("[VmWebrtc] Failed to parse argumentsJSON as JSON dictionary")
-      self.logger.log("[VmWebrtc] Attempting to decode as raw string...")
+      self.logger.log("[VmWebrtc] Failed to parse argumentsJSON as JSON dictionary", attributes: [
+        "callId": callId
+      ])
+      self.logger.log("[VmWebrtc] Attempting to decode as raw string...", attributes: [
+        "callId": callId
+      ])
       // If it's not valid JSON, maybe it's the raw code snippet?
       executegDriveOperation(callId: callId, codeSnippet: argumentsJSON)
       return
@@ -77,7 +82,8 @@ public class ToolGDriveConnector: BaseTool {
     self.logger.log(
       "[VmWebrtc] Parsed GDrive argument keys",
       attributes: [
-        "keys": Array(argsDict.keys)
+        "keys": Array(argsDict.keys),
+        "callId": callId
       ]
     )
     
@@ -86,7 +92,8 @@ public class ToolGDriveConnector: BaseTool {
         "[VmWebrtc] Failed to extract required GDrive code snippet",
         attributes: [
           "missing_key": "self_contained_javascript_gdrive_code_snippet",
-          "available_keys": Array(argsDict.keys)
+          "available_keys": Array(argsDict.keys),
+          "callId": callId
         ]
       )
       responder?.sendToolCallError(callId: callId, error: "Missing parameter 'self_contained_javascript_gdrive_code_snippet'")
@@ -121,7 +128,9 @@ public class ToolGDriveConnector: BaseTool {
         ]
       )
     } else {
-      self.logger.log("[ToolGDriveConnector] ⚠️ No callback found for requestId=\(requestId)")
+      self.logger.log("[ToolGDriveConnector] ⚠️ No callback found", attributes: [
+        "requestId": requestId
+      ])
     }
   }
   
@@ -191,22 +200,28 @@ public class ToolGDriveConnector: BaseTool {
   private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
   
   private func registerStringCallback(requestId: String, callback: @escaping (String?, Error?) -> Void) {
+    stringCallbacks[requestId] = callback
     self.logger.log(
       "[ToolGDriveConnector] 🔐 registerStringCallback",
       attributes: [
-        "requestId": requestId
+        "requestId": requestId,
+        "pendingCallbacks": stringCallbacks.count
       ]
     )
-    stringCallbacks[requestId] = callback
   }
   
   private func setupStringTimeout(for requestId: String, errorMessage: String) {
-    self.logger.log("[ToolGDriveConnector] ⏱️ Scheduling timeout for requestId=\(requestId)")
+    self.logger.log("[ToolGDriveConnector] ⏱️ Scheduling timeout", attributes: [
+      "requestId": requestId,
+      "timeoutSeconds": 60
+    ])
     DispatchQueue.main.asyncAfter(deadline: .now() + 60.0) { [weak self] in
       guard let self = self else { return }
       
       if let callback = self.stringCallbacks[requestId] {
-        self.logger.log("[ToolGDriveConnector] Request timed out: requestId=\(requestId)")
+        self.logger.log("[ToolGDriveConnector] Request timed out", attributes: [
+          "requestId": requestId
+        ])
         let error = NSError(domain: "ToolGDriveConnector", code: -1, userInfo: [
           NSLocalizedDescriptionKey: errorMessage
         ])

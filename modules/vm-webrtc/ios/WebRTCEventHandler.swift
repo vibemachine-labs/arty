@@ -308,7 +308,7 @@ final class WebRTCEventHandler {
         "callId": callId,
         "name": toolName,
         "arguments_length": argumentsJSON.count,
-        "arguments_preview": String(argumentsJSON.prefix(200))
+        "arguments_preview": String(argumentsJSON.prefix(1000))
       ])
     )
 
@@ -515,7 +515,7 @@ final class WebRTCEventHandler {
         "callId": callId,
         "tool": toolName,
         "arguments_length": argumentsJSON.count,
-        "arguments_preview": String(argumentsJSON.prefix(200))
+        "arguments_preview": String(argumentsJSON.prefix(1000))
       ])
     )
 

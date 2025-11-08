@@ -21,6 +21,12 @@ final class NativeLogger {
     guard !trimmedMessage.isEmpty else { return }
 
     let resolvedSeverity = LogfireTracingManager.severity(from: attributes) ?? .info
+    let severityText = resolvedSeverity.severityText
+    let severityNumber = resolvedSeverity.severityNumber
+
+    print(
+      "[NativeLogger] severityText=\(severityText) severityNumber=\(severityNumber) message=\(trimmedMessage)"
+    )
 
     var consoleMessage = "[\(category)] \(trimmedMessage)"
     if let attributes, !attributes.isEmpty {
@@ -40,7 +46,9 @@ final class NativeLogger {
       tracerName: tracerName,
       spanName: trimmedMessage,
       attributes: resolvedAttributes,
-      severity: resolvedSeverity
+      severity: resolvedSeverity,
+      severityText: severityText,
+      severityNumber: severityNumber
     )
   }
 }

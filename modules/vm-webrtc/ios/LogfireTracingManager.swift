@@ -63,7 +63,9 @@ final class LogfireTracingManager {
     tracerName: String,
     spanName: String,
     attributes: [String: Any]?,
-    severity: Severity? = nil
+    severity: Severity? = nil,
+    severityText: String? = nil,
+    severityNumber: Int? = nil
   ) {
     workerQueue.async {
       guard self.isInitialized else {
@@ -83,10 +85,25 @@ final class LogfireTracingManager {
         return
       }
 
-      let resolvedSeverity = severity ?? Self.severity(from: attributes) ?? .info
+      let severityFromText = severityText.flatMap { Severity(anyValue: $0) }
+      let severityFromNumber = severityNumber.flatMap { Severity(severityNumber: $0) }
+
+      let resolvedSeverity = severity
+        ?? severityFromText
+        ?? severityFromNumber
+        ?? Self.severity(from: attributes)
+        ?? .info
+
+      let resolvedSeverityText = severityText ?? resolvedSeverity.severityText
+      let resolvedSeverityNumber = severityNumber ?? resolvedSeverity.severityNumber
+
+      print(
+        "[LogfireTracingManager] recordEvent span=\(trimmedSpan) severityText=\(resolvedSeverityText) severityNumber=\(resolvedSeverityNumber)"
+      )
+
       let span = tracer.spanBuilder(spanName: trimmedSpan).startSpan()
-      span.setAttribute(key: "otel.log.severity.text", value: AttributeValue.string(resolvedSeverity.severityText))
-      span.setAttribute(key: "otel.log.severity.number", value: AttributeValue.int(resolvedSeverity.severityNumber))
+      span.setAttribute(key: "otel.log.severity.text", value: AttributeValue.string(resolvedSeverityText))
+      span.setAttribute(key: "otel.log.severity.number", value: AttributeValue.int(resolvedSeverityNumber))
       span.setAttribute(key: "logfire.level", value: AttributeValue.string(resolvedSeverity.rawValue))
 
       if let attributes = attributes {
@@ -280,6 +297,23 @@ extension LogfireTracingManager.Severity {
       return
     }
     self.init(rawValue: Self.normalizedSeverityString(String(describing: anyValue)))
+  }
+
+  init?(severityNumber: Int) {
+    switch severityNumber {
+    case 1...4:
+      self = .trace
+    case 5...8:
+      self = .debug
+    case 9...12:
+      self = .info
+    case 13...16:
+      self = .warn
+    case 17...24:
+      self = .error
+    default:
+      return nil
+    }
   }
 
   private static func normalizedSeverityString(_ string: String) -> String {

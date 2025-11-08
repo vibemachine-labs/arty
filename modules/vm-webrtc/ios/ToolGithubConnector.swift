@@ -229,7 +229,12 @@ extension ToolGithubConnector: GithubConnectorToolDelegate {
       requestId: requestId,
       parameters: ["self_contained_javascript_octokit_code_snippet": codeSnippet]
     )
-    self.logger.log("🆔 Event emitted for OpenAI tool call", attributes: ["requestId": requestId, "eventId": eventId])
+    self.logger.log("🆔 Event emitted for OpenAI tool call", attributes: [
+      "requestId": requestId,
+      "eventId": eventId,
+      "snippet_length": codeSnippet.count,
+      "snippet_preview": String(codeSnippet.prefix(200))
+    ])
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "Github connector request timed out")

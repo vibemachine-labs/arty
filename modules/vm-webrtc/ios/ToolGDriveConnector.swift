@@ -85,12 +85,25 @@ public class ToolGDriveConnector: BaseTool {
   ///   - requestId: The unique request identifier
   ///   - result: The response string
   public func handleResponse(requestId: String, result: String) {
-    self.logger.log("[ToolGDriveConnector] 📥 Received GDrive connector response from JavaScript: requestId=\(requestId), resultLen=\(result.count)")
+    self.logger.log(
+      "[ToolGDriveConnector] 📥 Received GDrive connector response from JavaScript",
+      attributes: [
+        "requestId": requestId,
+        "result_length": result.count,
+        "result_preview": String(result.prefix(200))
+      ]
+    )
     
     if let callback = stringCallbacks[requestId] {
       callback(result, nil)
       stringCallbacks.removeValue(forKey: requestId)
-      self.logger.log("[ToolGDriveConnector] ✅ GDrive connector callback executed successfully")
+      self.logger.log(
+        "[ToolGDriveConnector] ✅ GDrive connector callback executed successfully",
+        attributes: [
+          "requestId": requestId,
+          "result_length": result.count
+        ]
+      )
     } else {
       self.logger.log("[ToolGDriveConnector] ⚠️ No callback found for requestId=\(requestId)")
     }
@@ -208,7 +221,15 @@ extension ToolGDriveConnector: GDriveConnectorToolDelegate {
       requestId: requestId,
       parameters: ["self_contained_javascript_gdrive_code_snippet": codeSnippet]
     )
-    self.logger.log("[ToolGDriveConnector] 🆔 Event emitted for OpenAI tool call: requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log(
+      "[ToolGDriveConnector] 🆔 Event emitted for OpenAI tool call",
+      attributes: [
+        "requestId": requestId,
+        "eventId": eventId,
+        "snippet_length": codeSnippet.count,
+        "snippet_preview": String(codeSnippet.prefix(200))
+      ]
+    )
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "GDrive connector request timed out")

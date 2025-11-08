@@ -60,6 +60,12 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     }
   }, [visible, refreshServers]);
 
+  const handleCancelAddServer = useCallback(() => {
+    setForm(initialFormState);
+    setFormError(null);
+    setAddModalVisible(false);
+  }, []);
+
   const handleSaveServer = useCallback(async () => {
     const trimmedName = form.name.trim();
     const trimmedUrl = form.url.trim();
@@ -134,7 +140,10 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
                 <Text style={styles.doneButtonText}>Done</Text>
               </Pressable>
               <Pressable
-                onPress={() => setAddModalVisible(true)}
+                onPress={() => {
+                  console.log("[MCP] Add server pressed");
+                  setAddModalVisible(true);
+                }}
                 style={({ pressed }) => [
                   styles.addButton,
                   pressed && styles.addButtonPressed,
@@ -191,121 +200,113 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
               ))
             )}
           </ScrollView>
-        </SafeAreaView>
-      </Modal>
 
-      <Modal
-        animationType="slide"
-        transparent
-        visible={addModalVisible}
-        onRequestClose={() => setAddModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.addModalContainer}
-        >
-          <Pressable
-            style={styles.addModalBackdrop}
-            onPress={() => setAddModalVisible(false)}
-          />
-
-          <View style={styles.addModalCard}>
-            <View style={styles.modalNavBar}>
+          {addModalVisible && (
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.addModalContainer}
+              pointerEvents="box-none"
+            >
               <Pressable
-                onPress={() => {
-                  setForm(initialFormState);
-                  setFormError(null);
-                  setAddModalVisible(false);
-                }}
-                style={({ pressed }) => [
-                  styles.navTextButton,
-                  pressed && styles.navTextButtonPressed,
-                ]}
-              >
-                <Text style={styles.navTextButtonLabel}>Cancel</Text>
-              </Pressable>
-              <Text style={styles.modalTitle}>New MCP Server</Text>
-              <Pressable
-                onPress={handleSaveServer}
-                disabled={isSaving}
-                style={({ pressed }) => [
-                  styles.navTextButton,
-                  (pressed || isSaving) && styles.navTextButtonPressed,
-                ]}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="#0A84FF" />
-                ) : (
-                  <Text style={styles.navTextButtonPrimary}>Done</Text>
-                )}
-              </Pressable>
-            </View>
+                style={styles.addModalBackdrop}
+                onPress={handleCancelAddServer}
+              />
 
-            <View style={styles.modalBody}>
-              <Text style={styles.addModalSubtitle}>
-                Give the server a friendly name and paste the full URL.
-              </Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Name</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="Internal Tools"
-                  placeholderTextColor="#C7C7CC"
-                  style={styles.textInput}
-                  value={form.name}
-                  onChangeText={(value) => {
-                    setForm((prev) => ({ ...prev, name: value }));
-                    if (formError) {
-                      setFormError(null);
-                    }
-                  }}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <View style={styles.urlLabelRow}>
-                  <Text style={styles.inputLabel}>URL</Text>
+              <View style={styles.addModalCard}>
+                <View style={styles.modalNavBar}>
                   <Pressable
-                    onPress={async () => {
-                      const clipboardContent = await Clipboard.getStringAsync();
-                      if (clipboardContent) {
-                        setForm((prev) => ({ ...prev, url: clipboardContent }));
+                    onPress={handleCancelAddServer}
+                    style={({ pressed }) => [
+                      styles.navTextButton,
+                      pressed && styles.navTextButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.navTextButtonLabel}>Cancel</Text>
+                  </Pressable>
+                  <Text style={styles.modalTitle}>New MCP Server</Text>
+                  <Pressable
+                    onPress={handleSaveServer}
+                    disabled={isSaving}
+                    style={({ pressed }) => [
+                      styles.navTextButton,
+                      (pressed || isSaving) && styles.navTextButtonPressed,
+                    ]}
+                  >
+                    {isSaving ? (
+                      <ActivityIndicator color="#0A84FF" />
+                    ) : (
+                      <Text style={styles.navTextButtonPrimary}>Save</Text>
+                    )}
+                  </Pressable>
+                </View>
+
+                <View style={styles.modalBody}>
+                  <Text style={styles.addModalSubtitle}>
+                    Give the server a friendly name and paste the full URL.
+                  </Text>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Name</Text>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholder="Internal Tools"
+                      placeholderTextColor="#C7C7CC"
+                      style={styles.textInput}
+                      value={form.name}
+                      onChangeText={(value) => {
+                        setForm((prev) => ({ ...prev, name: value }));
                         if (formError) {
                           setFormError(null);
                         }
-                      }
-                    }}
-                    style={({ pressed }) => [
-                      styles.pasteButton,
-                      pressed && styles.pasteButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.pasteButtonText}>Paste</Text>
-                  </Pressable>
-                </View>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="https://server.example.com/mcp"
-                  placeholderTextColor="#C7C7CC"
-                  keyboardType="url"
-                  style={styles.textInput}
-                  value={form.url}
-                  onChangeText={(value) => {
-                    setForm((prev) => ({ ...prev, url: value }));
-                    if (formError) {
-                      setFormError(null);
-                    }
-                  }}
-                />
-              </View>
+                      }}
+                    />
+                  </View>
 
-              {formError && <Text style={styles.formError}>{formError}</Text>}
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+                  <View style={styles.inputGroup}>
+                    <View style={styles.urlLabelRow}>
+                      <Text style={styles.inputLabel}>URL</Text>
+                      <Pressable
+                        onPress={async () => {
+                          const clipboardContent = await Clipboard.getStringAsync();
+                          if (clipboardContent) {
+                            setForm((prev) => ({ ...prev, url: clipboardContent }));
+                            if (formError) {
+                              setFormError(null);
+                            }
+                          }
+                        }}
+                        style={({ pressed }) => [
+                          styles.pasteButton,
+                          pressed && styles.pasteButtonPressed,
+                        ]}
+                      >
+                        <Text style={styles.pasteButtonText}>Paste</Text>
+                      </Pressable>
+                    </View>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholder="https://server.example.com/mcp"
+                      placeholderTextColor="#C7C7CC"
+                      keyboardType="url"
+                      style={styles.textInput}
+                      value={form.url}
+                      onChangeText={(value) => {
+                        setForm((prev) => ({ ...prev, url: value }));
+                        if (formError) {
+                          setFormError(null);
+                        }
+                      }}
+                    />
+                  </View>
+
+                  {formError && <Text style={styles.formError}>{formError}</Text>}
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          )}
+        </SafeAreaView>
       </Modal>
     </>
   );
@@ -453,10 +454,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   addModalContainer: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.35)",
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     paddingHorizontal: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
   },
   addModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -465,6 +466,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     paddingBottom: 12,
+    zIndex: 1,
   },
   modalNavBar: {
     flexDirection: "row",

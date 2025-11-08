@@ -109,17 +109,14 @@ final class LogfireTracingManager {
         "[LogfireTracingManager] recordEvent span=\(trimmedSpan) severityText=\(resolvedSeverityText) severityNumber=\(resolvedSeverityNumber)"
       )
 
-    var enrichedAttributes = attributes ?? [:]
-    enrichedAttributes["logfire.level"] = resolvedSeverity.rawValue
-
-    let otelAttributes = self.otelAttributes(from: enrichedAttributes)
-    logger
-      .logRecordBuilder()
-      .setSeverity(resolvedSeverity.otelSeverity)
-      .setBody(AttributeValue.string(trimmedSpan))
-      .setAttributes(otelAttributes)
-      .emit()
-  }
+      let otelAttributes = self.otelAttributes(from: attributes ?? [:])
+      logger
+        .logRecordBuilder()
+        .setSeverity(resolvedSeverity.otelSeverity)
+        .setBody(AttributeValue.string(trimmedSpan))
+        .setAttributes(otelAttributes)
+        .emit()
+    }
   }
 
   static func severity(from attributes: [String: Any]?) -> Severity? {

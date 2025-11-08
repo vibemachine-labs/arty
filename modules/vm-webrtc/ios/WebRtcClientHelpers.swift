@@ -500,12 +500,12 @@ extension OpenAIWebRTCClient {
   @MainActor
   func handleIdleTimeoutTriggered() {
     guard peerConnection != nil || dataChannel != nil else {
-      emit(.debug, "[IdleTimer] Timeout fired without an active session; ignoring")
+      emit(.trace, "[IdleTimer] Timeout fired without an active session; ignoring")
       return
     }
 
     emit(
-      .warn,
+      .trace,
       "[IdleTimer] Inactivity threshold reached, disconnecting session",
       metadata: [
         "timeoutSeconds": Constants.idleTimeoutSeconds

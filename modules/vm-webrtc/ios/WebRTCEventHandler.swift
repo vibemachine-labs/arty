@@ -36,7 +36,7 @@ final class WebRTCEventHandler {
     if shouldResetIdleTimer(for: eventType) {
       logger.log(
         "[WebRTCEventHandler] [IdleTimer] Event activity detected",
-        attributes: logAttributes(for: .debug, metadata: ["eventType": eventType])
+        attributes: logAttributes(for: .trace, metadata: ["eventType": eventType])
       )
       recordIdleActivity(source: "event:\(eventType)")
     }
@@ -109,7 +109,7 @@ final class WebRTCEventHandler {
       self.lastActivityAt = nil
       self.logger.log(
         "[WebRTCEventHandler] [IdleTimer] Monitoring stopped",
-        attributes: self.logAttributes(for: .debug, metadata: ["reason": reason])
+        attributes: self.logAttributes(for: .info, metadata: ["reason": reason])
       )
     }
   }
@@ -204,7 +204,7 @@ final class WebRTCEventHandler {
     logger.log(
       "[WebRTCEventHandler] [IdleTimer] Timer scheduled",
       attributes: logAttributes(
-        for: .debug,
+        for: .trace,
         metadata: [
           "reason": reason,
           "timeoutSeconds": idleTimeoutSeconds
@@ -253,7 +253,7 @@ final class WebRTCEventHandler {
     logger.log(
       "[WebRTCEventHandler] [IdleTimer] Countdown update",
       attributes: logAttributes(
-        for: .debug,
+        for: .trace,
         metadata: [
           "isMonitoring": isIdleMonitoringActive,
           "lastActivityAt": lastActivityAt as Any,

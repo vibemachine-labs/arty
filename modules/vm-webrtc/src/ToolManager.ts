@@ -152,11 +152,13 @@ class ToolManager {
           try {
             const client = new McpClient(server.name, server.url);
             const tools = await client.listTools();
+            const klavisResult = await client.testKlavisToolCall();
             log.info('[ToolManager] MCP tools discovered', {}, {
               serverName: server.name,
               serverUrl: server.url,
               toolNames: tools.map((tool) => tool.name),
               toolCount: tools.length,
+              klavisResultPreview: typeof klavisResult === 'string' ? summarizeDescription(klavisResult) : typeof klavisResult,
             });
           } catch (error) {
             log.warn('[ToolManager] Failed to initialize MCP client', {}, {

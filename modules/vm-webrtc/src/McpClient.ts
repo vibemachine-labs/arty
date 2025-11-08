@@ -3,6 +3,7 @@ import type { ToolDefinition } from './VmWebrtc.types';
 
 const MCP_JSONRPC_VERSION = '2.0';
 const MCP_TOOLS_LIST_METHOD = 'tools/list';
+const MCP_TOOLS_CALL_METHOD = 'tools/call';
 const MCP_ACCEPT_HEADER = 'text/event-stream, application/json;q=0.9';
 
 type JsonRpcError = {
@@ -34,6 +35,13 @@ type ToolsListResponse = {
   jsonrpc?: string;
   id?: string;
   result?: ToolsListResult;
+  error?: JsonRpcError;
+};
+
+type ToolCallResponse = {
+  jsonrpc?: string;
+  id?: string;
+  result?: unknown;
   error?: JsonRpcError;
 };
 
@@ -75,6 +83,96 @@ export class McpClient {
       serverUrl: this.serverUrl,
       requestTimeoutMs: this.requestTimeoutMs,
     });
+  }
+
+  async testKlavisToolCall(): Promise<unknown> {
+    const requestId = this.buildRequestId();
+    const payload = {
+      jsonrpc: MCP_JSONRPC_VERSION,
+      id: requestId,
+      method: MCP_TOOLS_CALL_METHOD,
+      params: {
+        name: 'execute_action',
+        arguments: {
+          server_name: 'hacker news',
+          category_name: 'HACKER_NEWS_STORY_LIST',
+          action_name: 'hackerNews_topstories',
+          body_schema: '{"count": 10}',
+        },
+      },
+    };
+
+    log.info('[McpClient] Testing Klavis tool call', {}, {
+      serverName: this.serverName,
+      requestId,
+    });
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    try {
+      const response = await fetch(this.serverUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: MCP_ACCEPT_HEADER,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      let rawText = await response.text();
+      const contentType = response.headers.get('content-type') ?? '';
+
+      if (contentType.includes('text/event-stream')) {
+        const extracted = this.extractJsonFromEventStream(rawText);
+        if (extracted) {
+          rawText = extracted;
+        } else {
+          log.warn('[McpClient] Klavis SSE payload did not contain data lines', {}, {
+            serverName: this.serverName,
+          });
+        }
+      }
+
+      log.debug('[McpClient] Received Klavis tool response', {}, {
+        serverName: this.serverName,
+        status: response.status,
+        ok: response.ok,
+        response: rawText,
+      });
+
+      if (!response.ok) {
+        throw new Error(`MCP server responded with HTTP ${response.status} during Klavis tool call`);
+      }
+
+      let parsed: ToolCallResponse;
+      try {
+        parsed = JSON.parse(rawText) as ToolCallResponse;
+      } catch (parseError) {
+        log.warn('[McpClient] Failed to parse Klavis tool response', {}, {
+          errorMessage: parseError instanceof Error ? parseError.message : String(parseError),
+        });
+        throw new Error('MCP server returned malformed JSON during Klavis test call.');
+      }
+
+      if (parsed.error) {
+        throw new Error(`MCP Klavis tool error ${parsed.error.code}: ${parsed.error.message}`);
+      }
+
+      log.info('[McpClient] Klavis tool call successful', {}, {
+        serverName: this.serverName,
+      });
+
+      return parsed.result;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Timed out invoking Klavis tool on ${this.serverName}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   }
 
   async listTools(): Promise<ToolDefinition[]> {

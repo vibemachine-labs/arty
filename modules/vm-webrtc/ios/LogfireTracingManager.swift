@@ -85,8 +85,8 @@ final class LogfireTracingManager {
 
       let resolvedSeverity = severity ?? Self.severity(from: attributes) ?? .info
       let span = tracer.spanBuilder(spanName: trimmedSpan).startSpan()
-      span.setAttribute(key: "log.severity_text", value: AttributeValue.string(resolvedSeverity.severityText))
-      span.setAttribute(key: "log.severity_number", value: AttributeValue.int(resolvedSeverity.severityNumber))
+      span.setAttribute(key: "otel.log.severity.text", value: AttributeValue.string(resolvedSeverity.severityText))
+      span.setAttribute(key: "otel.log.severity.number", value: AttributeValue.int(resolvedSeverity.severityNumber))
       span.setAttribute(key: "logfire.level", value: AttributeValue.string(resolvedSeverity.rawValue))
 
       if let attributes = attributes {

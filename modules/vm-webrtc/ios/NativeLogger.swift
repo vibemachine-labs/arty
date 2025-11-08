@@ -32,10 +32,13 @@ final class NativeLogger {
     guard tracingManager.isInitialized else {
       return
     }
+    var resolvedAttributes = attributes ?? [:]
+    resolvedAttributes["is_native_logger"] = true
+
     tracingManager.recordEvent(
       tracerName: tracerName,
       spanName: trimmedMessage,
-      attributes: attributes
+      attributes: resolvedAttributes
     )
   }
 }

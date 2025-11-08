@@ -10,6 +10,7 @@ final class LogfireTracingManager {
     static let defaultTracerName = "vibemachine-tracer"
   }
   enum Severity: String {
+    case trace
     case debug
     case info
     case warn
@@ -21,6 +22,7 @@ final class LogfireTracingManager {
 
     var severityNumber: Int {
       switch self {
+      case .trace: return 3   // TRACE3
       case .debug: return 7   // DEBUG3 per OTLP spec
       case .info: return 11   // INFO3
       case .warn: return 15   // WARN3
@@ -270,13 +272,21 @@ extension LogfireTracingManager.Severity {
       return
     }
     if let string = anyValue as? String {
-      self.init(rawValue: string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+      self.init(rawValue: Self.normalizedSeverityString(string))
       return
     }
     if let string = anyValue as? NSString {
-      self.init(rawValue: String(string).trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+      self.init(rawValue: Self.normalizedSeverityString(String(string)))
       return
     }
-    self.init(rawValue: String(describing: anyValue).lowercased())
+    self.init(rawValue: Self.normalizedSeverityString(String(describing: anyValue)))
+  }
+
+  private static func normalizedSeverityString(_ string: String) -> String {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if trimmed == "tracing" {
+      return "trace"
+    }
+    return trimmed
   }
 }

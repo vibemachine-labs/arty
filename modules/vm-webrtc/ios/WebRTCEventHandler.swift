@@ -175,15 +175,17 @@ final class WebRTCEventHandler {
     idleQueue.async {
       guard self.isIdleMonitoringActive else { return }
       self.lastActivityAt = Date()
+      var attributes = self.logAttributes(
+        for: .debug,
+        metadata: [
+          "source": source,
+          "timeoutSeconds": self.idleTimeoutSeconds
+        ]
+      )
+      attributes["severity"] = "trace"
       self.logger.log(
         "[WebRTCEventHandler] [IdleTimer] Timer reset",
-        attributes: self.logAttributes(
-          for: .debug,
-          metadata: [
-            "source": source,
-            "timeoutSeconds": self.idleTimeoutSeconds
-          ]
-        )
+        attributes: attributes
       )
       self.scheduleIdleTimerLocked(reason: source)
       self.scheduleIdleDebugTimerLocked()

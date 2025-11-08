@@ -608,9 +608,13 @@ extension OpenAIWebRTCClient {
       let data = try JSONSerialization.data(withJSONObject: payload, options: [])
       let buffer = RTCDataBuffer(data: data, isBinary: false)
       let success = dataChannel.sendData(buffer)
+      let payloadPreview = String(data: data, encoding: .utf8) ?? "<non_utf8_payload>"
       self.logger.log("[VmWebrtc] " + "Sent data channel event", attributes: logAttributes(for: .debug, metadata: [
         "bytes": data.count,
-        "success": success
+        "success": success,
+        "eventType": payload["type"] as? String ?? "unknown",
+        "payloadKeys": Array(payload.keys),
+        "payloadPreview": String(payloadPreview.prefix(200))
       ]))
       return success
     } catch {

@@ -3,6 +3,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { log } from '../../../lib/logger';
 import { composePrompt } from '../../../lib/promptStorage';
 import { loadToolPromptAddition } from '../../../lib/toolPrompts';
+import { listMcpServers } from '../../../lib/secure-storage';
 import {
   ToolGDriveConnector,
   gdriveConnectorDefinition,
@@ -17,6 +18,7 @@ import {
 } from './ToolGithubConnector';
 import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
+import { McpClient } from './McpClient';
 import type { ToolDefinition } from './VmWebrtc.types';
 
 type ToolCallArguments = Record<string, any>;
@@ -126,6 +128,7 @@ class ToolManager {
   }
 
   async getAugmentedToolDefinitions(overrides?: ToolDefinition[]): Promise<ToolDefinition[]> {
+    await this.getMcpClients();
     const canonical = this.getCanonicalToolDefinitions(overrides);
     return Promise.all(canonical.map((definition) => this.applyPromptAddition(definition)));
   }
@@ -134,6 +137,40 @@ class ToolManager {
     return definitions
       .map((definition) => definition?.name)
       .filter((name): name is string => Boolean(name));
+  }
+
+  private async getMcpClients(): Promise<void> {
+    try {
+      const servers = await listMcpServers();
+      if (servers.length === 0) {
+        log.info('[ToolManager] No MCP servers configured; skipping MCP client initialization', {});
+        return;
+      }
+
+      await Promise.all(
+        servers.map(async (server) => {
+          try {
+            const client = new McpClient(server.name, server.url);
+            const tools = await client.listTools();
+            log.info('[ToolManager] MCP tools discovered', {}, {
+              serverName: server.name,
+              serverUrl: server.url,
+              toolNames: tools.map((tool) => tool.name),
+              toolCount: tools.length,
+            });
+          } catch (error) {
+            log.warn('[ToolManager] Failed to initialize MCP client', {}, {
+              serverName: server.name,
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }),
+      );
+    } catch (error) {
+      log.warn('[ToolManager] Unable to enumerate MCP servers', {}, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async executeToolCall(toolName: string, args: ToolCallArguments): Promise<string> {

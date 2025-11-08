@@ -55,7 +55,7 @@ public class ToolGDriveConnector: BaseTool {
         "callId": callId,
         "arguments_json": argumentsJSON,
         "arguments_length": argumentsJSON.count,
-        "arguments_preview": String(argumentsJSON.prefix(200))
+        "arguments_preview": String(argumentsJSON.prefix(1000))
       ]
     )
     
@@ -106,7 +106,7 @@ public class ToolGDriveConnector: BaseTool {
       attributes: [
         "requestId": requestId,
         "result_length": result.count,
-        "result_preview": String(result.prefix(200))
+        "result_preview": String(result.prefix(1000))
       ]
     )
     
@@ -141,7 +141,7 @@ public class ToolGDriveConnector: BaseTool {
       attributes: [
         "requestId": requestId,
         "snippet_length": codeSnippet.count,
-        "snippet_preview": String(codeSnippet.prefix(200))
+        "snippet_preview": String(codeSnippet.prefix(1000))
       ]
     )
     
@@ -163,7 +163,9 @@ public class ToolGDriveConnector: BaseTool {
       "[ToolGDriveConnector] 🧭 Emitting event to JavaScript",
       attributes: [
         "eventName": "onGDriveConnectorRequest",
-        "requestId": requestId
+        "requestId": requestId,
+        "snippet_length": codeSnippet.count,
+        "snippet_preview": String(codeSnippet.prefix(1000))
       ]
     )
     // Emit event to JavaScript using helper
@@ -215,19 +217,42 @@ public class ToolGDriveConnector: BaseTool {
   }
   
   private func executegDriveOperation(callId: String, codeSnippet: String) {
-    self.logger.log("[VmWebrtc] Executing GDrive connector tool call: callId=\(callId) snippet length=\(codeSnippet.count)")
-    self.logger.log("[VmWebrtc] 🔁 Forwarding request to JavaScript via requestGDriveOperation")
+    self.logger.log(
+      "[VmWebrtc] Executing GDrive connector tool call",
+      attributes: [
+        "callId": callId,
+        "snippet_length": codeSnippet.count,
+        "snippet_preview": String(codeSnippet.prefix(1000))
+      ]
+    )
+    self.logger.log(
+      "[VmWebrtc] Forwarding request to JavaScript",
+      attributes: [
+        "callId": callId
+      ]
+    )
     
     // Call JavaScript GDrive connector via delegate (self)
     requestGDriveOperation(codeSnippet: codeSnippet) { result, error in
       if let error = error {
-        self.logger.log("[VmWebrtc] GDrive connector request failed: callId=\(callId) error=\(error.localizedDescription)")
+        self.logger.log(
+          "[VmWebrtc] GDrive connector request failed",
+          attributes: [
+            "callId": callId,
+            "error": error.localizedDescription
+          ]
+        )
         self.responder?.sendToolCallError(callId: callId, error: error.localizedDescription)
         return
       }
       
       guard let result = result else {
-        self.logger.log("[VmWebrtc] GDrive connector returned no result: callId=\(callId)")
+        self.logger.log(
+          "[VmWebrtc] GDrive connector returned no result",
+          attributes: [
+            "callId": callId
+          ]
+        )
         self.responder?.sendToolCallError(callId: callId, error: "No result from GDrive connector")
         return
       }
@@ -238,7 +263,7 @@ public class ToolGDriveConnector: BaseTool {
           "callId": callId,
           "snippet_length": codeSnippet.count,
           "result_length": result.count,
-          "result_preview": String(result.prefix(200))
+        "result_preview": String(result.prefix(1000))
         ]
       )
       // Send the actual JSON result string to OpenAI
@@ -262,7 +287,7 @@ extension ToolGDriveConnector: GDriveConnectorToolDelegate {
       attributes: [
         "requestId": requestId,
         "snippet_length": codeSnippet.count,
-        "snippet_preview": String(codeSnippet.prefix(200))
+        "snippet_preview": String(codeSnippet.prefix(1000))
       ]
     )
     
@@ -275,7 +300,8 @@ extension ToolGDriveConnector: GDriveConnectorToolDelegate {
       attributes: [
         "eventName": "onGDriveConnectorRequest",
         "requestId": requestId,
-        "snippet_length": codeSnippet.count
+        "snippet_length": codeSnippet.count,
+        "snippet_preview": String(codeSnippet.prefix(1000))
       ]
     )
     let eventId = helper.emitToolRequest(
@@ -289,7 +315,7 @@ extension ToolGDriveConnector: GDriveConnectorToolDelegate {
         "requestId": requestId,
         "eventId": eventId,
         "snippet_length": codeSnippet.count,
-        "snippet_preview": String(codeSnippet.prefix(200))
+        "snippet_preview": String(codeSnippet.prefix(1000))
       ]
     )
     

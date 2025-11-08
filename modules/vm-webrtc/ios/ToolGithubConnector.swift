@@ -50,10 +50,8 @@ public class ToolGithubConnector: BaseTool {
   public func handleToolCall(callId: String, argumentsJSON: String) {
     self.logger.log("Processing github connector tool call handleToolCall", attributes: [
       "callId": callId,
-      "arguments_length": argumentsJSON.count
-    ])
-    self.logger.log("Raw argumentsJSON received", attributes: [
-      "argumentsJSON": argumentsJSON
+      "arguments_length": argumentsJSON.count,
+      "arguments_preview": String(argumentsJSON.prefix(1000))
     ])
     
     // Parse arguments to extract self_contained_javascript_octokit_code_snippet parameter
@@ -94,13 +92,17 @@ public class ToolGithubConnector: BaseTool {
   public func handleResponse(requestId: String, result: String) {
     self.logger.log("📥 Received github connector response from JavaScript", attributes: [
       "requestId": requestId,
-      "result": result
+      "result_length": result.count,
+      "result_preview": String(result.prefix(1000))
     ])
     
     if let callback = stringCallbacks[requestId] {
       callback(result, nil)
       stringCallbacks.removeValue(forKey: requestId)
-      self.logger.log("✅ Github connector callback executed successfully")
+      self.logger.log("✅ Github connector callback executed successfully", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
     } else {
       self.logger.log("⚠️ No callback found for requestId", attributes: ["requestId": requestId])
     }
@@ -119,7 +121,8 @@ public class ToolGithubConnector: BaseTool {
     let requestId = ToolHelper.generateRequestId()
     self.logger.log("📱 githubOperationFromSwift called", attributes: [
       "snippet_length": codeSnippet.count,
-      "requestId": requestId
+      "requestId": requestId,
+      "snippet_preview": String(codeSnippet.prefix(1000))
     ])
     
     // Register string callback
@@ -128,7 +131,10 @@ public class ToolGithubConnector: BaseTool {
         self.logger.log("❌ Github connector error", attributes: ["error": error.localizedDescription])
         promise.reject("E_GITHUB_CONNECTOR_ERROR", error.localizedDescription)
       } else if let result = result {
-        self.logger.log("✅ Github connector success", attributes: ["result": result])
+        self.logger.log("✅ Github connector success", attributes: [
+          "result_length": result.count,
+          "result_preview": String(result.prefix(1000))
+        ])
         promise.resolve(result)
       } else {
         self.logger.log("❌ No result received from github connector")
@@ -137,13 +143,21 @@ public class ToolGithubConnector: BaseTool {
     }
 
     // Emit event to JavaScript using helper
-    self.logger.log("📤 Emitting onGithubConnectorRequest event to JavaScript")
+    self.logger.log("📤 Emitting onGithubConnectorRequest event to JavaScript", attributes: [
+      "requestId": requestId,
+      "snippet_length": codeSnippet.count,
+      "snippet_preview": String(codeSnippet.prefix(1000))
+    ])
     let eventId = helper.emitToolRequest(
       eventName: "onGithubConnectorRequest",
       requestId: requestId,
       parameters: ["self_contained_javascript_octokit_code_snippet": codeSnippet]
     )
-    self.logger.log("🆔 Event emitted", attributes: ["requestId": requestId, "eventId": eventId])
+    self.logger.log("🆔 Event emitted", attributes: [
+      "requestId": requestId,
+      "eventId": eventId,
+      "snippet_length": codeSnippet.count
+    ])
     
     // Set up timeout
     setupStringTimeout(for: requestId, errorMessage: "Github connector request timed out")
@@ -175,7 +189,8 @@ public class ToolGithubConnector: BaseTool {
   private func executeGithubOperation(callId: String, codeSnippet: String) {
     self.logger.log("Executing github connector tool call", attributes: [
       "callId": callId,
-      "snippet_length": codeSnippet.count
+      "snippet_length": codeSnippet.count,
+      "snippet_preview": String(codeSnippet.prefix(1000))
     ])
     
     // Call JavaScript github connector via delegate (self)
@@ -198,7 +213,8 @@ public class ToolGithubConnector: BaseTool {
       self.logger.log("Github connector result received", attributes: [
         "callId": callId,
         "snippet_length": codeSnippet.count,
-        "result": result
+        "result_length": result.count,
+        "result_preview": String(result.prefix(1000))
       ])
       // Send the actual JSON result string to OpenAI
       self.responder?.sendToolCallResult(callId: callId, result: result)
@@ -218,7 +234,8 @@ extension ToolGithubConnector: GithubConnectorToolDelegate {
     let requestId = ToolHelper.generateRequestId()
     self.logger.log("🤖 OpenAI tool call requesting github operation", attributes: [
       "snippet_length": codeSnippet.count,
-      "requestId": requestId
+      "requestId": requestId,
+      "snippet_preview": String(codeSnippet.prefix(1000))
     ])
     
     // Register string callback

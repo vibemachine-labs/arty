@@ -278,17 +278,8 @@ final class OpenAIWebRTCClient: NSObject {
     var resolvedMetadata = metadata ?? [:]
     resolvedMetadata["level"] = level.rawValue
 
-    let metaText: String
-    if !resolvedMetadata.isEmpty {
-      let rendered = resolvedMetadata.map { entry in
-        "\(entry.key)=\(String(describing: entry.value))"
-      }.joined(separator: " ")
-      metaText = " " + rendered
-    } else {
-      metaText = ""
-    }
-    // Always print, even in Release builds
-    self.logger.log("[VmWebrtc] \(message)\(metaText)", attributes: resolvedMetadata)
+    // Always print, even in Release builds; structured attributes carry the context.
+    self.logger.log("[VmWebrtc][\(level.rawValue.uppercased())] \(message)", attributes: resolvedMetadata)
   }
 
   @MainActor
@@ -418,7 +409,10 @@ final class OpenAIWebRTCClient: NSObject {
         )
       }
     } else {
-      self.emit(.info, "Recording disabled by user preference")
+      self.emit(.info, "Recording disabled by user preference", metadata: [
+        "recordingRequested": enableRecording,
+        "reason": "user_preference"
+      ])
     }
 
     let connection = try makePeerConnection()
@@ -550,10 +544,14 @@ final class OpenAIWebRTCClient: NSObject {
       stopMonitoringAudioRouteChanges()
       deactivateAudioSession()
 
-      self.emit(
-        .info,
-        "OpenAI WebRTC connection teardown completed"
-      )
+    self.emit(
+      .info,
+      "OpenAI WebRTC connection teardown completed",
+      metadata: [
+        "recordingEnabled": isRecordingEnabled,
+        "hadPeerConnection": peerConnection != nil
+      ]
+    )
 
       return "closed"
   }

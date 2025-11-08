@@ -199,6 +199,10 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
       });
     }
 
+    if (attrs.is_native_logger === undefined) {
+      attrs.is_native_logger = false;
+    }
+
     logfireEvent(safeMessage, attrs);
   }
 };

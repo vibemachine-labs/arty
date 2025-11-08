@@ -94,8 +94,6 @@ public class VmWebrtcModule: Module {
         self.sendEvent(eventName, payload)
       }
       self.logger.log("Event emitter configured for OpenAI WebRTC client")
-      self.webrtcClient.setMinimumLogLevel(.debug)
-      self.logger.log("Minimum log level set to debug")
       // Initialize github connector tool
       self.toolGithubConnector = ToolGithubConnector(module: self, responder: self.webrtcClient)
       let githubInitialized = self.toolGithubConnector != nil

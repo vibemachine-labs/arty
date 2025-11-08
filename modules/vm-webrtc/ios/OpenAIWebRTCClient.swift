@@ -149,7 +149,6 @@ final class OpenAIWebRTCClient: NSObject {
     )
   }()
   private var moduleEventEmitter: ((String, [String: Any]) -> Void)?
-  private var minimumLogLevel: NativeLogLevel = .debug
 
   func makeEventHandlerContext() -> WebRTCEventHandler.ToolContext {
     WebRTCEventHandler.ToolContext(
@@ -275,8 +274,6 @@ final class OpenAIWebRTCClient: NSObject {
     _ message: String,
     metadata: [String: Any]? = nil
   ) {
-    guard shouldLog(level) else { return }
-
     var resolvedMetadata = metadata ?? [:]
     resolvedMetadata["level"] = level.rawValue
 
@@ -302,23 +299,6 @@ final class OpenAIWebRTCClient: NSObject {
       return
     }
     moduleEventEmitter(name, payload)
-  }
-
-  func setMinimumLogLevel(_ level: NativeLogLevel) {
-    minimumLogLevel = level
-  }
-
-  private func shouldLog(_ level: NativeLogLevel) -> Bool {
-    logPriority(for: level) >= logPriority(for: minimumLogLevel)
-  }
-
-  private func logPriority(for level: NativeLogLevel) -> Int {
-    switch level {
-    case .debug: return 0
-    case .info: return 1
-    case .warn: return 2
-    case .error: return 3
-    }
   }
 
   private func convertLogLevel(_ levelString: String) -> NativeLogLevel {

@@ -54,6 +54,7 @@ final class OpenAIWebRTCClient: NSObject {
   var isRecordingEnabled: Bool = false
   
   public enum NativeLogLevel: String {
+    case trace
     case debug
     case info
     case warn
@@ -303,6 +304,7 @@ final class OpenAIWebRTCClient: NSObject {
 
   private func convertLogLevel(_ levelString: String) -> NativeLogLevel {
     switch levelString.lowercased() {
+    case "trace": return .trace
     case "debug": return .debug
     case "info": return .info
     case "warn": return .warn

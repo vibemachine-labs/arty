@@ -53,6 +53,7 @@ const MODULE_NAME = "VmWebrtc";
 
 const resolveNativeModule = (): NativeTracingModule | undefined => {
   if (Platform.OS !== "ios") {
+    console.debug("[Logfire] Native module skipped: non-iOS platform", Platform.OS);
     return undefined;
   }
 
@@ -62,9 +63,11 @@ const resolveNativeModule = (): NativeTracingModule | undefined => {
     typeof candidate.initializeLogfireTracing === "function" &&
     typeof candidate.logfireEvent === "function"
   ) {
+    console.debug("[Logfire] Native module resolved");
     return candidate as NativeTracingModule;
   }
 
+  console.warn("[Logfire] Native module unavailable or missing tracing methods");
   return undefined;
 };
 

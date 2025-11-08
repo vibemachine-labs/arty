@@ -7,6 +7,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
   private weak var module: Module?
   private weak var responder: ToolCallResponder?
   private let helper: ToolHelper
+  private let logger = VmWebrtcLogging.logger
 
   private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
 
@@ -14,14 +15,14 @@ public class ToolGPT5GDriveFixer: BaseTool {
     self.module = module
     self.responder = responder
     self.helper = ToolHelper(module: module)
-    print("[ToolGPT5GDriveFixer] init: toolName=\(toolName)")
+    self.logger.log("[ToolGPT5GDriveFixer] init: toolName=\(toolName)")
   }
 
   public func handleToolCall(callId: String, argumentsJSON: String) {
-    print("[ToolGPT5GDriveFixer] handleToolCall: callId=\(callId)")
+    self.logger.log("[ToolGPT5GDriveFixer] handleToolCall: callId=\(callId)")
     guard let argsData = argumentsJSON.data(using: .utf8),
           let argsDict = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] else {
-      print("[ToolGPT5GDriveFixer] Failed to parse JSON arguments")
+      self.logger.log("[ToolGPT5GDriveFixer] Failed to parse JSON arguments")
       responder?.sendToolCallError(callId: callId, error: "Invalid arguments for GPT5-gdrive-fixer")
       return
     }
@@ -38,50 +39,50 @@ public class ToolGPT5GDriveFixer: BaseTool {
       guard let self = self else { return }
 
       if let error = error {
-        print("[ToolGPT5GDriveFixer] ❌ Fix operation error: \(error.localizedDescription)")
+        self.logger.log("[ToolGPT5GDriveFixer] ❌ Fix operation error: \(error.localizedDescription)")
         self.responder?.sendToolCallError(callId: callId, error: error.localizedDescription)
         return
       }
 
       guard let result = result else {
-        print("[ToolGPT5GDriveFixer] ❌ Fix operation returned no result")
+        self.logger.log("[ToolGPT5GDriveFixer] ❌ Fix operation returned no result")
         self.responder?.sendToolCallError(callId: callId, error: "No result from GPT5-gdrive-fixer")
         return
       }
 
-      print("[ToolGPT5GDriveFixer] ✅ Fix operation succeeded, returning result")
+      self.logger.log("[ToolGPT5GDriveFixer] ✅ Fix operation succeeded, returning result")
       self.responder?.sendToolCallResult(callId: callId, result: result)
     }
   }
 
   public func handleResponse(requestId: String, result: String) {
-    print("[ToolGPT5GDriveFixer] 📥 Received response from JavaScript: requestId=\(requestId), len=\(result.count)")
+    self.logger.log("[ToolGPT5GDriveFixer] 📥 Received response from JavaScript: requestId=\(requestId), len=\(result.count)")
 
     if let callback = stringCallbacks[requestId] {
       callback(result, nil)
       stringCallbacks.removeValue(forKey: requestId)
-      print("[ToolGPT5GDriveFixer] ✅ Callback executed for requestId=\(requestId)")
+      self.logger.log("[ToolGPT5GDriveFixer] ✅ Callback executed for requestId=\(requestId)")
     } else {
-      print("[ToolGPT5GDriveFixer] ⚠️ No callback found for requestId=\(requestId)")
+      self.logger.log("[ToolGPT5GDriveFixer] ⚠️ No callback found for requestId=\(requestId)")
     }
   }
 
   public func handleResponse(requestId: String, result: Int) {
-    print("[ToolGPT5GDriveFixer] ⚠️ Received int result, but GPT5 fixer expects string")
+    self.logger.log("[ToolGPT5GDriveFixer] ⚠️ Received int result, but GPT5 fixer expects string")
   }
 
   private func registerStringCallback(requestId: String, callback: @escaping (String?, Error?) -> Void) {
-    print("[ToolGPT5GDriveFixer] 🔐 registerStringCallback requestId=\(requestId)")
+    self.logger.log("[ToolGPT5GDriveFixer] 🔐 registerStringCallback requestId=\(requestId)")
     stringCallbacks[requestId] = callback
   }
 
   private func setupStringTimeout(for requestId: String, errorMessage: String) {
-    print("[ToolGPT5GDriveFixer] ⏱️ Scheduling timeout for requestId=\(requestId)")
+    self.logger.log("[ToolGPT5GDriveFixer] ⏱️ Scheduling timeout for requestId=\(requestId)")
     DispatchQueue.main.asyncAfter(deadline: .now() + 60.0) { [weak self] in
       guard let self = self else { return }
 
       if let callback = self.stringCallbacks[requestId] {
-        print("[ToolGPT5GDriveFixer] Request timed out: requestId=\(requestId)")
+        self.logger.log("[ToolGPT5GDriveFixer] Request timed out: requestId=\(requestId)")
         let error = NSError(
           domain: "ToolGPT5GDriveFixer",
           code: -1,
@@ -100,7 +101,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
     completion: @escaping (String?, Error?) -> Void
   ) {
     let requestId = ToolHelper.generateRequestId()
-    print("[ToolGPT5GDriveFixer] 🤖 OpenAI tool call requesting fix operation: requestId=\(requestId)")
+    self.logger.log("[ToolGPT5GDriveFixer] 🤖 OpenAI tool call requesting fix operation: requestId=\(requestId)")
 
     registerStringCallback(requestId: requestId, callback: completion)
 
@@ -113,24 +114,24 @@ public class ToolGPT5GDriveFixer: BaseTool {
         "error_message": errorMessage
       ]
     )
-    print("[ToolGPT5GDriveFixer] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log("[ToolGPT5GDriveFixer] 🆔 Event emitted: requestId=\(requestId) eventId=\(eventId)")
 
     setupStringTimeout(for: requestId, errorMessage: "GPT5 gdrive fixer request timed out")
   }
 
   public func gpt5GDriveFixerOperationFromSwift(paramsJson: String, promise: Promise) {
     let requestId = ToolHelper.generateRequestId()
-    print("[ToolGPT5GDriveFixer] 📱 gpt5GDriveFixerOperationFromSwift called: requestId=\(requestId)")
+    self.logger.log("[ToolGPT5GDriveFixer] 📱 gpt5GDriveFixerOperationFromSwift called: requestId=\(requestId)")
 
     registerStringCallback(requestId: requestId) { result, error in
       if let error = error {
-        print("[ToolGPT5GDriveFixer] ❌ gpt5 fixer error: \(error.localizedDescription)")
+        self.logger.log("[ToolGPT5GDriveFixer] ❌ gpt5 fixer error: \(error.localizedDescription)")
         promise.reject("E_GPT5_FIXER_ERROR", error.localizedDescription)
       } else if let result = result {
-        print("[ToolGPT5GDriveFixer] ✅ gpt5 fixer success")
+        self.logger.log("[ToolGPT5GDriveFixer] ✅ gpt5 fixer success")
         promise.resolve(result)
       } else {
-        print("[ToolGPT5GDriveFixer] ❌ No result received from gpt5 fixer")
+        self.logger.log("[ToolGPT5GDriveFixer] ❌ No result received from gpt5 fixer")
         promise.reject("E_GPT5_FIXER_ERROR", "No result received")
       }
     }
@@ -155,7 +156,7 @@ public class ToolGPT5GDriveFixer: BaseTool {
         "error_message": errorMessage
       ]
     )
-    print("[ToolGPT5GDriveFixer] 🆔 Event emitted (Swift bridge): requestId=\(requestId) eventId=\(eventId)")
+    self.logger.log("[ToolGPT5GDriveFixer] 🆔 Event emitted (Swift bridge): requestId=\(requestId) eventId=\(eventId)")
 
     setupStringTimeout(for: requestId, errorMessage: "GPT5 gdrive fixer request timed out")
   }

@@ -42,6 +42,14 @@ class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   async closeOpenAIConnectionAsync(): Promise<OpenAIConnectionState> {
     return 'closed';
   }
+
+  async initializeLogfireTracing(_serviceName: string, _apiKey: string): Promise<void> {
+    // Logfire tracing is a native-only implementation; web stub is a no-op.
+  }
+
+  logfireEvent(_tracerName: string, _spanName: string, _attributes?: Record<string, unknown>): void {
+    // No-op on web.
+  }
 }
 
 const module = registerWebModule(VmWebrtcModule, 'VmWebrtcModule') as unknown as VmWebrtcModule;

@@ -39,7 +39,7 @@ final class OpenAIWebRTCClient: NSObject {
     let manager = VoiceSessionRecordingManager()
     manager.setMetricsHandler { [weak self] metrics in
       guard let self else { return }
-      self.emit(.debug, "Outgoing audio meters", metadata: metrics.toMetadata())
+      self.logger.log("[VmWebrtc] " + "Outgoing audio meters", attributes: logAttributes(for: .debug, metadata: metrics.toMetadata()))
       Task { @MainActor in
         self.emitModuleEvent("onAudioMetrics", payload: metrics.toMetadata())
       }
@@ -47,13 +47,17 @@ final class OpenAIWebRTCClient: NSObject {
     manager.setLogEmitter { [weak self] level, message, metadata in
       guard let self else { return }
       let logLevel = self.convertLogLevel(level)
-      self.emit(logLevel, message, metadata: metadata)
+      self.logger.log(
+        "[VmWebrtc][\(logLevel.rawValue.uppercased())] " + message,
+        attributes: logAttributes(for: logLevel, metadata: metadata)
+      )
     }
     return manager
   }()
   var isRecordingEnabled: Bool = false
   
   public enum NativeLogLevel: String {
+    case trace
     case debug
     case info
     case warn
@@ -101,6 +105,7 @@ final class OpenAIWebRTCClient: NSObject {
   private var maxConversationTurns: Int?
   var retentionRatio: Double?
   private let retentionRatioScale: Int = 2
+  let logger = VmWebrtcLogging.logger
 
   // Reference to the github connector tool delegate
   weak var githubConnectorDelegate: BaseTool?
@@ -111,11 +116,7 @@ final class OpenAIWebRTCClient: NSObject {
   weak var gpt5WebSearchDelegate: BaseTool?
 
   var toolDefinitions: [[String: Any]] = []
-  lazy var eventHandler: WebRTCEventHandler = {
-    WebRTCEventHandler { [weak self] level, message, metadata in
-      self?.emit(level, message, metadata: metadata)
-    }
-  }()
+  lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
     InboundAudioStatsMonitor(
       peerConnectionProvider: { [weak self] in
@@ -125,7 +126,11 @@ final class OpenAIWebRTCClient: NSObject {
         self?.remoteAudioTrackId
       },
       logEmitter: { [weak self] level, message, metadata in
-        self?.emit(level, message, metadata: metadata)
+        guard let self else { return }
+        self.logger.log(
+          "[VmWebrtc][\(level.rawValue.uppercased())] " + message,
+          attributes: logAttributes(for: level, metadata: metadata)
+        )
       },
       speakingActivityRecorder: { [weak self] in
         self?.eventHandler.recordRemoteSpeakingActivity()
@@ -141,7 +146,11 @@ final class OpenAIWebRTCClient: NSObject {
         self?.audioTrack?.trackId
       },
       logEmitter: { [weak self] level, message, metadata in
-        self?.emit(level, message, metadata: metadata)
+        guard let self else { return }
+        self.logger.log(
+          "[VmWebrtc][\(level.rawValue.uppercased())] " + message,
+          attributes: logAttributes(for: level, metadata: metadata)
+        )
       },
       statsEventEmitter: { [weak self] metadata in
         guard let self else { return }
@@ -152,7 +161,6 @@ final class OpenAIWebRTCClient: NSObject {
     )
   }()
   private var moduleEventEmitter: ((String, [String: Any]) -> Void)?
-  private var minimumLogLevel: NativeLogLevel = .debug
 
   func makeEventHandlerContext() -> WebRTCEventHandler.ToolContext {
     WebRTCEventHandler.ToolContext(
@@ -206,22 +214,31 @@ final class OpenAIWebRTCClient: NSObject {
     isOutgoingAudioMuted = muted
     if let audioTrack {
       audioTrack.isEnabled = !muted
-      emit(.info, muted ? "Outgoing audio muted" : "Outgoing audio unmuted", metadata: [
-        "hasAudioTrack": true
-      ])
+      self.logger.log(
+        "[VmWebrtc] " + (muted ? "Outgoing audio muted" : "Outgoing audio unmuted"),
+        attributes: logAttributes(for: .info, metadata: [
+          "hasAudioTrack": true
+        ])
+      )
     } else {
-      emit(.debug, "Queued outgoing audio mute state", metadata: [
-        "muted": muted,
-        "hasAudioTrack": false
-      ])
+      self.logger.log(
+        "[VmWebrtc] " + "Queued outgoing audio mute state",
+        attributes: logAttributes(for: .debug, metadata: [
+          "muted": muted,
+          "hasAudioTrack": false
+        ])
+      )
     }
   }
 
   func setToolDefinitions(_ definitions: [[String: Any]]) {
     self.toolDefinitions = definitions
-    emit(.debug, "Configured tool definitions from JavaScript", metadata: [
-      "count": definitions.count
-    ])
+    self.logger.log(
+      "[VmWebrtc] " + "Configured tool definitions from JavaScript",
+      attributes: logAttributes(for: .debug, metadata: [
+        "count": definitions.count
+      ])
+    )
   }
 
   func appendToolDefinition(
@@ -235,14 +252,12 @@ final class OpenAIWebRTCClient: NSObject {
     if let definition = definitionsByName[toolName] {
       tools.append(definition)
     } else {
-      emit(
-        .warn,
-        warningMessage,
-        metadata: [
+      self.logger.log(
+        "[VmWebrtc] " + warningMessage,
+        attributes: logAttributes(for: .warn, metadata: [
           "toolName": toolName,
           "availableDefinitions": Array(definitionsByName.keys)
-        ],
-        propagateToReactNative: true
+        ])
       )
     }
   }
@@ -274,80 +289,23 @@ final class OpenAIWebRTCClient: NSObject {
     RTCCleanupSSL()
   }
 
-  public func emit(
-    _ level: NativeLogLevel,
-    _ message: String,
-    metadata: [String: Any]? = nil,
-    propagateToReactNative: Bool = false,
-    sourceFile: StaticString = #fileID
-  ) {
-    guard shouldLog(level) else { return }
-
-    let metaText: String
-    if let metadata, !metadata.isEmpty {
-      let rendered = metadata.map { entry in
-        "\(entry.key)=\(String(describing: entry.value))"
-      }.joined(separator: " ")
-      metaText = " " + rendered
-    } else {
-      metaText = ""
-    }
-    // Always print, even in Release builds
-    print("[VmWebrtc][\(level.rawValue.uppercased())] \(message)\(metaText)")
-
-    let shouldPropagate = propagateToReactNative || level == .error
-
-    guard shouldPropagate else { return }
-
-    var payload: [String: Any] = [
-      "level": level.rawValue,
-      "message": message,
-      "sourceFile": String(describing: sourceFile),
-      "timestampMs": Int(Date().timeIntervalSince1970 * 1000)
-    ]
-
-    if let metadata, !metadata.isEmpty {
-      payload["metadata"] = metadata
-    }
-
-    Task { [weak self] in
-      guard let self else { return }
-      await MainActor.run {
-        self.emitModuleEvent("onNativeLog", payload: payload)
-      }
-    }
-  }
-
   @MainActor
   func emitModuleEvent(_ name: String, payload: [String: Any]) {
     guard let moduleEventEmitter else {
-      emit(.debug, "No module event emitter configured; dropping event", metadata: [
-        "event": name
-      ])
+      self.logger.log(
+        "[VmWebrtc] " + "No module event emitter configured; dropping event",
+        attributes: logAttributes(for: .debug, metadata: [
+          "event": name
+        ])
+      )
       return
     }
     moduleEventEmitter(name, payload)
   }
 
-  func setMinimumLogLevel(_ level: NativeLogLevel) {
-    minimumLogLevel = level
-  }
-
-  private func shouldLog(_ level: NativeLogLevel) -> Bool {
-    logPriority(for: level) >= logPriority(for: minimumLogLevel)
-  }
-
-  private func logPriority(for level: NativeLogLevel) -> Int {
-    switch level {
-    case .debug: return 0
-    case .info: return 1
-    case .warn: return 2
-    case .error: return 3
-    }
-  }
-
   private func convertLogLevel(_ levelString: String) -> NativeLogLevel {
     switch levelString.lowercased() {
+    case "trace": return .trace
     case "debug": return .debug
     case "info": return .info
     case "warn": return .warn
@@ -372,7 +330,7 @@ final class OpenAIWebRTCClient: NSObject {
   ) async throws -> String {
     let sanitizedInstructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !sanitizedInstructions.isEmpty else {
-      self.emit(.error, "Received empty instructions for OpenAI session")
+      self.logger.log("[VmWebrtc] " + "Received empty instructions for OpenAI session", attributes: logAttributes(for: .error))
       throw OpenAIWebRTCError.missingInstructions
     }
     sessionInstructions = sanitizedInstructions
@@ -404,44 +362,39 @@ final class OpenAIWebRTCClient: NSObject {
 
     eventHandler.stopIdleMonitoring(reason: "starting_new_connection")
 
-    self.emit(
-      .info,
-      "Starting OpenAI WebRTC connection",
-      metadata: [
+    self.logger.log("[VmWebrtc] " + "Starting OpenAI WebRTC connection", attributes: logAttributes(for: .info, metadata: [
         "hasModel": (model?.isEmpty == false),
         "hasBaseURL": (baseURL?.isEmpty == false),
         "audioOutput": audioOutput.rawValue,
         "voice": sessionVoice,
         "recordingEnabled": enableRecording
-      ],
-      propagateToReactNative: true
-    )
+      ]))
     // Persist recording preferences
     self.isRecordingEnabled = enableRecording
 
-    self.emit(.debug, "Resolved session instructions", metadata: [
+    self.logger.log("[VmWebrtc] " + "Resolved session instructions", attributes: logAttributes(for: .debug, metadata: [
       "characterCount": sanitizedInstructions.count
-    ])
+    ]))
 
-    self.emit(.debug, "Resolved session voice", metadata: [
+    self.logger.log("[VmWebrtc] " + "Resolved session voice", attributes: logAttributes(for: .debug, metadata: [
       "hasCustom": sanitizedVoice?.isEmpty == false
-    ])
+    ]))
 
-    self.emit(.debug, "Resolved turn detection mode", metadata: [
+    self.logger.log("[VmWebrtc] " + "Resolved turn detection mode", attributes: logAttributes(for: .debug, metadata: [
       "mode": turnDetectionMode.rawValue
-    ])
+    ]))
 
-    self.emit(.debug, "Resolved session audio speed", metadata: [
+    self.logger.log("[VmWebrtc] " + "Resolved session audio speed", attributes: logAttributes(for: .debug, metadata: [
       "speed": sessionAudioSpeed
-    ])
+    ]))
 
     let endpointURL = try buildEndpointURL(baseURL: baseURL, model: model)
-    self.emit(.debug, "Resolved OpenAI endpoint", metadata: ["endpoint": endpointURL.absoluteString])
+    self.logger.log("[VmWebrtc] " + "Resolved OpenAI endpoint", attributes: logAttributes(for: .debug, metadata: ["endpoint": endpointURL.absoluteString]))
 
     try configureAudioSession(for: audioOutput)
-    self.emit(.debug, "Configured AVAudioSession for voice chat", metadata: [
+    self.logger.log("[VmWebrtc] " + "Configured AVAudioSession for voice chat", attributes: logAttributes(for: .debug, metadata: [
       "requestedOutput": audioOutput.rawValue
-    ])
+    ]))
 
     let audioSession = AVAudioSession.sharedInstance()
 
@@ -453,53 +406,46 @@ final class OpenAIWebRTCClient: NSObject {
           voice: sessionVoice
         )
       } catch {
-        self.emit(
-          .warn,
-          "Failed to start recording",
-          metadata: [
+        self.logger.log("[VmWebrtc] " + "Failed to start recording", attributes: logAttributes(for: .warn, metadata: [
             "error": error.localizedDescription
-          ],
-          propagateToReactNative: true
-        )
+          ]))
       }
     } else {
-      self.emit(.info, "Recording disabled by user preference")
+      self.logger.log("[VmWebrtc] " + "Recording disabled by user preference", attributes: logAttributes(for: .info, metadata: [
+        "recordingRequested": enableRecording,
+        "reason": "user_preference"
+      ]))
     }
 
     let connection = try makePeerConnection()
     firstCandidateTimestamp = nil
-    self.emit(.debug, "Peer connection prepared", metadata: [
+    self.logger.log("[VmWebrtc] " + "Peer connection prepared", attributes: logAttributes(for: .debug, metadata: [
       "hasAudioTrack": audioTrack != nil,
       "hasDataChannel": dataChannel != nil
-    ])
+    ]))
     let offer = try await createOffer(connection: connection)
-    self.emit(.debug, "Created local SDP offer", metadata: ["hasSDP": !offer.sdp.isEmpty])
+    self.logger.log("[VmWebrtc] " + "Created local SDP offer", attributes: logAttributes(for: .debug, metadata: ["hasSDP": !offer.sdp.isEmpty]))
     try await setLocalDescription(offer, for: connection)
-    self.emit(.debug, "Local description applied")
+    self.logger.log("[VmWebrtc] " + "Local description applied", attributes: logAttributes(for: .debug))
     let iceWait = try await waitForIceGathering(on: connection, timeout: iceGatheringGracePeriod)
-    self.emit(.debug, "Continuing after ICE wait", metadata: [
+    self.logger.log("[VmWebrtc] " + "Continuing after ICE wait", attributes: logAttributes(for: .debug, metadata: [
       "state": connection.iceGatheringState.rawValue,
       "elapsedSeconds": iceWait,
       "timedOut": connection.iceGatheringState != .complete
-    ])
+    ]))
 
     guard let localSDP = connection.localDescription?.sdp else {
-      self.emit(.error, "Local description missing after ICE gathering")
+      self.logger.log("[VmWebrtc] " + "Local description missing after ICE gathering", attributes: logAttributes(for: .error))
       throw OpenAIWebRTCError.missingLocalDescription
     }
 
     let answerSDP = try await exchangeSDPWithOpenAI(apiKey: apiKey, endpointURL: endpointURL, offerSDP: localSDP)
     let remoteDescription = RTCSessionDescription(type: .answer, sdp: answerSDP)
     try await setRemoteDescription(remoteDescription, for: connection)
-    self.emit(.debug, "Remote description applied")
+    self.logger.log("[VmWebrtc] " + "Remote description applied", attributes: logAttributes(for: .debug))
 
     let state = try await waitForConnection(toReach: connection, timeout: 15)
-    self.emit(
-      .info,
-      "OpenAI WebRTC connection flow finished",
-      metadata: ["state": state],
-      propagateToReactNative: true
-    )
+    self.logger.log("[VmWebrtc] " + "OpenAI WebRTC connection flow finished", attributes: logAttributes(for: .info, metadata: ["state": state]))
 
     if enableRecording {
       await recordingManager.startConversationTracking()
@@ -531,11 +477,7 @@ final class OpenAIWebRTCClient: NSObject {
 
   @MainActor
   func closeConnection() -> String {
-      self.emit(
-        .info,
-        "Closing OpenAI WebRTC connection",
-        propagateToReactNative: true
-      )
+      self.logger.log("[VmWebrtc] " + "Closing OpenAI WebRTC connection", attributes: logAttributes(for: .info))
 
       eventHandler.stopIdleMonitoring(reason: "connection_closed")
       stopInboundAudioStatsMonitoring()
@@ -560,7 +502,7 @@ final class OpenAIWebRTCClient: NSObject {
       if let dataChannel {
         dataChannel.delegate = nil
         dataChannel.close()
-        self.emit(.debug, "Data channel closed", metadata: ["label": dataChannel.label])
+        self.logger.log("[VmWebrtc] " + "Data channel closed", attributes: logAttributes(for: .debug, metadata: ["label": dataChannel.label]))
       }
       dataChannel = nil
 
@@ -572,10 +514,10 @@ final class OpenAIWebRTCClient: NSObject {
       if let connection = peerConnection {
         connection.delegate = nil
         connection.close()
-        self.emit(.debug, "Peer connection closed", metadata: [
+        self.logger.log("[VmWebrtc] " + "Peer connection closed", attributes: logAttributes(for: .debug, metadata: [
           "signalingState": connection.signalingState.rawValue,
           "iceState": stringValue(for: connection.iceConnectionState)
-        ])
+        ]))
       }
       peerConnection = nil
 
@@ -590,18 +532,17 @@ final class OpenAIWebRTCClient: NSObject {
           // Completion handler - nothing needed here
         }
       } else {
-        self.emit(.info, "Recording was disabled - skipping TTS generation and merge")
+        self.logger.log("[VmWebrtc] " + "Recording was disabled - skipping TTS generation and merge", attributes: logAttributes(for: .info))
         recordingManager.reset()
       }
 
       stopMonitoringAudioRouteChanges()
       deactivateAudioSession()
 
-      self.emit(
-        .info,
-        "OpenAI WebRTC connection teardown completed",
-        propagateToReactNative: true
-      )
+    self.logger.log("[VmWebrtc] " + "OpenAI WebRTC connection teardown completed", attributes: logAttributes(for: .info, metadata: [
+        "recordingEnabled": isRecordingEnabled,
+        "hadPeerConnection": peerConnection != nil
+      ]))
 
       return "closed"
   }
@@ -624,18 +565,24 @@ extension OpenAIWebRTCClient: ToolCallResponder {
     let didSend = sendEvent(outputDict)
 
     if didSend {
-      emit(.debug, "Tool call result sent", metadata: [
-        "callId": callId,
-        "resultLength": result.count
-      ])
+      self.logger.log(
+        "[VmWebrtc] " + "Tool call result sent",
+        attributes: logAttributes(for: .debug, metadata: [
+          "callId": callId,
+          "resultLength": result.count
+        ])
+      )
       eventHandler.recordExternalActivity(reason: "tool_call_result")
 
       // Continue conversation
       sendEvent(["type": "response.create"])
     } else {
-      emit(.error, "Failed to send tool call result", metadata: [
-        "callId": callId
-      ])
+      self.logger.log(
+        "[VmWebrtc] " + "Failed to send tool call result",
+        attributes: logAttributes(for: .error, metadata: [
+          "callId": callId
+        ])
+      )
     }
   }
 

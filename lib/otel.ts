@@ -1,18 +1,114 @@
-// otel.ts
+import { requireOptionalNativeModule } from "expo";
+import { Platform } from "react-native";
 import { trace, type Tracer } from "@opentelemetry/api";
-import {
-  BasicTracerProvider,
-  BatchSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import { BasicTracerProvider, BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 
 import { getLogfireApiKey, getLogfireEnabled } from "./secure-storage";
-import { log } from "./logger";
+
+type NativeTracingModule = {
+  initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
+  logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
+};
+
+type LoggerOptions = {
+  emit2logfire?: boolean;
+  allowSensitiveLogging?: boolean;
+};
+
+type LoggerLike = {
+  debug: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+  info: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+  warn: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+  error: (message: string, options?: LoggerOptions, ...args: unknown[]) => void;
+};
+
+const fallbackLogger: LoggerLike = {
+  debug: (message, _options, ...args) => console.debug("[Logfire]", message, ...args),
+  info: (message, _options, ...args) => console.info("[Logfire]", message, ...args),
+  warn: (message, _options, ...args) => console.warn("[Logfire]", message, ...args),
+  error: (message, _options, ...args) => console.error("[Logfire]", message, ...args),
+};
+
+let currentLogger: LoggerLike = fallbackLogger;
+
+export const registerLogfireLogger = (logger: LoggerLike | undefined): void => {
+  if (logger) {
+    currentLogger = logger;
+  }
+};
+
+const log: LoggerLike = {
+  debug: (message, options, ...args) => currentLogger.debug(message, options, ...args),
+  info: (message, options, ...args) => currentLogger.info(message, options, ...args),
+  warn: (message, options, ...args) => currentLogger.warn(message, options, ...args),
+  error: (message, options, ...args) => currentLogger.error(message, options, ...args),
+};
+
+const SERVICE_NAME = "vibemachine";
+const TRACER_NAME = "vibemachine-tracer";
+const LOGFIRE_ENDPOINT = "https://logfire-us.pydantic.dev/v1/traces";
+
+const MODULE_NAME = "VmWebrtc";
+
+const resolveNativeModule = (): NativeTracingModule | undefined => {
+  if (Platform.OS !== "ios") {
+    console.debug("[Logfire] Native module skipped: non-iOS platform", Platform.OS);
+    return undefined;
+  }
+
+  const candidate = requireOptionalNativeModule<NativeTracingModule>(MODULE_NAME);
+  if (
+    candidate &&
+    typeof candidate.initializeLogfireTracing === "function" &&
+    typeof candidate.logfireEvent === "function"
+  ) {
+    console.debug("[Logfire] Native module resolved");
+    return candidate as NativeTracingModule;
+  }
+
+  console.warn("[Logfire] Native module unavailable or missing tracing methods");
+  return undefined;
+};
+
+const nativeTracingModule = resolveNativeModule();
 
 let tracer: Tracer | null = null;
 let isInitialized = false;
+let usingNativeTracing = false;
 
-// Initialize OpenTelemetry tracing with Pydantic Logfire
+async function initializeNativeTracer(apiKey: string): Promise<void> {
+  if (!nativeTracingModule) {
+    throw new Error("Native Logfire module unavailable");
+  }
+
+  await nativeTracingModule.initializeLogfireTracing(SERVICE_NAME, apiKey);
+  usingNativeTracing = true;
+  tracer = null;
+}
+
+function initializeJsTracer(apiKey: string): void {
+  const exporter = new OTLPTraceExporter({
+    url: LOGFIRE_ENDPOINT,
+    headers: {
+      Authorization: apiKey,
+    },
+  });
+
+  const provider = new BasicTracerProvider({
+    resource: {
+      attributes: {
+        "service.name": SERVICE_NAME,
+      },
+    } as any,
+    spanProcessors: [new BatchSpanProcessor(exporter)],
+  });
+
+  trace.setGlobalTracerProvider(provider);
+  tracer = trace.getTracer(TRACER_NAME);
+  usingNativeTracing = false;
+}
+
 export async function initializeLogfire(): Promise<void> {
   if (isInitialized) {
     log.info("Logfire tracing already initialized", { emit2logfire: false });
@@ -34,45 +130,55 @@ export async function initializeLogfire(): Promise<void> {
 
     log.info("Initializing Logfire tracing...", { emit2logfire: false });
 
-    // Create OTLP exporter with Pydantic Logfire endpoint
-    const exporter = new OTLPTraceExporter({
-      url: "https://logfire-us.pydantic.dev/v1/traces",
-      headers: {
-        Authorization: apiKey,
-      },
-    });
+    if (nativeTracingModule) {
+      try {
+        await initializeNativeTracer(apiKey);
+        log.info("✅ Logfire native tracing initialized", { emit2logfire: false });
+        try {
+          nativeTracingModule.logfireEvent(TRACER_NAME, "native_tracing_initialized", {
+            source: "initializeLogfire",
+            is_native_logger: true,
+          });
+        } catch (eventError) {
+          log.warn("Failed to emit native tracing init event", { emit2logfire: false }, eventError);
+        }
+      } catch (nativeError) {
+        log.error(
+          "Native Logfire initialization failed, falling back to JS exporter",
+          { emit2logfire: false },
+          nativeError,
+        );
+        initializeJsTracer(apiKey);
+        log.info("✅ Logfire JS tracing fallback initialized", { emit2logfire: false });
+      }
+    } else {
+      initializeJsTracer(apiKey);
+      log.info("✅ Logfire JS tracing initialized", { emit2logfire: false });
+    }
 
-    // Create a minimal resource with service name
-    // Using a plain object to avoid React Native compatibility issues with Resource class
-    const resource = {
-      attributes: {
-        "service.name": "vibemachine",
-      },
-    };
-
-    // Create the tracer provider with spanProcessors passed in constructor
-    const provider = new BasicTracerProvider({
-      resource: resource as any,
-      spanProcessors: [new BatchSpanProcessor(exporter)],
-    });
-
-    // Register the provider globally
-    trace.setGlobalTracerProvider(provider);
-
-    // Get tracer instance
-    tracer = trace.getTracer("vibemachine-tracer");
     isInitialized = true;
-
-    log.info("✅ Logfire tracing initialized successfully", { emit2logfire: false });
   } catch (error) {
     log.error("Failed to initialize Logfire tracing:", { emit2logfire: false }, error);
   }
 }
 
-// Log an event to Pydantic Logfire
 export function logfireEvent(name: string, attrs?: Record<string, unknown>): void {
-  if (!isInitialized || !tracer) {
+  if (!isInitialized) {
     log.debug("Logfire tracing not initialized, skipping event:", { emit2logfire: false }, name);
+    return;
+  }
+
+  if (usingNativeTracing) {
+    try {
+      nativeTracingModule?.logfireEvent(TRACER_NAME, name, attrs);
+    } catch (error) {
+      log.error("Failed to log event to Logfire (native path):", { emit2logfire: false }, error);
+    }
+    return;
+  }
+
+  if (!tracer) {
+    log.debug("JS tracer not configured, skipping event:", { emit2logfire: false }, name);
     return;
   }
 
@@ -85,7 +191,6 @@ export function logfireEvent(name: string, attrs?: Record<string, unknown>): voi
   }
 }
 
-// Check if Logfire tracing is initialized
 export function isLogfireInitialized(): boolean {
   return isInitialized;
 }

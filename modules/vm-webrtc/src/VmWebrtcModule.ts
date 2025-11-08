@@ -43,6 +43,8 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   gpt5WebSearchOperationFromSwift(query: string): Promise<string>;
   sendGPT5WebSearchResponse(requestId: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
+  initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
+  logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
 }
 
 const module = loadModule();

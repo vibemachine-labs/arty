@@ -4,6 +4,8 @@ import AVFoundation
 // MARK: - SmartAudioMerger Class
 class SmartAudioMerger {
     
+    private let logger = VmWebrtcLogging.logger
+    
     // MARK: - Public Methods
     
     /// Merge microphone audio with TTS segments at precise timestamps
@@ -18,10 +20,10 @@ class SmartAudioMerger {
         outputURL: URL,
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
-        print("[AudioMerger] 🔗 Starting merge...")
-        print("[AudioMerger] 📁 Mic audio: \(micAudioURL.lastPathComponent)")
-        print("[AudioMerger] 📁 AI segments: \(aiSegments.count)")
-        print("[AudioMerger] 📁 Output: \(outputURL.lastPathComponent)")
+        self.logger.log("[AudioMerger] 🔗 Starting merge...")
+        self.logger.log("[AudioMerger] 📁 Mic audio: \(micAudioURL.lastPathComponent)")
+        self.logger.log("[AudioMerger] 📁 AI segments: \(aiSegments.count)")
+        self.logger.log("[AudioMerger] 📁 Output: \(outputURL.lastPathComponent)")
         
         // Run merge on background thread to avoid blocking UI
         DispatchQueue.global(qos: .userInitiated).async {
@@ -62,7 +64,7 @@ class SmartAudioMerger {
                 )
                 
                 let micDuration = CMTimeGetSeconds(micAsset.duration)
-                print("[AudioMerger] ✅ Mic track inserted (duration: \(String(format: "%.1f", micDuration))s)")
+                self.logger.log("[AudioMerger] ✅ Mic track inserted (duration: \(String(format: "%.1f", micDuration))s)")
                 
                 // ============================================
                 // TRACK 2: AI Audio Segments (TTS)
@@ -84,7 +86,7 @@ class SmartAudioMerger {
                     let aiAsset = AVAsset(url: segment.url)
                     
                     guard let aiTrack = aiAsset.tracks(withMediaType: .audio).first else {
-                        print("[AudioMerger] ⚠️ Skipping segment \(index + 1) - no audio track found")
+                        self.logger.log("[AudioMerger] ⚠️ Skipping segment \(index + 1) - no audio track found")
                         continue
                     }
                     
@@ -101,10 +103,10 @@ class SmartAudioMerger {
                         at: insertTime
                     )
                     
-                    print("[AudioMerger] 📍 Segment \(index + 1) inserted at +\(String(format: "%.1f", segment.insertTime))s: \"\(segment.text)\"")
+                    self.logger.log("[AudioMerger] 📍 Segment \(index + 1) inserted at +\(String(format: "%.1f", segment.insertTime))s: \"\(segment.text)\"")
                 }
                 
-                print("[AudioMerger] ✅ All AI segments inserted (\(aiSegments.count) total)")
+                self.logger.log("[AudioMerger] ✅ All AI segments inserted (\(aiSegments.count) total)")
                 
                 // ============================================
                 // EXPORT TO FINAL FILE
@@ -124,17 +126,17 @@ class SmartAudioMerger {
                 exportSession.outputURL = outputURL
                 exportSession.outputFileType = .m4a
                 
-                print("[AudioMerger] 📤 Exporting merged file...")
+                self.logger.log("[AudioMerger] 📤 Exporting merged file...")
                 
                 exportSession.exportAsynchronously {
                     switch exportSession.status {
                     case .completed:
-                        print("[AudioMerger] ✅ Export completed successfully!")
+                        self.logger.log("[AudioMerger] ✅ Export completed successfully!")
                         
                         // Get file size
                         if let fileSize = try? FileManager.default.attributesOfItem(atPath: outputURL.path)[.size] as? UInt64 {
                             let fileSizeMB = Double(fileSize) / 1_048_576.0
-                            print("[AudioMerger] 📊 File size: \(String(format: "%.2f", fileSizeMB)) MB")
+                            self.logger.log("[AudioMerger] 📊 File size: \(String(format: "%.2f", fileSizeMB)) MB")
                         }
                         
                         // Clean up temporary TTS segment files
@@ -151,7 +153,7 @@ class SmartAudioMerger {
                             code: 5,
                             userInfo: [NSLocalizedDescriptionKey: "Export failed with unknown error"]
                         )
-                        print("[AudioMerger] ❌ Export failed: \(error.localizedDescription)")
+                        self.logger.log("[AudioMerger] ❌ Export failed: \(error.localizedDescription)")
                         
                         DispatchQueue.main.async {
                             completion(.failure(error))
@@ -163,7 +165,7 @@ class SmartAudioMerger {
                             code: 6,
                             userInfo: [NSLocalizedDescriptionKey: "Export was cancelled"]
                         )
-                        print("[AudioMerger] ❌ Export cancelled")
+                        self.logger.log("[AudioMerger] ❌ Export cancelled")
                         
                         DispatchQueue.main.async {
                             completion(.failure(error))
@@ -175,7 +177,7 @@ class SmartAudioMerger {
                 }
                 
             } catch {
-                print("[AudioMerger] ❌ Merge error: \(error.localizedDescription)")
+                self.logger.log("[AudioMerger] ❌ Merge error: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(.failure(error))
                 }
@@ -187,20 +189,19 @@ class SmartAudioMerger {
     
     /// Clean up temporary TTS segment files
     private func cleanupTempFiles(segments: [AudioSegment]) {
-        print("[AudioMerger] 🗑️ Cleaning up temporary files...")
+        self.logger.log("[AudioMerger] 🗑️ Cleaning up temporary files...")
         
         var deletedCount = 0
         for segment in segments {
             do {
                 try FileManager.default.removeItem(at: segment.url)
                 deletedCount += 1
-                print("[AudioMerger] 🗑️ Deleted: \(segment.url.lastPathComponent)")
+                self.logger.log("[AudioMerger] 🗑️ Deleted: \(segment.url.lastPathComponent)")
             } catch {
-                print("[AudioMerger] ⚠️ Failed to delete temp file: \(segment.url.lastPathComponent)")
+                self.logger.log("[AudioMerger] ⚠️ Failed to delete temp file: \(segment.url.lastPathComponent)")
             }
         }
         
-        print("[AudioMerger] ✅ Cleanup complete (\(deletedCount)/\(segments.count) files deleted)")
+        self.logger.log("[AudioMerger] ✅ Cleanup complete (\(deletedCount)/\(segments.count) files deleted)")
     }
 }
-

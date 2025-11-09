@@ -87,6 +87,14 @@ export function exportToolDefinition(toolkit: ToolkitDefinition): ToolDefinition
   };
 }
 
+/**
+ * Converts all ToolkitDefinitions in a ToolkitGroup to an array of ToolDefinitions.
+ * This creates the format needed for LLM tool calls.
+ */
+export function exportToolDefinitions(group: ToolkitGroup): ToolDefinition[] {
+  return group.toolkits.map(toolkit => exportToolDefinition(toolkit));
+}
+
 
 
 export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {

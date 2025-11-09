@@ -586,22 +586,25 @@ extension OpenAIWebRTCClient {
       }
     )
 
-    let delegateWarnings: [(BaseTool?, String)] = [
-      (githubConnectorDelegate, "No JavaScript-provided definition found for github connector tool"),
-      (gdriveConnectorDelegate, "No JavaScript-provided definition found for gdrive connector tool"),
-      (gpt5GDriveFixerDelegate, "No JavaScript-provided definition found for GPT5 gdrive fixer tool"),
-      (gpt5WebSearchDelegate, "No JavaScript-provided definition found for GPT5 web search tool")
+    // Collect all available delegates (Gen1 legacy tools)
+    let legacyDelegates: [BaseTool?] = [
+      githubConnectorDelegate,
+      gdriveConnectorDelegate,
+      gpt5GDriveFixerDelegate,
+      gpt5WebSearchDelegate
     ]
 
-    let tools = delegateWarnings.compactMap { delegate, warning -> [String: Any]? in
+    // Match legacy delegates with their definitions
+    let legacyTools = legacyDelegates.compactMap { delegate -> [String: Any]? in
       guard let delegate else { return nil }
       let toolName = delegate.toolName
+
       if let definition = definitionsByName[toolName] {
         return definition
       }
 
       self.logger.log(
-        "[VmWebrtc] " + warning,
+        "[VmWebrtc] " + "No JavaScript-provided definition found for tool",
         attributes: logAttributes(for: .warn, metadata: [
           "toolName": toolName,
           "availableDefinitions": Array(definitionsByName.keys)
@@ -610,7 +613,26 @@ extension OpenAIWebRTCClient {
       return nil
     }
 
-    return tools
+    // Collect all Gen2 toolkit tools (tools that don't match legacy delegates)
+    let legacyToolNames = Set(legacyDelegates.compactMap { $0?.toolName })
+    let gen2Tools = definitionsByName.filter { toolName, _ in
+      !legacyToolNames.contains(toolName)
+    }.map { _, definition in
+      definition
+    }
+
+    if !gen2Tools.isEmpty {
+      self.logger.log(
+        "[VmWebrtc] " + "Found Gen2 toolkit tools",
+        attributes: logAttributes(for: .info, metadata: [
+          "count": gen2Tools.count,
+          "toolNames": gen2Tools.compactMap { $0["name"] as? String }
+        ])
+      )
+    }
+
+    // Combine legacy and Gen2 tools
+    return legacyTools + gen2Tools
   }
 
   @discardableResult

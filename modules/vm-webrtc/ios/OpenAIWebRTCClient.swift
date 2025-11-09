@@ -236,7 +236,7 @@ final class OpenAIWebRTCClient: NSObject {
     self.logger.log(
       "[VmWebrtc] " + "Configured tool definitions from JavaScript",
       attributes: logAttributes(for: .debug, metadata: [
-        "count": definitions.count
+        "definitions": definitions
       ])
     )
   }

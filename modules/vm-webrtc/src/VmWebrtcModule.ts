@@ -14,6 +14,10 @@ import {
   createGPT5WebSearchTool,
   type GPT5WebSearchNativeModule,
 } from './ToolGPT5WebSearch';
+import {
+  createToolkitHelper,
+  type ToolkitHelperNativeModule,
+} from './ToolkitHelper';
 import type { VadMode } from '../../../lib/vadPreference';
 import toolManager from './ToolManager';
 import {
@@ -43,6 +47,7 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   sendGPT5GDriveFixerResponse(requestId: string, result: string): void;
   gpt5WebSearchOperationFromSwift(query: string): Promise<string>;
   sendGPT5WebSearchResponse(requestId: string, result: string): void;
+  sendToolkitResponse(requestId: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
   logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
@@ -63,6 +68,9 @@ const gpt5GDriveFixerTool = createGPT5GDriveFixerTool(
 const gpt5WebSearchTool = createGPT5WebSearchTool(
   module as unknown as GPT5WebSearchNativeModule | null,
 );
+
+// Initialize Gen2 toolkit helper
+const toolkitHelper = createToolkitHelper(module as unknown as ToolkitHelperNativeModule | null);
 
 export const helloFromExpoModule = () => {
   if (!module) {

@@ -277,6 +277,14 @@ public class VmWebrtcModule: Module {
       self.toolGPT5WebSearch?.handleResponse(requestId: requestId, result: result)
     }
 
+    Function("sendToolkitResponse") { (requestId: String, result: String) in
+      self.logger.log("JS→Native sendToolkitResponse", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
+      self.toolkitHelper?.handleResponse(requestId: requestId, result: result)
+    }
+
     // Github Connector function - calls JavaScript github connector via events
     AsyncFunction("githubOperationFromSwift") { (codeSnippet: String, promise: Promise) in
       self.logger.log("Swift→JS githubOperationFromSwift", attributes: [

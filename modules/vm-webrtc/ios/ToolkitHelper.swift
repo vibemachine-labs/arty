@@ -148,19 +148,30 @@ public class ToolkitHelper: BaseTool {
   /// - Parameter fullName: The full tool name (e.g., "hacker_news__showTopStories")
   /// - Returns: Tuple of (groupName, toolName) or nil if invalid format
   private func parseToolName(_ fullName: String) -> (String, String)? {
-    let components = fullName.split(separator: "_", maxSplits: 2, omittingEmptySubsequences: false)
-
-    // Expected format: "group__toolName" which splits into ["group", "", "toolName"]
-    // The double underscore creates an empty component in the middle
-    guard components.count == 3,
-          !components[0].isEmpty,
-          components[1].isEmpty,  // This is the empty part from "__"
-          !components[2].isEmpty else {
+    // Look for the double underscore separator "__"
+    guard let range = fullName.range(of: "__") else {
+      self.logger.log(
+        "[ToolkitHelper] Tool name does not contain double underscore separator",
+        attributes: ["fullName": fullName]
+      )
       return nil
     }
 
-    let groupName = String(components[0])
-    let toolName = String(components[2])
+    let groupName = String(fullName[..<range.lowerBound])
+    let toolName = String(fullName[range.upperBound...])
+
+    // Validate both parts are non-empty
+    guard !groupName.isEmpty, !toolName.isEmpty else {
+      self.logger.log(
+        "[ToolkitHelper] Tool name has empty group or tool component",
+        attributes: [
+          "fullName": fullName,
+          "groupName": groupName,
+          "toolName": toolName
+        ]
+      )
+      return nil
+    }
 
     return (groupName, toolName)
   }

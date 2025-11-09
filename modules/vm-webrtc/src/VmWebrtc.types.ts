@@ -71,17 +71,25 @@ export type ToolkitGroup = {
 
 export type ToolkitGroups = {
   byName: Record<string, ToolkitGroup>;
+  list: ToolkitGroup[];
 };
 
 /**
  * Converts a ToolkitDefinition to a ToolDefinition by stripping out
  * extra fields (group, supported_auth, tool_source_file, extra).
  * This creates the format needed for LLM tool calls.
+ *
+ * @param toolkit - The toolkit definition to convert
+ * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news:showTopStories")
  */
-export function exportToolDefinition(toolkit: ToolkitDefinition): ToolDefinition {
+export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
+  const toolName = includeGroupInName && toolkit.group
+    ? `${toolkit.group}:${toolkit.name}`
+    : toolkit.name;
+
   return {
     type: toolkit.type,
-    name: toolkit.name,
+    name: toolName,
     description: toolkit.description,
     parameters: toolkit.parameters,
   };
@@ -90,9 +98,12 @@ export function exportToolDefinition(toolkit: ToolkitDefinition): ToolDefinition
 /**
  * Converts all ToolkitDefinitions in a ToolkitGroup to an array of ToolDefinitions.
  * This creates the format needed for LLM tool calls.
+ *
+ * @param group - The toolkit group to convert
+ * @param includeGroupInName - If true, prepends group name to tool names (default: true)
  */
-export function exportToolDefinitions(group: ToolkitGroup): ToolDefinition[] {
-  return group.toolkits.map(toolkit => exportToolDefinition(toolkit));
+export function exportToolDefinitions(group: ToolkitGroup, includeGroupInName = true): ToolDefinition[] {
+  return group.toolkits.map(toolkit => exportToolDefinition(toolkit, includeGroupInName));
 }
 
 

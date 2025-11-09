@@ -20,7 +20,6 @@ import {
     OpenAIConnectionOptions,
     OpenAIConnectionState,
     VmWebrtcModuleEvents,
-    exportToolDefinition,
 } from './VmWebrtc.types';
 import { getToolkitDefinitions } from './ToolkitManager';
 
@@ -94,13 +93,13 @@ export const openOpenAIConnectionAsync = async (
     definitions: toolDefinitionsWithPrompts,
   });
 
-  const toolkitDefinitions = getToolkitDefinitions(); // gen2
+  // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
+  const toolDefinitionsFromToolkits = getToolkitDefinitions(); // gen2
   log.info(`[${MODULE_NAME}] Toolkit definitions resolved`, {}, {
-    definitions: toolkitDefinitions,
+    definitions: toolDefinitionsFromToolkits,
   });
 
-  // Convert toolkit definitions to tool definitions and merge with existing ones
-  const toolDefinitionsFromToolkits = toolkitDefinitions.map(toolkit => exportToolDefinition(toolkit));
+  // Merge Gen1 and Gen2 tool definitions
   const mergedToolDefinitions = [
     ...(toolDefinitionsWithPrompts || []),
     ...toolDefinitionsFromToolkits,

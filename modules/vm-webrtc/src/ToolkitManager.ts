@@ -1,12 +1,12 @@
 import toolkitGroupsData from '../toolkits/toolkitGroups.json';
 
-import type { ToolkitDefinition, ToolkitGroup, ToolkitGroups } from './VmWebrtc.types';
+import type { ToolDefinition, ToolkitDefinition, ToolkitGroup, ToolkitGroups } from './VmWebrtc.types';
+import { exportToolDefinition } from './VmWebrtc.types';
 
 const buildToolkitGroups = (): ToolkitGroups => {
-  const byName = (toolkitGroupsData.byName ?? {}) as Record<string, ToolkitGroup>;
-  const list = Array.isArray(toolkitGroupsData.list)
-    ? (toolkitGroupsData.list as ToolkitGroup[])
-    : Object.values(byName);
+  const data = toolkitGroupsData as unknown as ToolkitGroups;
+  const byName = data.byName ?? {};
+  const list = Array.isArray(data.list) ? data.list : Object.values(byName);
 
   return {
     byName,
@@ -18,6 +18,19 @@ const toolkitGroups = buildToolkitGroups();
 
 export const getToolkitGroups = (): ToolkitGroups => toolkitGroups;
 
-export const getToolkitDefinitions = (): ToolkitDefinition[] => {
+/**
+ * Gets all toolkit definitions and converts them to tool definitions with
+ * fully qualified names (group:name format, e.g., "hacker_news:showTopStories").
+ */
+export const getToolkitDefinitions = (): ToolDefinition[] => {
+  return toolkitGroups.list.flatMap((group) =>
+    group.toolkits.map((toolkit) => exportToolDefinition(toolkit, true))
+  );
+};
+
+/**
+ * Gets raw toolkit definitions without conversion (for internal use).
+ */
+export const getRawToolkitDefinitions = (): ToolkitDefinition[] => {
   return toolkitGroups.list.flatMap((group) => group.toolkits);
 };

@@ -73,6 +73,20 @@ export type ToolkitGroups = {
   byName: Record<string, ToolkitGroup>;
 };
 
+/**
+ * Converts a ToolkitDefinition to a ToolDefinition by stripping out
+ * extra fields (group, supported_auth, tool_source_file, extra).
+ * This creates the format needed for LLM tool calls.
+ */
+export function exportToolDefinition(toolkit: ToolkitDefinition): ToolDefinition {
+  return {
+    type: toolkit.type,
+    name: toolkit.name,
+    description: toolkit.description,
+    parameters: toolkit.parameters,
+  };
+}
+
 
 
 export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {

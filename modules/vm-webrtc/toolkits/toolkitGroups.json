@@ -11,13 +11,7 @@
           "supported_auth": "no_auth_required",
           "tool_source_file": "hackernews/show_top_stories.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the Hacker News API endpoint for top stories."
-              }
-            }
+            "api_url": "https://hacker-news.firebaseio.com/v0/topstories.json"
           },
           "parameters": {
             "type": "object",
@@ -40,13 +34,7 @@
           "supported_auth": "no_auth_required",
           "tool_source_file": "hackernews/show_comments_for_story.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the Hacker News API endpoint for story comments."
-              }
-            }
+            "api_url": "https://hacker-news.firebaseio.com/v0/item"
           },
           "parameters": {
             "type": "object",
@@ -74,17 +62,11 @@
           "type": "function",
           "name": "showDailyPapers",
           "group": "daily_papers",
-          "description": "Retrieve a list of today’s daily papers from major publications.",
+          "description": "Retrieve a list of today\u2019s daily papers from major publications.",
           "supported_auth": "no_auth_required",
           "tool_source_file": "dailypapers/show_daily_papers.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the daily papers API endpoint."
-              }
-            }
+            "api_url": "https://huggingface.co/daily-papers/api/daily"
           },
           "parameters": {
             "type": "object",
@@ -111,13 +93,7 @@
           "supported_auth": "no_auth_required",
           "tool_source_file": "dailypapers/show_comments_for_paper.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the daily paper comments API endpoint."
-              }
-            }
+            "api_url": "https://huggingface.co/daily-papers/api/comments"
           },
           "parameters": {
             "type": "object",
@@ -151,13 +127,7 @@
           "supported_auth": "no_auth_required",
           "tool_source_file": "hackernews/show_top_stories.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the Hacker News API endpoint for top stories."
-              }
-            }
+            "api_url": "https://hacker-news.firebaseio.com/v0/topstories.json"
           },
           "parameters": {
             "type": "object",
@@ -180,13 +150,7 @@
           "supported_auth": "no_auth_required",
           "tool_source_file": "hackernews/show_comments_for_story.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the Hacker News API endpoint for story comments."
-              }
-            }
+            "api_url": "https://hacker-news.firebaseio.com/v0/item"
           },
           "parameters": {
             "type": "object",
@@ -214,17 +178,11 @@
           "type": "function",
           "name": "showDailyPapers",
           "group": "daily_papers",
-          "description": "Retrieve a list of today’s daily papers from major publications.",
+          "description": "Retrieve a list of today\u2019s daily papers from major publications.",
           "supported_auth": "no_auth_required",
           "tool_source_file": "dailypapers/show_daily_papers.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the daily papers API endpoint."
-              }
-            }
+            "api_url": "https://huggingface.co/daily-papers/api/daily"
           },
           "parameters": {
             "type": "object",
@@ -251,13 +209,7 @@
           "supported_auth": "no_auth_required",
           "tool_source_file": "dailypapers/show_comments_for_paper.ts",
           "extra": {
-            "type": "object",
-            "properties": {
-              "api_url": {
-                "type": "string",
-                "description": "The base URL of the daily paper comments API endpoint."
-              }
-            }
+            "api_url": "https://huggingface.co/daily-papers/api/comments"
           },
           "parameters": {
             "type": "object",

@@ -48,19 +48,8 @@ export type ToolkitDefinition = {
   description: string;
   supported_auth: 'no_auth_required' | 'api_key' | 'oauth2';
   tool_source_file?: string;
-  // To make the tool as self contained and generic as possible, this
-  // allows passing arbitrary extra parameters that the tool implementation.
-  // Could include auth tokens or other config. 
-  extra: {
-    type: 'object';
-    properties: Record<
-      string,
-      {
-        type: string;
-        description: string;
-      }
-    >;
-  };
+  // Arbitrary extra parameters passed along to the tool implementation.
+  extra: Record<string, string>;
   // These are the params that the LLM should call this tool with
   parameters: {
     type: 'object';

@@ -40,9 +40,56 @@ export type ToolDefinition = {
   };
 };
 
+// This is a tool definition for the new Gen2 toolkit format
+export type ToolkitDefinition = {
+  type: 'function';
+  name: string;
+  group: string
+  description: string;
+  supported_auth: 'no_auth_required' | 'api_key' | 'oauth2';
+  // To make the tool as self contained and generic as possible, this
+  // allows passing arbitrary extra parameters that the tool implementation.
+  // Could include auth tokens or other config. 
+  extra: {
+    type: 'object';
+    properties: Record<
+      string,
+      {
+        type: string;
+        description: string;
+      }
+    >;
+  };
+  // These are the params that the LLM should call this tool with
+  parameters: {
+    type: 'object';
+    properties: Record<
+      string,
+      {
+        type: string;
+        description: string;
+      }
+    >;
+    required: string[];
+  };
+};
+
+export type ToolkitGroup = {
+  name: string;
+  toolkits: ToolkitDefinition[];
+};
+
+export type ToolkitGroups = {
+  byName: Record<string, ToolkitGroup>;
+  list: ToolkitGroup[];
+};
+
+
+
 export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {
   instructions: string;
   toolDefinitions?: ToolDefinition[];
+  toolkitDefinitions: ToolkitDefinition[];  // gen2
   vadMode?: VadMode;
   audioSpeed?: number;
   enableRecording?: boolean;

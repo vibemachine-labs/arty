@@ -89,8 +89,12 @@ export const openOpenAIConnectionAsync = async (
   );
 
   log.info(`[${MODULE_NAME}] Tool definitions resolved`, {}, {
-    definitionsCount: toolDefinitionsWithPrompts.length,
     definitions: toolDefinitionsWithPrompts,
+  });
+
+  const toolkitDefinitions = await toolkitManager.getToolkitDefinitions(); // gen2
+  log.info(`[${MODULE_NAME}] Toolkit definitions resolved`, {}, {
+    definitions: toolkitDefinitions,
   });
 
   const resolvedVadMode: VadMode = options.vadMode === 'semantic' ? 'semantic' : 'server';
@@ -105,6 +109,7 @@ export const openOpenAIConnectionAsync = async (
     voice: resolvedVoice,
     instructions: trimmedInstructions,
     toolDefinitions: toolDefinitionsWithPrompts,
+    toolkitDefinitions: toolkitDefinitions,  // gen2
     vadMode: resolvedVadMode,
     audioSpeed: resolvedAudioSpeed,
   };

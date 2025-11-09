@@ -21,6 +21,7 @@ import {
     OpenAIConnectionState,
     VmWebrtcModuleEvents,
 } from './VmWebrtc.types';
+import { getToolkitDefinitions } from './ToolkitManager';
 
 const MODULE_NAME = 'VmWebrtc';
 
@@ -92,7 +93,7 @@ export const openOpenAIConnectionAsync = async (
     definitions: toolDefinitionsWithPrompts,
   });
 
-  const toolkitDefinitions = await toolkitManager.getToolkitDefinitions(); // gen2
+  const toolkitDefinitions = getToolkitDefinitions(); // gen2
   log.info(`[${MODULE_NAME}] Toolkit definitions resolved`, {}, {
     definitions: toolkitDefinitions,
   });

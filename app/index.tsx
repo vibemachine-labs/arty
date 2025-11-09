@@ -29,9 +29,8 @@ import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
 import { OnboardingWizard } from "./OnboardingWizard";
 import TextChat from "./TextChat";
 import VoiceChat from "./VoiceChat";
-import toolkitGroupsData from "../modules/vm-webrtc/toolkits/toolkitGroups.json";
 
-import { type BaseOpenAIConnectionOptions, type ToolkitGroup, type ToolkitGroups } from "../modules/vm-webrtc";
+import { type BaseOpenAIConnectionOptions } from "../modules/vm-webrtc";
 
 const buildConnectionOptions = async (): Promise<BaseOpenAIConnectionOptions | null> => {
   // Try to get user-saved API key first
@@ -62,16 +61,6 @@ const buildConnectionOptions = async (): Promise<BaseOpenAIConnectionOptions | n
   };
 };
 
-const toolkitGroups: ToolkitGroups = (() => {
-  const byName = (toolkitGroupsData.byName ?? {}) as Record<string, ToolkitGroup>;
-  const list = (toolkitGroupsData.list ?? Object.values(byName)) as ToolkitGroup[];
-
-  return {
-    byName,
-    list,
-  };
-})();
-
 export default function Index() {
   const [hasMicPermission, setHasMicPermission] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -97,10 +86,6 @@ export default function Index() {
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
-
-  useEffect(() => {
-    log.info("Toolkit groups loaded", {}, { toolkitGroups });
-  }, []);
 
   // Load connection options on mount and when API key config screen closes
   useEffect(() => {

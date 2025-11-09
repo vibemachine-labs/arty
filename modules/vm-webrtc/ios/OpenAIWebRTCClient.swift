@@ -115,6 +115,9 @@ final class OpenAIWebRTCClient: NSObject {
   weak var gpt5GDriveFixerDelegate: BaseTool?
   weak var gpt5WebSearchDelegate: BaseTool?
 
+  // Reference to the Gen2 toolkit helper
+  var toolkitHelper: ToolkitHelper?
+
   var toolDefinitions: [[String: Any]] = []
   lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
@@ -168,6 +171,7 @@ final class OpenAIWebRTCClient: NSObject {
       gdriveConnectorDelegate: gdriveConnectorDelegate,
       gpt5GDriveFixerDelegate: gpt5GDriveFixerDelegate,
       gpt5WebSearchDelegate: gpt5WebSearchDelegate,
+      toolkitHelper: toolkitHelper,
       sendToolCallError: { [weak self] callId, error in
         guard let self else { return }
         self.sendToolCallError(callId: callId, error: error)
@@ -207,6 +211,10 @@ final class OpenAIWebRTCClient: NSObject {
 
   func setGPT5WebSearchDelegate(_ delegate: BaseTool) {
     self.gpt5WebSearchDelegate = delegate
+  }
+
+  func setToolkitHelper(_ helper: ToolkitHelper) {
+    self.toolkitHelper = helper
   }
 
   @MainActor

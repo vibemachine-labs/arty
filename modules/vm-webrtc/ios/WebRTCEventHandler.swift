@@ -10,6 +10,7 @@ final class WebRTCEventHandler {
     let gdriveConnectorDelegate: BaseTool?
     let gpt5GDriveFixerDelegate: BaseTool?
     let gpt5WebSearchDelegate: BaseTool?
+    let toolkitHelper: ToolkitHelper?
     let sendToolCallError: (_ callId: String, _ error: String) -> Void
     let emitModuleEvent: (_ name: String, _ payload: [String: Any]) -> Void
   }
@@ -556,11 +557,34 @@ final class WebRTCEventHandler {
       delegate.handleToolCall(callId: callId, argumentsJSON: argumentsJSON)
 
     default:
-      logger.log(
-        "[WebRTCEventHandler] Unknown tool requested",
-        attributes: logAttributes(for: .warn, metadata: ["tool": toolName])
-      )
-      context.sendToolCallError(callId, "Unknown tool: \(toolName)")
+      // Check if this is a Gen2 toolkit tool (contains double underscore)
+      if toolName.contains("__") {
+        logger.log(
+          "[WebRTCEventHandler] Gen2 toolkit tool requested",
+          attributes: logAttributes(for: .info, metadata: ["tool": toolName])
+        )
+
+        guard let toolkitHelper = context.toolkitHelper else {
+          logger.log(
+            "[WebRTCEventHandler] Toolkit helper not configured",
+            attributes: logAttributes(for: .warn, metadata: ["tool": toolName])
+          )
+          context.sendToolCallError(callId, "Toolkit helper not configured: \(toolName)")
+          return
+        }
+
+        toolkitHelper.handleToolkitCall(
+          callId: callId,
+          toolName: toolName,
+          argumentsJSON: argumentsJSON
+        )
+      } else {
+        logger.log(
+          "[WebRTCEventHandler] Unknown tool requested",
+          attributes: logAttributes(for: .warn, metadata: ["tool": toolName])
+        )
+        context.sendToolCallError(callId, "Unknown tool: \(toolName)")
+      }
     }
   }
 }

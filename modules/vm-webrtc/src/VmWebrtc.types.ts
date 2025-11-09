@@ -47,6 +47,7 @@ export type ToolkitDefinition = {
   group: string
   description: string;
   supported_auth: 'no_auth_required' | 'api_key' | 'oauth2';
+  tool_source_file?: string;
   // To make the tool as self contained and generic as possible, this
   // allows passing arbitrary extra parameters that the tool implementation.
   // Could include auth tokens or other config. 
@@ -81,7 +82,6 @@ export type ToolkitGroup = {
 
 export type ToolkitGroups = {
   byName: Record<string, ToolkitGroup>;
-  list: ToolkitGroup[];
 };
 
 

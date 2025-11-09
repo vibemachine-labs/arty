@@ -241,27 +241,6 @@ final class OpenAIWebRTCClient: NSObject {
     )
   }
 
-  func appendToolDefinition(
-    for delegate: BaseTool?,
-    warningMessage: String,
-    definitionsByName: [String: [String: Any]],
-    tools: inout [[String: Any]]
-  ) {
-    guard let delegate else { return }
-    let toolName = delegate.toolName
-    if let definition = definitionsByName[toolName] {
-      tools.append(definition)
-    } else {
-      self.logger.log(
-        "[VmWebrtc] " + warningMessage,
-        attributes: logAttributes(for: .warn, metadata: [
-          "toolName": toolName,
-          "availableDefinitions": Array(definitionsByName.keys)
-        ])
-      )
-    }
-  }
-
   let defaultEndpoint = "https://api.openai.com/v1/realtime"
   let defaultModel = "gpt-realtime"
   private let iceGatheringGracePeriod: TimeInterval = 0.5

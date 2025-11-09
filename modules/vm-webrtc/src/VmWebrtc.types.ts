@@ -80,11 +80,11 @@ export type ToolkitGroups = {
  * This creates the format needed for LLM tool calls.
  *
  * @param toolkit - The toolkit definition to convert
- * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news:showTopStories")
+ * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news__showTopStories")
  */
 export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
   const toolName = includeGroupInName && toolkit.group
-    ? `${toolkit.group}:${toolkit.name}`
+    ? `${toolkit.group}__${toolkit.name}`
     : toolkit.name;
 
   return {

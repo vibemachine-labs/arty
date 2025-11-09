@@ -20,6 +20,7 @@ import {
     OpenAIConnectionOptions,
     OpenAIConnectionState,
     VmWebrtcModuleEvents,
+    exportToolDefinition,
 } from './VmWebrtc.types';
 import { getToolkitDefinitions } from './ToolkitManager';
 
@@ -98,6 +99,17 @@ export const openOpenAIConnectionAsync = async (
     definitions: toolkitDefinitions,
   });
 
+  // Convert toolkit definitions to tool definitions and merge with existing ones
+  const toolDefinitionsFromToolkits = toolkitDefinitions.map(toolkit => exportToolDefinition(toolkit));
+  const mergedToolDefinitions = [
+    ...(toolDefinitionsWithPrompts || []),
+    ...toolDefinitionsFromToolkits,
+  ];
+
+  log.info(`[${MODULE_NAME}] Merged tool definitions`, {}, {
+    definitions: mergedToolDefinitions,
+  });
+
   const resolvedVadMode: VadMode = options.vadMode === 'semantic' ? 'semantic' : 'server';
 
   const resolvedAudioSpeed =
@@ -109,8 +121,7 @@ export const openOpenAIConnectionAsync = async (
     ...options,
     voice: resolvedVoice,
     instructions: trimmedInstructions,
-    toolDefinitions: toolDefinitionsWithPrompts,
-    toolkitDefinitions: toolkitDefinitions,  // gen2
+    toolDefinitions: mergedToolDefinitions,
     vadMode: resolvedVadMode,
     audioSpeed: resolvedAudioSpeed,
   };

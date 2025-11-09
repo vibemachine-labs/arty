@@ -100,7 +100,6 @@ export function exportToolDefinitions(group: ToolkitGroup): ToolDefinition[] {
 export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {
   instructions: string;
   toolDefinitions?: ToolDefinition[];
-  toolkitDefinitions: ToolkitDefinition[];  // gen2
   vadMode?: VadMode;
   audioSpeed?: number;
   enableRecording?: boolean;

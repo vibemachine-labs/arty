@@ -1,9 +1,15 @@
 import { log } from '../../../../lib/logger';
 
+// MARK: - Constants
+
+const BASE_API_URL = 'https://hn.algolia.com/api/v1';
+const DEFAULT_NUM_STORIES = 10;
+
 // MARK: - Types
 
 export interface ShowTopStoriesParams {
-  limit: number;
+  story_type: 'top' | 'new' | 'ask_hn' | 'show_hn';
+  num_stories?: number;
 }
 
 export interface ShowCommentsForStoryParams {
@@ -11,41 +17,104 @@ export interface ShowCommentsForStoryParams {
   maxDepth?: number;
 }
 
+interface HNStory {
+  objectID: string;
+  title: string;
+  url?: string;
+  author: string;
+  points?: number;
+  num_comments?: number;
+}
+
+// MARK: - Helper Functions
+
+function formatStoryDetails(story: HNStory) {
+  return {
+    id: parseInt(story.objectID, 10),
+    title: story.title,
+    url: story.url || `https://news.ycombinator.com/item?id=${story.objectID}`,
+    author: story.author,
+    points: story.points ?? null,
+  };
+}
+
 // MARK: - Functions
 
 /**
- * Fetch the top stories from Hacker News.
+ * Fetch stories from Hacker News by category.
+ *
+ * @param params.story_type - Category of stories: "top" (front page), "new" (recent), "ask_hn", "show_hn"
+ * @param params.num_stories - Number of stories to return (default: 10)
  */
 export async function showTopStories(params: ShowTopStoriesParams): Promise<string> {
-  const { limit } = params;
+  const { story_type, num_stories = DEFAULT_NUM_STORIES } = params;
 
-  log.info('[hacker_news] showTopStories called (STUBBED)', {}, { limit });
+  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories });
 
-  // STUB: Return mock data
-  const stubData = {
-    success: true,
-    stories: [
-      {
-        id: 1,
-        title: "Rust goes open source",
-        url: "https://example.com/rust-oss",
-        points: 1234,
-        author: "rustfan",
-        comments: 567
-      },
-      {
-        id: 2,
-        title: "OpenAI raises $10 trillion on a $100 trillion valuation",
-        url: "https://example.com/openai-funding",
-        points: 9999,
-        author: "aifuturist",
-        comments: 8888
-      }
-    ].slice(0, limit),
-    timestamp: new Date().toISOString()
+  // Validate story_type
+  const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
+  const normalizedType = story_type.toLowerCase().trim();
+
+  if (!validTypes.includes(normalizedType)) {
+    const error = `story_type must be one of: ${validTypes.join(', ')}`;
+    log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes });
+    return JSON.stringify({
+      success: false,
+      error,
+    });
+  }
+
+  // Map story type to appropriate API parameters
+  const apiParams: Record<string, { endpoint: string; tags: string }> = {
+    top: { endpoint: 'search', tags: 'front_page' },
+    new: { endpoint: 'search_by_date', tags: 'story' },
+    ask_hn: { endpoint: 'search', tags: 'ask_hn' },
+    show_hn: { endpoint: 'search', tags: 'show_hn' },
   };
 
-  return JSON.stringify(stubData);
+  const params_config = apiParams[normalizedType];
+  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}`;
+
+  try {
+    log.info('[hacker_news] Fetching stories from API', {}, { url });
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API request failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    const stories = data.hits.map((story: HNStory) => formatStoryDetails(story));
+
+    log.info('[hacker_news] Stories fetched successfully', {}, {
+      story_type: normalizedType,
+      count: stories.length
+    });
+
+    return JSON.stringify({
+      success: true,
+      story_type: normalizedType,
+      stories,
+      timestamp: new Date().toISOString(),
+    });
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log.error('[hacker_news] Failed to fetch stories', {}, {
+      story_type: normalizedType,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    }, error);
+
+    return JSON.stringify({
+      success: false,
+      error: errorMessage,
+      story_type: normalizedType,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
 
 /**

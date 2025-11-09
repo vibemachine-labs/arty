@@ -7,19 +7,26 @@
           "type": "function",
           "name": "showTopStories",
           "group": "hacker_news",
-          "description": "Fetch the top stories from Hacker News.",
+          "description": "Fetches and formats a list of Hacker News stories of the specified type. Use this to get the latest front page stories, recent submissions, Ask HN posts, or Show HN posts.",
           "supported_auth": "no_auth_required",
-          "extra": {},
+          "extra": {
+            "api_url": "https://hn.algolia.com/api/v1"
+          },
           "parameters": {
             "type": "object",
             "properties": {
-              "limit": {
+              "story_type": {
+                "type": "string",
+                "description": "Category of stories to fetch. Must be one of: 'top' (front page stories), 'new' (most recent stories), 'ask_hn' (Ask HN posts), 'show_hn' (Show HN posts)",
+                "enum": ["top", "new", "ask_hn", "show_hn"]
+              },
+              "num_stories": {
                 "type": "number",
-                "description": "The number of top stories to retrieve."
+                "description": "Number of stories to return (default: 10)"
               }
             },
             "required": [
-              "limit"
+              "story_type"
             ]
           }
         },

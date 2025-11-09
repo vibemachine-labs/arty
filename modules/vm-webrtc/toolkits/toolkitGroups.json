@@ -9,10 +9,7 @@
           "group": "hacker_news",
           "description": "Fetch the top stories from Hacker News.",
           "supported_auth": "no_auth_required",
-          "tool_source_file": "hackernews/show_top_stories.ts",
-          "extra": {
-            "api_url": "https://hacker-news.firebaseio.com/v0/topstories.json"
-          },
+          "extra": {},
           "parameters": {
             "type": "object",
             "properties": {
@@ -32,10 +29,7 @@
           "group": "hacker_news",
           "description": "Fetch the comments for a given Hacker News story.",
           "supported_auth": "no_auth_required",
-          "tool_source_file": "hackernews/show_comments_for_story.ts",
-          "extra": {
-            "api_url": "https://hacker-news.firebaseio.com/v0/item"
-          },
+          "extra": {},
           "parameters": {
             "type": "object",
             "properties": {
@@ -64,10 +58,7 @@
           "group": "daily_papers",
           "description": "Retrieve a list of today\u2019s daily papers from major publications.",
           "supported_auth": "no_auth_required",
-          "tool_source_file": "dailypapers/show_daily_papers.ts",
-          "extra": {
-            "api_url": "https://huggingface.co/daily-papers/api/daily"
-          },
+          "extra": {},
           "parameters": {
             "type": "object",
             "properties": {
@@ -91,10 +82,7 @@
           "group": "daily_papers",
           "description": "Retrieve comments or reader feedback for a specified daily paper.",
           "supported_auth": "no_auth_required",
-          "tool_source_file": "dailypapers/show_comments_for_paper.ts",
-          "extra": {
-            "api_url": "https://huggingface.co/daily-papers/api/comments"
-          },
+          "extra": {},
           "parameters": {
             "type": "object",
             "properties": {

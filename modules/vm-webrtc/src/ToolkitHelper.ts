@@ -1,5 +1,6 @@
 import { log } from '../../../lib/logger';
 import { type ToolNativeModule } from './ToolHelper';
+import { executeToolkitFunction } from './toolkit_functions';
 
 // MARK: - Types
 
@@ -116,8 +117,7 @@ export class ToolkitHelper {
   }
 
   /**
-   * Execute a toolkit operation (STUBBED).
-   * This is where the actual tool logic will be implemented later.
+   * Execute a toolkit operation by routing to the appropriate toolkit function.
    */
   private async executeToolkitOperation(
     groupName: string,
@@ -127,7 +127,7 @@ export class ToolkitHelper {
   ): Promise<string> {
     const { requestId, callId, eventId } = context;
 
-    log.info(`[${this.toolName}] 🔧 Executing toolkit operation (STUBBED)`, {}, {
+    log.info(`[${this.toolName}] 🔧 Executing toolkit operation`, {}, {
       groupName,
       toolName,
       args,
@@ -136,22 +136,40 @@ export class ToolkitHelper {
       eventId,
     });
 
-    // STUB: Return a bogus response
-    // In the future, this will route to actual toolkit implementations
-    const stubbedResponse = {
-      success: true,
-      data: "I found 2 top stories on hacker news. Story 1: rust goes open source. Story 2: open ai raises 10 trillion on a 100 trillion valuation",
-      metadata: {
+    try {
+      // Route to the appropriate toolkit function
+      const result = await executeToolkitFunction(groupName, toolName, args);
+
+      log.info(`[${this.toolName}] ✅ Toolkit function executed successfully`, {}, {
         groupName,
         toolName,
-        timestamp: new Date().toISOString(),
-      }
-    };
+        requestId,
+        callId,
+        resultLength: result.length,
+      });
 
-    // Simulate some async work
-    await new Promise(resolve => setTimeout(resolve, 100));
+      return result;
+    } catch (error) {
+      log.error(`[${this.toolName}] ❌ Toolkit function execution failed`, {}, {
+        groupName,
+        toolName,
+        requestId,
+        callId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      }, error);
 
-    return JSON.stringify(stubbedResponse);
+      // Return error as JSON
+      return JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        metadata: {
+          groupName,
+          toolName,
+          timestamp: new Date().toISOString(),
+        }
+      });
+    }
   }
 
   // MARK: - Public Methods

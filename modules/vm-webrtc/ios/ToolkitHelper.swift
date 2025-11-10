@@ -42,7 +42,7 @@ public class ToolkitHelper: BaseTool {
         "callId": callId,
         "toolName": toolName,
         "arguments_length": argumentsJSON.count,
-        "arguments_preview": String(argumentsJSON.prefix(500))
+        "arguments": argumentsJSON
       ]
     )
 
@@ -103,8 +103,8 @@ public class ToolkitHelper: BaseTool {
       "[ToolkitHelper] 📥 Received toolkit response from JavaScript",
       attributes: [
         "requestId": requestId,
-        "result_length": result.count,
-        "result_preview": String(result.prefix(500))
+        "result_preview": String(result.prefix(500)),
+        "result": result
       ]
     )
 
@@ -143,6 +143,17 @@ public class ToolkitHelper: BaseTool {
   }
 
   // MARK: - Private Methods
+
+  /// Add tool details to the beginning of a result string
+  /// - Parameters:
+  ///   - groupName: The toolkit group name (e.g., "hacker_news")
+  ///   - toolName: The tool name (e.g., "showTopStories")
+  ///   - result: The original result string
+  /// - Returns: Enhanced result string with tool details prepended
+  private func addToolDetails(groupName: String, toolName: String, result: String) -> String {
+    let prefix = "The \(groupName) \(toolName) tool returned "
+    return prefix + result
+  }
 
   /// Parse a fully qualified tool name into group and tool name
   /// - Parameter fullName: The full tool name (e.g., "hacker_news__showTopStories")
@@ -253,8 +264,11 @@ public class ToolkitHelper: BaseTool {
         ]
       )
 
+      // Add tool details to the result
+      let enhancedResult = self.addToolDetails(groupName: groupName, toolName: toolName, result: result)
+
       // Send the result back to OpenAI
-      self.responder?.sendToolCallResult(callId: callId, result: result)
+      self.responder?.sendToolCallResult(callId: callId, result: enhancedResult)
     }
 
     // Emit event to JavaScript
@@ -265,7 +279,8 @@ public class ToolkitHelper: BaseTool {
         "requestId": requestId,
         "groupName": groupName,
         "toolName": toolName,
-        "callId": callId
+        "callId": callId,
+        "arguments": argumentsJSON
       ]
     )
 
@@ -286,7 +301,8 @@ public class ToolkitHelper: BaseTool {
         "requestId": requestId,
         "eventId": eventId,
         "groupName": groupName,
-        "toolName": toolName
+        "toolName": toolName,
+        "arguments": argumentsJSON
       ]
     )
 

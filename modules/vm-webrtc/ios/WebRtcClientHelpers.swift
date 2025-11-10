@@ -652,7 +652,8 @@ extension OpenAIWebRTCClient {
         "success": success,
         "eventType": payload["type"] as? String ?? "unknown",
         "payloadKeys": Array(payload.keys),
-        "payloadPreview": String(payloadPreview.prefix(200))
+        "payloadPreview": String(payloadPreview.prefix(200)),
+        "payload": payload
       ]))
       return success
     } catch {

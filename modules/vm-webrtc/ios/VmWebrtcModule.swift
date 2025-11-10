@@ -280,7 +280,8 @@ public class VmWebrtcModule: Module {
     Function("sendToolkitResponse") { (requestId: String, result: String) in
       self.logger.log("JS→Native sendToolkitResponse", attributes: [
         "requestId": requestId,
-        "result_length": result.count
+        "result_length": result.count,
+        "result": result
       ])
       self.toolkitHelper?.handleResponse(requestId: requestId, result: result)
     }

@@ -90,7 +90,8 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
 
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
-      count: stories.length
+      count: stories.length,
+      stories,
     });
 
     return JSON.stringify({

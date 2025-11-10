@@ -53,6 +53,7 @@ export class ToolkitHelper {
       toolName,
       eventId,
       argumentsLength: argumentsJSON?.length || 0,
+      arguments: argumentsJSON,
     });
 
     try {

@@ -12,23 +12,24 @@ It's currently a thin wrapper around the OpenAI Realtime speech API, however the
 
 If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to help it grow.
 
-## 🎥 Demo Reel (80 seconds)
+## 🎤 Demo audio - browse hacker news (1 min 30 secs)
 
-(Does not play directly, this links to a Vimeo.  Open in a new tab.)
-
-<a href="https://vimeo.com/manage/videos/1127547235" target="_blank">
-  <img src="https://github.com/user-attachments/assets/e500b199-f0a2-4d6b-9a1a-f572fc48361a" alt="Demo video">
-</a>
+https://github.com/user-attachments/assets/0c735cc8-317c-407a-8db1-0f02b65533ae
 
 <details>
   <summary>Whats's in the demo</summary>
 
-  1. Navigate Google Drive via voice: "Find all files with the name vibemachine in it"
-  2. Have the app summarize contents of a document in Google Drive: "Summarize the contents of the vibemachine design doc"
-  3. File a Github issue: "Create a new issue to update design doc" 
-  4. Show phone with github issue actually filed.
+  - "What are top storiees on hacker news?"
+  - "What are commetns about montana law story?"
+  - "SUmmarize new montana law"
 
 </details>
+
+## 🎥 Demo Reel (80 seconds)
+
+https://github.com/user-attachments/assets/6171b7d1-ef97-483b-ba09-d6854babc726
+
+or [full resolution version](https://github.com/user-attachments/assets/e500b199-f0a2-4d6b-9a1a-f572fc48361a) 
 
 ## 📱 Screenshots
 

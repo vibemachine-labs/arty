@@ -158,6 +158,8 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
     log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes });
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'showTopStories',
       error,
     });
   }
@@ -194,6 +196,8 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
 
     return JSON.stringify({
       success: true,
+      group: 'hacker_news',
+      tool: 'showTopStories',
       story_type: normalizedType,
       stories,
       timestamp: new Date().toISOString(),
@@ -209,6 +213,8 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
 
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'showTopStories',
       error: errorMessage,
       story_type: normalizedType,
       timestamp: new Date().toISOString(),
@@ -233,6 +239,8 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
     log.error('[hacker_news] searchStories validation failed', {}, { query });
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'searchStories',
       error: errorMessage,
       timestamp: new Date().toISOString(),
     });
@@ -267,6 +275,8 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
 
     return JSON.stringify({
       success: true,
+      group: 'hacker_news',
+      tool: 'searchStories',
       query: normalizedQuery,
       search_by_date,
       stories,
@@ -281,6 +291,8 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
 
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'searchStories',
       error: errorMessage,
       query: normalizedQuery,
       timestamp: new Date().toISOString(),
@@ -319,6 +331,8 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
 
     return JSON.stringify({
       success: true,
+      group: 'hacker_news',
+      tool: 'getStoryInfo',
       story: formattedStory,
       timestamp: new Date().toISOString(),
     });
@@ -331,6 +345,8 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
 
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'getStoryInfo',
       error: errorMessage,
       story_id,
       timestamp: new Date().toISOString(),
@@ -370,6 +386,8 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
     log.error('[hacker_news] getUserInfo validation failed', {}, { user_name });
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'getUserInfo',
       error: errorMessage,
       timestamp: new Date().toISOString(),
     });
@@ -400,6 +418,8 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
 
     return JSON.stringify({
       success: true,
+      group: 'hacker_news',
+      tool: 'getUserInfo',
       user: {
         ...userData,
         stories,
@@ -415,6 +435,8 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
 
     return JSON.stringify({
       success: false,
+      group: 'hacker_news',
+      tool: 'getUserInfo',
       error: errorMessage,
       user_name: normalizedUserName,
       timestamp: new Date().toISOString(),

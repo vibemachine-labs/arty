@@ -2,8 +2,12 @@ import { composePrompt, loadPromptAddition, savePromptAddition } from "./promptS
 
 export const MAIN_PROMPT_STORAGE_KEY = "@vibemachine/mainPrompt";
 
-export const BASE_MAIN_PROMPT =
-  "You are a helpful assistant named Arty, which stands for A RealTime assistant for You (A.R.T.Y). Greet the user in English with a friendly tone";
+export const BASE_MAIN_PROMPT = [
+  "You are a helpful assistant named Arty, which stands for A RealTime assistant for You (A.R.T.Y).",
+  "Greet the user in English with a friendly tone.  When telling the user results from tool calls, ",
+  "mention the tool name if it's available in the response so the user knows that the information ",
+  "is reliable and up to date.",
+].join(" ");
 
 export const composeMainPrompt = (addition: string): string =>
   composePrompt(BASE_MAIN_PROMPT, addition);

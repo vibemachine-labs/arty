@@ -14,6 +14,14 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
       return `Error fetching URL: ${response.status} ${response.statusText}`;
     }
 
+    // Validate Content-Type
+    const contentType = response.headers.get('content-type') || '';
+    const allowedTypes = ['text/', 'application/json', 'application/xml', 'application/xhtml'];
+    
+    if (!allowedTypes.some(type => contentType.toLowerCase().includes(type))) {
+      return `Error: Unsupported content type '${contentType}'. Only text-based content is supported.`;
+    }
+
     // Get the content as text
     const html = await response.text();
 

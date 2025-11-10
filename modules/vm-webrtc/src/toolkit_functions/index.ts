@@ -2,6 +2,7 @@
 
 import * as hackerNews from './hacker_news';
 import * as dailyPapers from './daily_papers';
+import * as web from './web';
 import { log } from '../../../../lib/logger';
 
 // MARK: - Types
@@ -29,6 +30,9 @@ export const toolkitRegistry: ToolkitRegistry = {
   daily_papers: {
     showDailyPapers: dailyPapers.showDailyPapers,
     showCommentsForPaper: dailyPapers.showCommentsForPaper,
+  },
+  web: {
+    getContentsFromUrl: web.getContentsFromUrl,
   },
 };
 
@@ -94,4 +98,4 @@ export async function executeToolkitFunction(
 
 // MARK: - Exports
 
-export { hackerNews, dailyPapers };
+export { hackerNews, dailyPapers, web };

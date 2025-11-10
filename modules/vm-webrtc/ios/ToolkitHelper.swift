@@ -219,6 +219,8 @@ public class ToolkitHelper: BaseTool {
           attributes: [
             "callId": callId,
             "requestId": requestId,
+            "groupName": groupName,
+            "toolName": toolName,
             "error": error.localizedDescription
           ]
         )
@@ -231,7 +233,9 @@ public class ToolkitHelper: BaseTool {
           "[ToolkitHelper] Toolkit operation returned no result",
           attributes: [
             "callId": callId,
-            "requestId": requestId
+            "requestId": requestId,
+            "groupName": groupName,
+            "toolName": toolName
           ]
         )
         self.responder?.sendToolCallError(callId: callId, error: "No result from toolkit operation")
@@ -243,8 +247,9 @@ public class ToolkitHelper: BaseTool {
         attributes: [
           "callId": callId,
           "requestId": requestId,
-          "result_length": result.count,
-          "result_preview": String(result.prefix(500))
+          "groupName": groupName,
+          "toolName": toolName,
+          "result_preview": String(result.prefix(1000))
         ]
       )
 

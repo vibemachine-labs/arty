@@ -18,6 +18,8 @@ If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vi
 
 https://github.com/user-attachments/files/23454406/hackernews-arty-demo.mp3
 
+https://github.com/user-attachments/assets/0c735cc8-317c-407a-8db1-0f02b65533ae
+
 <details>
   <summary>Whats's in the demo</summary>
 

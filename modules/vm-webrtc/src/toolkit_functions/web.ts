@@ -37,8 +37,12 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
       return 'Error: Access to private/internal URLs is not allowed';
     }
 
-    // Fetch the URL
-    const response = await fetch(url);
+    // Fetch with 10 second timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       return `Error fetching URL: ${response.status} ${response.statusText}`;
@@ -66,6 +70,9 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
 
     return strippedContent;
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return 'Error fetching URL: Request timeout';
+    }
     if (error instanceof Error) {
       return `Error fetching URL: ${error.message}`;
     }

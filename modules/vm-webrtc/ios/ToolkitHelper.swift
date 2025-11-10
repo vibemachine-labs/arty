@@ -42,7 +42,7 @@ public class ToolkitHelper: BaseTool {
         "callId": callId,
         "toolName": toolName,
         "arguments_length": argumentsJSON.count,
-        "arguments_preview": String(argumentsJSON.prefix(500))
+        "arguments": argumentsJSON
       ]
     )
 
@@ -103,8 +103,8 @@ public class ToolkitHelper: BaseTool {
       "[ToolkitHelper] 📥 Received toolkit response from JavaScript",
       attributes: [
         "requestId": requestId,
-        "result_length": result.count,
-        "result_preview": String(result.prefix(500))
+        "result_preview": String(result.prefix(500)),
+        "result": result
       ]
     )
 
@@ -219,6 +219,8 @@ public class ToolkitHelper: BaseTool {
           attributes: [
             "callId": callId,
             "requestId": requestId,
+            "groupName": groupName,
+            "toolName": toolName,
             "error": error.localizedDescription
           ]
         )
@@ -231,7 +233,9 @@ public class ToolkitHelper: BaseTool {
           "[ToolkitHelper] Toolkit operation returned no result",
           attributes: [
             "callId": callId,
-            "requestId": requestId
+            "requestId": requestId,
+            "groupName": groupName,
+            "toolName": toolName
           ]
         )
         self.responder?.sendToolCallError(callId: callId, error: "No result from toolkit operation")
@@ -243,8 +247,9 @@ public class ToolkitHelper: BaseTool {
         attributes: [
           "callId": callId,
           "requestId": requestId,
-          "result_length": result.count,
-          "result_preview": String(result.prefix(500))
+          "groupName": groupName,
+          "toolName": toolName,
+          "result_preview": String(result.prefix(1000))
         ]
       )
 
@@ -260,7 +265,8 @@ public class ToolkitHelper: BaseTool {
         "requestId": requestId,
         "groupName": groupName,
         "toolName": toolName,
-        "callId": callId
+        "callId": callId,
+        "arguments": argumentsJSON
       ]
     )
 
@@ -281,7 +287,8 @@ public class ToolkitHelper: BaseTool {
         "requestId": requestId,
         "eventId": eventId,
         "groupName": groupName,
-        "toolName": toolName
+        "toolName": toolName,
+        "arguments": argumentsJSON
       ]
     )
 

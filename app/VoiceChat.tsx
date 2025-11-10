@@ -325,13 +325,56 @@ export function VoiceChat({
         retentionRatio,
         toolDefinitions: canonicalToolDefinitions,
       };
-      const state: OpenAIConnectionState = await openOpenAIConnectionAsync(customConnectionOptions);
-      log.info("OpenAI voice session resolved", {}, { state });
-      const connected = state === "connected" || state === "completed";
-      setIsSessionActive(connected);
-      if (!connected) {
-        log.warn("Voice session resolved without reaching a connected state", {}, { state });
-        setFrequencyBins([]);
+
+      // Retry logic with exponential backoff for 503 errors
+      const maxRetries = 3;
+      const retryDelays = [1000, 3000, 5000]; // 1s, 3s, 5s in milliseconds
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          log.info("Attempting to connect to OpenAI", {}, { attempt: attempt + 1, maxRetries });
+          const state: OpenAIConnectionState = await openOpenAIConnectionAsync(customConnectionOptions);
+          log.info("OpenAI voice session resolved", {}, { state, attempt: attempt + 1 });
+          const connected = state === "connected" || state === "completed";
+          setIsSessionActive(connected);
+          if (!connected) {
+            log.warn("Voice session resolved without reaching a connected state", {}, { state });
+            setFrequencyBins([]);
+          }
+          // Success - break out of retry loop
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error as Error;
+          const is503Error = error instanceof Error && error.message.includes("503");
+
+          if (is503Error && attempt < maxRetries - 1) {
+            const delay = retryDelays[attempt];
+            log.warn("OpenAI connection failed with 503, retrying", {}, {
+              attempt: attempt + 1,
+              maxRetries,
+              retryDelayMs: delay,
+              errorMessage: lastError.message,
+            });
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            // Either not a 503 error, or we've exhausted all retries
+            log.error("OpenAI connection attempt failed", {}, {
+              attempt: attempt + 1,
+              maxRetries,
+              is503Error,
+              errorMessage: lastError.message,
+            });
+            throw error;
+          }
+        }
+      }
+
+      // If we still have an error after all retries, throw it
+      if (lastError) {
+        throw lastError;
       }
     } catch (error) {
       log.error("Failed to start OpenAI voice session", {}, {

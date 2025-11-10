@@ -7,6 +7,36 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
   try {
     const { url } = params;
 
+    // Validate URL format and protocol
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return 'Error: Invalid URL format';
+    }
+
+    // Only allow HTTP and HTTPS protocols
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return 'Error: Only HTTP and HTTPS protocols are supported';
+    }
+
+    // Block private IP ranges and localhost to prevent SSRF
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const blockedPatterns = [
+      /^localhost$/i,
+      /^127\./,
+      /^10\./,
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+      /^192\.168\./,
+      /^169\.254\./, // Cloud metadata endpoint
+      /^::1$/, // IPv6 localhost
+      /^fc00:/, // IPv6 private
+    ];
+
+    if (blockedPatterns.some(pattern => pattern.test(hostname))) {
+      return 'Error: Access to private/internal URLs is not allowed';
+    }
+
     // Fetch the URL
     const response = await fetch(url);
 

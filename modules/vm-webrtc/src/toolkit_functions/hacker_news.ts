@@ -120,6 +120,8 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
 
 /**
  * Fetch the comments for a given Hacker News story.
+ * 
+ * TODO: remove this, just an old stub.
  */
 export async function showCommentsForStory(params: ShowCommentsForStoryParams): Promise<string> {
   const { storyId, maxDepth } = params;

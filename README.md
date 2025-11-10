@@ -12,11 +12,7 @@ It's currently a thin wrapper around the OpenAI Realtime speech API, however the
 
 If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to help it grow.
 
-## 🎤 Demo audio (1 min 30 secs)
-
-[▶️ Play the Hacker News walkthrough](hackernews-arty-demo.mp3?raw=1)
-
-https://github.com/user-attachments/files/23454406/hackernews-arty-demo.mp3
+## 🎤 Demo audio - browse hacker news (1 min 30 secs)
 
 https://github.com/user-attachments/assets/0c735cc8-317c-407a-8db1-0f02b65533ae
 

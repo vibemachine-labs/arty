@@ -158,6 +158,29 @@
           }
         }
       ]
+    },
+    "web": {
+      "name": "web",
+      "toolkits": [
+        {
+          "type": "function",
+          "name": "getContentsFromUrl",
+          "group": "web",
+          "description": "Retrieve the contents of a URL.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "The url to fetch content from."
+              }
+            },
+            "required": ["url"]
+          }
+        }
+      ]
     }
   }
 }

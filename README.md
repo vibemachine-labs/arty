@@ -14,10 +14,9 @@ If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vi
 
 ## 🎤 Demo audio (1 min 30 secs)
 
-<audio controls style="width:100%;">
-  <source src="hackernews-arty-demo.mp3" type="audio/mpeg">
-  Your browser does not support the audio element. <a href="hackernews-arty-demo.mp3">Download the MP3</a>.
-</audio>
+[▶️ Play the Hacker News walkthrough](hackernews-arty-demo.mp3?raw=1)
+
+https://github.com/user-attachments/files/23454406/hackernews-arty-demo.mp3
 
 <details>
   <summary>Whats's in the demo</summary>

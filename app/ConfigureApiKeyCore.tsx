@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { log } from '../lib/logger';
 import { deleteApiKey, getApiKey, isValidApiKey, saveApiKey } from '../lib/secure-storage';
-import { refreshWebSearchApiKey } from '../modules/vm-webrtc/src/VmWebrtcModule';
 
 export interface ConfigureApiKeyActionState {
   canSubmit: boolean;
@@ -256,16 +255,6 @@ export const ConfigureApiKeyCore: React.FC<ConfigureApiKeyCoreProps> = ({
       if (verificationKey) {
         setCurrentApiKey(verificationKey);
         log.info('✅ API key verified after save:', {}, verificationKey ? 'exists' : 'missing');
-
-        // Refresh the web search tool's cached API key
-        try {
-          await refreshWebSearchApiKey();
-          log.info('✅ Web search API key cache refreshed');
-        } catch (refreshError) {
-          log.warn('⚠️ Failed to refresh web search API key cache:', {}, refreshError);
-          // Don't fail the entire save operation if cache refresh fails
-        }
-
         onSaveSuccess?.(verificationKey);
       } else {
         log.error('❌ API key verification failed after save');

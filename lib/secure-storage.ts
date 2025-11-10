@@ -3,6 +3,12 @@ import * as SecureStore from 'expo-secure-store';
 
 import { log } from './logger';
 
+// NOTE: SecureStore is not accessible when the device screen is locked or during certain
+// app lifecycle states (background, WebRTC event handlers, etc.). To work around this,
+// we cache all SecureStore values in memory during app initialization (when the app is
+// in the foreground and SecureStore is accessible). All getter functions use the cache
+// first, falling back to SecureStore only if the cache is empty.
+
 const OPENAI_API_KEY = 'VIBEFLUENT_OPENAI_API_KEY';
 const GITHUB_TOKEN_KEY = 'VIBEMACHINE_GITHUB_TOKEN';
 
@@ -15,6 +21,117 @@ const GDRIVE_REFRESH_TOKEN_KEY = 'VIBEMACHINE_GDRIVE_REFRESH_TOKEN';
 const LOGFIRE_API_KEY = 'VIBEMACHINE_LOGFIRE_API_KEY';
 const LOGFIRE_ENABLED_KEY = 'VIBEMACHINE_LOGFIRE_ENABLED';
 
+// In-memory cache for all SecureStore values
+// This cache is populated during app initialization and updated on every write operation
+const cache: Map<string, string | null> = new Map();
+
+// Track whether cache has been initialized
+let cacheInitialized = false;
+
+/**
+ * Initialize the cache by loading all values from SecureStore.
+ * This should be called during app initialization when the app is in the foreground
+ * and SecureStore is guaranteed to be accessible.
+ */
+export async function initializeSecureStorageCache(): Promise<void> {
+  log.info('🔄 Initializing SecureStore cache...', {});
+
+  const keys = [
+    OPENAI_API_KEY,
+    GITHUB_TOKEN_KEY,
+    GDRIVE_CLIENT_ID_OVERRIDE_KEY,
+    GDRIVE_ACCESS_TOKEN_KEY,
+    GDRIVE_REFRESH_TOKEN_KEY,
+    LOGFIRE_API_KEY,
+  ];
+
+  try {
+    // Load all values from SecureStore in parallel
+    const results = await Promise.allSettled(
+      keys.map(async (key) => {
+        try {
+          const value = await SecureStore.getItemAsync(key);
+          cache.set(key, value);
+          return { key, success: true, hasValue: value !== null };
+        } catch (error) {
+          log.warn(`⚠️ Failed to load ${key} during cache initialization`, {}, error);
+          cache.set(key, null);
+          return { key, success: false, hasValue: false };
+        }
+      })
+    );
+
+    const successCount = results.filter((r) => r.status === 'fulfilled' && r.value.success).length;
+    const valueCount = results.filter(
+      (r) => r.status === 'fulfilled' && r.value.hasValue
+    ).length;
+
+    cacheInitialized = true;
+    log.info('✅ SecureStore cache initialized', {}, {
+      totalKeys: keys.length,
+      successfulLoads: successCount,
+      valuesFound: valueCount,
+    });
+  } catch (error) {
+    log.error('❌ Failed to initialize SecureStore cache', {}, error);
+    cacheInitialized = true; // Mark as initialized even on error to prevent blocking
+  }
+}
+
+/**
+ * Get a value from the cache. If cache is not initialized or value is not in cache,
+ * attempts to read from SecureStore directly.
+ *
+ * @param key - The SecureStore key to retrieve
+ * @returns The cached value, or null if not found
+ */
+async function getCachedValue(key: string): Promise<string | null> {
+  // If cache has this key, return it immediately (even if null)
+  if (cache.has(key)) {
+    return cache.get(key) ?? null;
+  }
+
+  // Cache miss - try to load from SecureStore
+  try {
+    const value = await SecureStore.getItemAsync(key);
+    cache.set(key, value);
+    return value;
+  } catch (error) {
+    // SecureStore access failed (likely due to screen lock or background state)
+    // Return null and log the issue
+    log.warn(`⚠️ SecureStore access failed for ${key}, returning null`, {}, error);
+    cache.set(key, null);
+    return null;
+  }
+}
+
+/**
+ * Update a value in both SecureStore and the cache.
+ *
+ * @param key - The SecureStore key to update
+ * @param value - The value to store
+ */
+async function setCachedValue(key: string, value: string): Promise<void> {
+  // Update SecureStore first
+  await SecureStore.setItemAsync(key, value);
+  // Then update cache
+  cache.set(key, value);
+}
+
+/**
+ * Delete a value from both SecureStore and the cache.
+ *
+ * @param key - The SecureStore key to delete
+ */
+async function deleteCachedValue(key: string): Promise<void> {
+  // Delete from SecureStore first
+  await SecureStore.deleteItemAsync(key);
+  // Then update cache to null
+  cache.set(key, null);
+}
+
+// OpenAI API Key Functions
+
 export async function saveApiKey(apiKey: string): Promise<void> {
   if (!apiKey || apiKey.length === 0) {
     throw new Error('API key must not be empty.');
@@ -23,10 +140,10 @@ export async function saveApiKey(apiKey: string): Promise<void> {
   log.info('🔄 Attempting to save API key...', {});
 
   try {
-    await SecureStore.setItemAsync(OPENAI_API_KEY, apiKey);
-    log.info('✅ API key saved to SecureStore successfully', {});
+    await setCachedValue(OPENAI_API_KEY, apiKey);
+    log.info('✅ API key saved to SecureStore and cache successfully', {});
 
-    const verification = await SecureStore.getItemAsync(OPENAI_API_KEY);
+    const verification = await getCachedValue(OPENAI_API_KEY);
     if (verification) {
       log.info('✅ SecureStore verification successful', {});
     } else {
@@ -47,22 +164,22 @@ export async function getApiKey(_: { forceSecureStore?: boolean } = {}): Promise
   log.info('🔄 Attempting to retrieve OpenAI API key...', {});
 
   try {
-    const apiKey = await SecureStore.getItemAsync(OPENAI_API_KEY);
+    const apiKey = await getCachedValue(OPENAI_API_KEY);
 
     if (apiKey) {
-      log.info('✅ OpenAI API key retrieved from SecureStore', {});
+      log.info('✅ OpenAI API key retrieved from cache', {});
       return apiKey;
     }
 
-    log.info('ℹ️ No OpenAI API key found in SecureStore', {});
+    log.info('ℹ️ No OpenAI API key found in cache', {});
     return null;
-  } catch (secureStoreError) {
+  } catch (error) {
     const errorDetails = {
-      name: (secureStoreError as Error).name,
-      message: (secureStoreError as Error).message,
-      stack: (secureStoreError as Error).stack,
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
     };
-    log.error('❌ SecureStore failed to retrieve API key', {}, errorDetails);
+    log.error('❌ Failed to retrieve API key', {}, errorDetails);
     return null;
   }
 }
@@ -71,8 +188,8 @@ export async function deleteApiKey(): Promise<void> {
   log.info('🔄 Attempting to delete API key from SecureStore...', {});
 
   try {
-    await SecureStore.deleteItemAsync(OPENAI_API_KEY);
-    log.info('✅ API key deleted from SecureStore', {});
+    await deleteCachedValue(OPENAI_API_KEY);
+    log.info('✅ API key deleted from SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -104,6 +221,7 @@ export function isValidApiKey(apiKey: string): boolean {
 }
 
 // GitHub Token Functions
+
 export async function saveGithubToken(token: string): Promise<void> {
   if (!token || token.length === 0) {
     throw new Error('GitHub token must not be empty.');
@@ -112,10 +230,10 @@ export async function saveGithubToken(token: string): Promise<void> {
   log.info('🔄 Attempting to save GitHub token...', {});
 
   try {
-    await SecureStore.setItemAsync(GITHUB_TOKEN_KEY, token);
-    log.info('✅ GitHub token saved to SecureStore successfully', {});
+    await setCachedValue(GITHUB_TOKEN_KEY, token);
+    log.info('✅ GitHub token saved to SecureStore and cache successfully', {});
 
-    const verification = await SecureStore.getItemAsync(GITHUB_TOKEN_KEY);
+    const verification = await getCachedValue(GITHUB_TOKEN_KEY);
     if (verification) {
       log.info('✅ SecureStore verification successful', {});
     } else {
@@ -136,22 +254,22 @@ export async function getGithubToken(): Promise<string | null> {
   log.info('🔄 Attempting to retrieve GitHub token...', {});
 
   try {
-    const token = await SecureStore.getItemAsync(GITHUB_TOKEN_KEY);
+    const token = await getCachedValue(GITHUB_TOKEN_KEY);
 
     if (token) {
-      log.info('✅ GitHub token retrieved from SecureStore', {});
+      log.info('✅ GitHub token retrieved from cache', {});
       return token;
     }
 
-    log.info('ℹ️ No GitHub token found in SecureStore', {});
+    log.info('ℹ️ No GitHub token found in cache', {});
     return null;
-  } catch (secureStoreError) {
+  } catch (error) {
     const errorDetails = {
-      name: (secureStoreError as Error).name,
-      message: (secureStoreError as Error).message,
-      stack: (secureStoreError as Error).stack,
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
     };
-    log.error('❌ SecureStore failed to retrieve GitHub token', {}, errorDetails);
+    log.error('❌ Failed to retrieve GitHub token', {}, errorDetails);
     return null;
   }
 }
@@ -160,8 +278,8 @@ export async function deleteGithubToken(): Promise<void> {
   log.info('🔄 Attempting to delete GitHub token from SecureStore...', {});
 
   try {
-    await SecureStore.deleteItemAsync(GITHUB_TOKEN_KEY);
-    log.info('✅ GitHub token deleted from SecureStore', {});
+    await deleteCachedValue(GITHUB_TOKEN_KEY);
+    log.info('✅ GitHub token deleted from SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -192,7 +310,8 @@ export function isValidGithubToken(token: string): boolean {
   return !!token && (token.startsWith('ghp_') || token.startsWith('github_pat_')) && token.length > 20;
 }
 
-// Google Drive Client ID (override and effective getter)
+// Google Drive Client ID Functions
+
 export async function saveGDriveClientIdOverride(clientId: string): Promise<void> {
   if (!clientId || clientId.length === 0) {
     throw new Error('GDrive Client ID override must not be empty.');
@@ -200,8 +319,8 @@ export async function saveGDriveClientIdOverride(clientId: string): Promise<void
 
   log.info('🔄 Saving GDrive Client ID override...', {});
   try {
-    await SecureStore.setItemAsync(GDRIVE_CLIENT_ID_OVERRIDE_KEY, clientId);
-    log.info('✅ GDrive Client ID override saved to SecureStore', {});
+    await setCachedValue(GDRIVE_CLIENT_ID_OVERRIDE_KEY, clientId);
+    log.info('✅ GDrive Client ID override saved to SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -216,8 +335,8 @@ export async function saveGDriveClientIdOverride(clientId: string): Promise<void
 export async function deleteGDriveClientIdOverride(): Promise<void> {
   log.info('🔄 Deleting GDrive Client ID override...', {});
   try {
-    await SecureStore.deleteItemAsync(GDRIVE_CLIENT_ID_OVERRIDE_KEY);
-    log.info('✅ GDrive Client ID override deleted from SecureStore', {});
+    await deleteCachedValue(GDRIVE_CLIENT_ID_OVERRIDE_KEY);
+    log.info('✅ GDrive Client ID override deleted from SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -231,9 +350,9 @@ export async function deleteGDriveClientIdOverride(): Promise<void> {
 
 export async function getGDriveClientIdOverride(): Promise<string | null> {
   try {
-    const v = await SecureStore.getItemAsync(GDRIVE_CLIENT_ID_OVERRIDE_KEY);
+    const v = await getCachedValue(GDRIVE_CLIENT_ID_OVERRIDE_KEY);
     if (v) return v;
-    log.info('ℹ️ No GDrive Client ID override found in SecureStore', {});
+    log.info('ℹ️ No GDrive Client ID override found in cache', {});
     return null;
   } catch (err) {
     const errorDetails = {
@@ -262,7 +381,8 @@ export async function getGDriveClientId(): Promise<string | null> {
   return envDefault;
 }
 
-// Google Drive Tokens
+// Google Drive Token Functions
+
 export async function saveGDriveAccessToken(token: string): Promise<void> {
   if (!token || token.length === 0) {
     throw new Error('GDrive access token must not be empty.');
@@ -270,8 +390,8 @@ export async function saveGDriveAccessToken(token: string): Promise<void> {
 
   log.info('🔄 Saving GDrive access token...', {});
   try {
-    await SecureStore.setItemAsync(GDRIVE_ACCESS_TOKEN_KEY, token);
-    log.info('✅ GDrive access token saved to SecureStore', {});
+    await setCachedValue(GDRIVE_ACCESS_TOKEN_KEY, token);
+    log.info('✅ GDrive access token saved to SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -283,7 +403,7 @@ export async function saveGDriveAccessToken(token: string): Promise<void> {
   }
 }
 
-// Add: setGDriveAccessToken wrapper to match callers (expiresIn currently unused)
+// Wrapper to match callers (expiresIn currently unused)
 export async function setGDriveAccessToken(token: string, _expiresIn?: number): Promise<void> {
   return saveGDriveAccessToken(token);
 }
@@ -295,8 +415,8 @@ export async function saveGDriveRefreshToken(token: string): Promise<void> {
 
   log.info('🔄 Saving GDrive refresh token...', {});
   try {
-    await SecureStore.setItemAsync(GDRIVE_REFRESH_TOKEN_KEY, token);
-    log.info('✅ GDrive refresh token saved to SecureStore', {});
+    await setCachedValue(GDRIVE_REFRESH_TOKEN_KEY, token);
+    log.info('✅ GDrive refresh token saved to SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -310,9 +430,9 @@ export async function saveGDriveRefreshToken(token: string): Promise<void> {
 
 export async function getGDriveAccessToken(): Promise<string | null> {
   try {
-    const v = await SecureStore.getItemAsync(GDRIVE_ACCESS_TOKEN_KEY);
+    const v = await getCachedValue(GDRIVE_ACCESS_TOKEN_KEY);
     if (v) return v;
-    log.info('ℹ️ No GDrive access token found in SecureStore', {});
+    log.info('ℹ️ No GDrive access token found in cache', {});
     return null;
   } catch (err) {
     const errorDetails = {
@@ -327,9 +447,9 @@ export async function getGDriveAccessToken(): Promise<string | null> {
 
 export async function getGDriveRefreshToken(): Promise<string | null> {
   try {
-    const v = await SecureStore.getItemAsync(GDRIVE_REFRESH_TOKEN_KEY);
+    const v = await getCachedValue(GDRIVE_REFRESH_TOKEN_KEY);
     if (v) return v;
-    log.info('ℹ️ No GDrive refresh token found in SecureStore', {});
+    log.info('ℹ️ No GDrive refresh token found in cache', {});
     return null;
   } catch (err) {
     const errorDetails = {
@@ -344,8 +464,8 @@ export async function getGDriveRefreshToken(): Promise<string | null> {
 
 export async function deleteGDriveAccessToken(): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(GDRIVE_ACCESS_TOKEN_KEY);
-    log.info('✅ GDrive access token deleted from SecureStore', {});
+    await deleteCachedValue(GDRIVE_ACCESS_TOKEN_KEY);
+    log.info('✅ GDrive access token deleted from SecureStore and cache', {});
   } catch (err) {
     const errorDetails = {
       name: (err as Error).name,
@@ -358,8 +478,8 @@ export async function deleteGDriveAccessToken(): Promise<void> {
 
 export async function deleteGDriveRefreshToken(): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(GDRIVE_REFRESH_TOKEN_KEY);
-    log.info('✅ GDrive refresh token deleted from SecureStore', {});
+    await deleteCachedValue(GDRIVE_REFRESH_TOKEN_KEY);
+    log.info('✅ GDrive refresh token deleted from SecureStore and cache', {});
   } catch (err) {
     const errorDetails = {
       name: (err as Error).name,
@@ -380,6 +500,7 @@ export async function deleteGDriveTokens(): Promise<void> {
 }
 
 // Pydantic Logfire API Key Functions
+
 export async function saveLogfireApiKey(apiKey: string): Promise<void> {
   if (!apiKey || apiKey.length === 0) {
     throw new Error('Logfire API key must not be empty.');
@@ -388,10 +509,10 @@ export async function saveLogfireApiKey(apiKey: string): Promise<void> {
   log.info('🔄 Attempting to save Logfire API key...', {});
 
   try {
-    await SecureStore.setItemAsync(LOGFIRE_API_KEY, apiKey);
-    log.info('✅ Logfire API key saved to SecureStore successfully', {});
+    await setCachedValue(LOGFIRE_API_KEY, apiKey);
+    log.info('✅ Logfire API key saved to SecureStore and cache successfully', {});
 
-    const verification = await SecureStore.getItemAsync(LOGFIRE_API_KEY);
+    const verification = await getCachedValue(LOGFIRE_API_KEY);
     if (verification) {
       log.info('✅ SecureStore verification successful', {});
     } else {
@@ -412,22 +533,22 @@ export async function getLogfireApiKey(): Promise<string | null> {
   log.info('🔄 Attempting to retrieve Logfire API key...', {});
 
   try {
-    const apiKey = await SecureStore.getItemAsync(LOGFIRE_API_KEY);
+    const apiKey = await getCachedValue(LOGFIRE_API_KEY);
 
     if (apiKey) {
-      log.info('✅ Logfire API key retrieved from SecureStore', {});
+      log.info('✅ Logfire API key retrieved from cache', {});
       return apiKey;
     }
 
-    log.info('ℹ️ No Logfire API key found in SecureStore', {});
+    log.info('ℹ️ No Logfire API key found in cache', {});
     return null;
-  } catch (secureStoreError) {
+  } catch (error) {
     const errorDetails = {
-      name: (secureStoreError as Error).name,
-      message: (secureStoreError as Error).message,
-      stack: (secureStoreError as Error).stack,
+      name: (error as Error).name,
+      message: (error as Error).message,
+      stack: (error as Error).stack,
     };
-    log.error('❌ SecureStore failed to retrieve Logfire API key', {}, errorDetails);
+    log.error('❌ Failed to retrieve Logfire API key', {}, errorDetails);
     return null;
   }
 }
@@ -436,8 +557,8 @@ export async function deleteLogfireApiKey(): Promise<void> {
   log.info('🔄 Attempting to delete Logfire API key from SecureStore...', {});
 
   try {
-    await SecureStore.deleteItemAsync(LOGFIRE_API_KEY);
-    log.info('✅ Logfire API key deleted from SecureStore', {});
+    await deleteCachedValue(LOGFIRE_API_KEY);
+    log.info('✅ Logfire API key deleted from SecureStore and cache', {});
   } catch (secureStoreError) {
     const errorDetails = {
       name: (secureStoreError as Error).name,
@@ -465,6 +586,8 @@ export async function hasLogfireApiKey(): Promise<boolean> {
 }
 
 // Pydantic Logfire Enabled State Functions
+// Note: These use AsyncStorage, not SecureStore, so no caching is needed
+
 export async function saveLogfireEnabled(enabled: boolean): Promise<void> {
   log.info('🔄 Attempting to save Logfire enabled state:', {}, enabled);
 
@@ -507,6 +630,7 @@ export async function getLogfireEnabled(): Promise<boolean> {
 }
 
 // Clear All Stored Secrets
+
 export async function clearAllStoredSecrets(): Promise<void> {
   log.info('🔄 Starting clear all stored secrets operation...', {});
 
@@ -545,11 +669,11 @@ export async function clearAllStoredSecrets(): Promise<void> {
       log.info(`  ⚠️ About to delete AsyncStorage key: ${key}`, {});
     }
 
-    // Now perform the batch deletion
+    // Now perform the batch deletion using deleteCachedValue to update cache
     log.info('🗑️ Deleting all SecureStore keys...', {});
     await Promise.all(
       secureStoreKeys.map((key) =>
-        SecureStore.deleteItemAsync(key).catch((error) => {
+        deleteCachedValue(key).catch((error) => {
           log.warn(`⚠️ Failed to delete SecureStore key: ${key}`, {}, {
             error: (error as Error).message,
           });

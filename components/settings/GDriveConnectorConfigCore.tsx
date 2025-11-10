@@ -323,14 +323,25 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
 
   const handleDisconnectLongPress = useCallback(async () => {
     try {
-      const randomToken =
-        "ya29." + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const randomToken = await generateSecureRandomToken();
       await saveGDriveAccessToken(randomToken);
       Alert.alert("access token randomized");
     } catch {
       Alert.alert("Error", "Failed to randomize access token.");
     }
   }, []);
+
+
+  // Helper to generate a secure random "ya29." token (with 32-byte hex string)
+  async function generateSecureRandomToken(): Promise<string> {
+    // Use expo-random for cryptographically secure PRNG in React Native/Expo
+    // Generates 32 random bytes and encodes as hex
+    const { getRandomBytesAsync } = await import('expo-random');
+    const bytes = await getRandomBytesAsync(32);
+    // Convert bytes to hex string
+    const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    return `ya29.${hex}`;
+  }
 
   const handleToggleAdvanced = useCallback(() => {
     setIsAdvancedVisible((prev) => !prev);

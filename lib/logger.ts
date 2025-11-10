@@ -146,7 +146,7 @@ type SetRedactionOptions = {
 const shouldLog = (level: LogLevel) => levelPriority[level] >= levelPriority[minimumLevel];
 
 export type LogOptions = {
-  emit2logfire?: boolean;
+  emit2logfire?: boolean; // defaults to true
   allowSensitiveLogging?: boolean;
 };
 

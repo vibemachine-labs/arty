@@ -117,6 +117,7 @@ export class ToolGPT5WebSearch {
       throw new Error('Web search requires a non-empty query.');
     }
 
+    // Get API key from secure-storage (uses in-memory cache to avoid SecureStore access issues)
     const apiKey = await getApiKey({ forceSecureStore: true });
     if (!apiKey) {
       log.info(`[${this.toolName}] ⚠️ OpenAI API key not configured`, {});

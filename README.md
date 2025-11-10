@@ -27,11 +27,9 @@ https://github.com/user-attachments/assets/0c735cc8-317c-407a-8db1-0f02b65533ae
 
 ## 🎥 Demo Reel (80 seconds)
 
-(Does not play directly, this links to a Vimeo.  Open in a new tab.)
+https://github.com/user-attachments/assets/6171b7d1-ef97-483b-ba09-d6854babc726
 
-<a href="https://vimeo.com/manage/videos/1127547235" target="_blank">
-  <img src="https://github.com/user-attachments/assets/e500b199-f0a2-4d6b-9a1a-f572fc48361a" alt="Demo video">
-</a>
+or [full resolution version](https://github.com/user-attachments/assets/e500b199-f0a2-4d6b-9a1a-f572fc48361a) 
 
 ## 📱 Screenshots
 

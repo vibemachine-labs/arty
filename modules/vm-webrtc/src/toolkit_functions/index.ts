@@ -22,7 +22,9 @@ export interface ToolkitRegistry {
 export const toolkitRegistry: ToolkitRegistry = {
   hacker_news: {
     showTopStories: hackerNews.showTopStories,
-    showCommentsForStory: hackerNews.showCommentsForStory,
+    searchStories: hackerNews.searchStories,
+    getStoryInfo: hackerNews.getStoryInfo,
+    getUserInfo: hackerNews.getUserInfo,
   },
   daily_papers: {
     showDailyPapers: dailyPapers.showDailyPapers,

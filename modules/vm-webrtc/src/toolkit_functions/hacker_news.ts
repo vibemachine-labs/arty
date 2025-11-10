@@ -20,11 +20,6 @@ export interface SearchStoriesParams {
   search_by_date?: boolean;
 }
 
-export interface ShowCommentsForStoryParams {
-  storyId: number;
-  maxDepth?: number;
-}
-
 export interface GetStoryInfoParams {
   story_id: number;
   comment_depth?: number;
@@ -437,51 +432,4 @@ async function fetchStoryById(storyId: number): Promise<HNStory> {
   }
 
   return response.json();
-}
-
-/**
- * Fetch the comments for a given Hacker News story.
- * 
- * TODO: remove this, just an old stub.
- */
-export async function showCommentsForStory(params: ShowCommentsForStoryParams): Promise<string> {
-  const { storyId, maxDepth } = params;
-
-  log.info('[hacker_news] showCommentsForStory called (STUBBED)', {}, { storyId, maxDepth });
-
-  // STUB: Return mock data
-  const stubData = {
-    success: true,
-    storyId,
-    comments: [
-      {
-        id: 101,
-        author: "techexpert",
-        text: "This is a great story! Very insightful.",
-        points: 42,
-        depth: 0,
-        replies: [
-          {
-            id: 102,
-            author: "codereader",
-            text: "I agree, learned a lot from this.",
-            points: 15,
-            depth: 1
-          }
-        ]
-      },
-      {
-        id: 103,
-        author: "skeptic99",
-        text: "I'm not sure about this approach...",
-        points: 8,
-        depth: 0
-      }
-    ],
-    totalComments: 2,
-    maxDepth: maxDepth || 5,
-    timestamp: new Date().toISOString()
-  };
-
-  return JSON.stringify(stubData);
 }

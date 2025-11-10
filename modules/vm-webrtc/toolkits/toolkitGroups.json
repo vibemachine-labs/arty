@@ -7,7 +7,7 @@
           "type": "function",
           "name": "showTopStories",
           "group": "hacker_news",
-          "description": "Fetches and formats a list of Hacker News stories of the specified type. Use this to get the latest front page stories, recent submissions, Ask HN posts, or Show HN posts.  When telling the results from this tool to the user, mention that you used this tool so the user knows the info came from a reliable source.",
+          "description": "Fetches and formats Hacker News stories for a specific category (top/new/ask_hn/show_hn). Returns story dictionaries with id, title, url, author, and points so you can cite exact posts. When you present the results, mention you used this tool so the user knows the information came from Hacker News.",
           "supported_auth": "no_auth_required",
           "extra": {
             "api_url": "https://hn.algolia.com/api/v1"
@@ -32,25 +32,87 @@
         },
         {
           "type": "function",
-          "name": "showCommentsForStory",
+          "name": "searchStories",
           "group": "hacker_news",
-          "description": "Fetch the comments for a given Hacker News story.",
+          "description": "Searches Hacker News stories using a free-form query string. Returns matching story dictionaries (id, title, url, author, points) so you can pull topical results. Use this when you need stories containing a keyword, optionally sorting by recency.",
           "supported_auth": "no_auth_required",
-          "extra": {},
+          "extra": {
+            "api_url": "https://hn.algolia.com/api/v1"
+          },
           "parameters": {
             "type": "object",
             "properties": {
-              "storyId": {
-                "type": "number",
-                "description": "The unique ID of the Hacker News story for which to fetch comments."
+              "query": {
+                "type": "string",
+                "description": "Search terms to find in Hacker News stories."
               },
-              "maxDepth": {
+              "num_results": {
                 "type": "number",
-                "description": "The maximum depth of comment threads to retrieve."
+                "description": "Number of results to return (default: 10)."
+              },
+              "search_by_date": {
+                "type": "boolean",
+                "description": "If true, sort by most recent. If false, sort by relevance/points/comments (default: false)."
               }
             },
             "required": [
-              "storyId"
+              "query"
+            ]
+          }
+        },
+        {
+          "type": "function",
+          "name": "getStoryInfo",
+          "group": "hacker_news",
+          "description": "Fetches detailed information about a specific Hacker News story, explicitly including nested comments when requested. Use this when you need the full story metadata (title/url/author/points) and its discussion thread.",
+          "supported_auth": "no_auth_required",
+          "extra": {
+            "api_url": "https://hn.algolia.com/api/v1"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "story_id": {
+                "type": "number",
+                "description": "The Hacker News story ID to fetch."
+              },
+              "comment_depth": {
+                "type": "number",
+                "description": "How many nested levels of comments to include (default: 2)."
+              },
+              "comments_per_level": {
+                "type": "number",
+                "description": "Maximum number of comments to include per level (default: 10)."
+              }
+            },
+            "required": [
+              "story_id"
+            ]
+          }
+        },
+        {
+          "type": "function",
+          "name": "getUserInfo",
+          "group": "hacker_news",
+          "description": "Fetches a Hacker News user's profile information (id, created_at, karma, about) plus their recent story submissions. Use this when you need to summarize a user's background or reference their recent posts.",
+          "supported_auth": "no_auth_required",
+          "extra": {
+            "api_url": "https://hn.algolia.com/api/v1"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "user_name": {
+                "type": "string",
+                "description": "The Hacker News username to look up."
+              },
+              "num_stories": {
+                "type": "number",
+                "description": "Number of that user's recent stories to include (default: 10)."
+              }
+            },
+            "required": [
+              "user_name"
             ]
           }
         }

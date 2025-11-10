@@ -75,6 +75,7 @@ export class ToolGPT5WebSearch {
   private readonly toolName = 'GPT5-web-search';
   private readonly requestEventName = 'onGPT5WebSearchRequest';
   private readonly module: GPT5WebSearchNativeModule | null;
+  private cachedApiKey: string | null = null;
 
   constructor(nativeModule: GPT5WebSearchNativeModule | null) {
     this.module = nativeModule;
@@ -82,8 +83,25 @@ export class ToolGPT5WebSearch {
     if (this.module) {
       log.info(`[${this.toolName}] Initializing; attaching listener for ${this.requestEventName}`, {});
       this.module.addListener(this.requestEventName, this.handleRequest.bind(this));
+      // Cache the API key during initialization (foreground state)
+      this.initializeApiKey();
     } else {
       log.info(`[${this.toolName}] Native module unavailable; web search tool disabled.`, {});
+    }
+  }
+
+  private async initializeApiKey(): Promise<void> {
+    try {
+      log.info(`[${this.toolName}] 🔑 Initializing API key cache...`, {});
+      this.cachedApiKey = await getApiKey({ forceSecureStore: true });
+      if (this.cachedApiKey) {
+        log.info(`[${this.toolName}] ✅ API key cached successfully`, {});
+      } else {
+        log.info(`[${this.toolName}] ⚠️ No API key found during initialization`, {});
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      log.error(`[${this.toolName}] ❌ Failed to cache API key during initialization: ${message}`, {});
     }
   }
 
@@ -117,7 +135,8 @@ export class ToolGPT5WebSearch {
       throw new Error('Web search requires a non-empty query.');
     }
 
-    const apiKey = await getApiKey({ forceSecureStore: true });
+    // Use cached API key to avoid SecureStore access issues in background/WebRTC context
+    const apiKey = this.cachedApiKey;
     if (!apiKey) {
       log.info(`[${this.toolName}] ⚠️ OpenAI API key not configured`, {});
       return JSON.stringify({
@@ -208,6 +227,13 @@ export class ToolGPT5WebSearch {
 
   async executeFromSwift(query: string): Promise<string> {
     return this.performOperation({ query });
+  }
+
+  /**
+   * Refresh the cached API key. Should be called when the API key is updated.
+   */
+  async refreshApiKey(): Promise<void> {
+    return this.initializeApiKey();
   }
 }
 

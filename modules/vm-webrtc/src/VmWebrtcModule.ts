@@ -187,5 +187,16 @@ export const githubOperationFromSwift = async (codeSnippet: string): Promise<str
 // Export tool instances for direct access if needed
 export { githubConnectorTool, gpt5GDriveFixerTool, gpt5WebSearchTool };
 
+/**
+ * Refresh the cached API key for the web search tool.
+ * Should be called whenever the OpenAI API key is updated.
+ */
+export const refreshWebSearchApiKey = async (): Promise<void> => {
+  if (gpt5WebSearchTool) {
+    log.info('[VmWebrtcModule] Refreshing web search API key cache');
+    await gpt5WebSearchTool.refreshApiKey();
+  }
+};
+
 // This call loads the native module object from the JSI.
 export default (module ?? ({} as VmWebrtcModule));

@@ -338,7 +338,7 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error('[hacker_news] getStoryInfo failed', {}, {
+    log.error('[hacker_news] getStoryInfo failed', { emit2logfire: true }, {
       story_id,
       error: errorMessage,
     }, error);

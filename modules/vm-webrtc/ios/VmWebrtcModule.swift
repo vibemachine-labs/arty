@@ -46,6 +46,8 @@ public class VmWebrtcModule: Module {
   private var toolGDriveConnector: ToolGDriveConnector?
   private var toolGPT5GDriveFixer: ToolGPT5GDriveFixer?
   private var toolGPT5WebSearch: ToolGPT5WebSearch?
+  // Add Gen2 toolkit helper
+  private var toolkitHelper: ToolkitHelper?
   private let logfireTracingManager = LogfireTracingManager()
   private var logger: NativeLogger { VmWebrtcLogging.logger }
 
@@ -79,6 +81,9 @@ public class VmWebrtcModule: Module {
       "onGPT5GDriveFixerResponse",
       "onGPT5WebSearchRequest",
       "onGPT5WebSearchResponse",
+      // Add Gen2 toolkit events
+      "onToolkitRequest",
+      "onToolkitResponse",
       "onIdleTimeout",
       "onTokenUsage",
       "onRealtimeError",
@@ -114,6 +119,11 @@ public class VmWebrtcModule: Module {
       let webSearchInitialized = self.toolGPT5WebSearch != nil
       self.logger.log("ToolGPT5WebSearch initialized = \(webSearchInitialized)")
 
+      // Initialize Gen2 toolkit helper
+      self.toolkitHelper = ToolkitHelper(module: self, responder: self.webrtcClient)
+      let toolkitInitialized = self.toolkitHelper != nil
+      self.logger.log("ToolkitHelper initialized = \(toolkitInitialized)")
+
       // Wire delegates into the WebRTC client
       self.webrtcClient.setGithubConnectorDelegate(self.toolGithubConnector!)
       if let gdrive = self.toolGDriveConnector {
@@ -134,7 +144,13 @@ public class VmWebrtcModule: Module {
       } else {
         self.logger.log("Delegate set NOT: GPT5 web search")
       }
-      self.logger.log("Delegates set: github, possibly GDrive")
+      if let toolkit = self.toolkitHelper {
+        self.webrtcClient.setToolkitHelper(toolkit)
+        self.logger.log("Delegate set: Toolkit helper")
+      } else {
+        self.logger.log("Delegate set NOT: Toolkit helper")
+      }
+      self.logger.log("Delegates set: github, possibly GDrive, toolkit")
     }
 
     // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
@@ -259,6 +275,14 @@ public class VmWebrtcModule: Module {
         "result_length": result.count
       ])
       self.toolGPT5WebSearch?.handleResponse(requestId: requestId, result: result)
+    }
+
+    Function("sendToolkitResponse") { (requestId: String, result: String) in
+      self.logger.log("JS→Native sendToolkitResponse", attributes: [
+        "requestId": requestId,
+        "result_length": result.count
+      ])
+      self.toolkitHelper?.handleResponse(requestId: requestId, result: result)
     }
 
     // Github Connector function - calls JavaScript github connector via events

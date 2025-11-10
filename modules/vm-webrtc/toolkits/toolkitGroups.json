@@ -1,0 +1,113 @@
+{
+  "byName": {
+    "hacker_news": {
+      "name": "hacker_news",
+      "toolkits": [
+        {
+          "type": "function",
+          "name": "showTopStories",
+          "group": "hacker_news",
+          "description": "Fetches and formats a list of Hacker News stories of the specified type. Use this to get the latest front page stories, recent submissions, Ask HN posts, or Show HN posts.",
+          "supported_auth": "no_auth_required",
+          "extra": {
+            "api_url": "https://hn.algolia.com/api/v1"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "story_type": {
+                "type": "string",
+                "description": "Category of stories to fetch. Must be one of: 'top' (front page stories), 'new' (most recent stories), 'ask_hn' (Ask HN posts), 'show_hn' (Show HN posts)",
+                "enum": ["top", "new", "ask_hn", "show_hn"]
+              },
+              "num_stories": {
+                "type": "number",
+                "description": "Number of stories to return (default: 10)"
+              }
+            },
+            "required": [
+              "story_type"
+            ]
+          }
+        },
+        {
+          "type": "function",
+          "name": "showCommentsForStory",
+          "group": "hacker_news",
+          "description": "Fetch the comments for a given Hacker News story.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "storyId": {
+                "type": "number",
+                "description": "The unique ID of the Hacker News story for which to fetch comments."
+              },
+              "maxDepth": {
+                "type": "number",
+                "description": "The maximum depth of comment threads to retrieve."
+              }
+            },
+            "required": [
+              "storyId"
+            ]
+          }
+        }
+      ]
+    },
+    "daily_papers": {
+      "name": "daily_papers",
+      "toolkits": [
+        {
+          "type": "function",
+          "name": "showDailyPapers",
+          "group": "daily_papers",
+          "description": "Retrieve a list of today\u2019s daily papers from major publications.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "region": {
+                "type": "string",
+                "description": "The geographic region or country code for which to fetch daily papers."
+              },
+              "limit": {
+                "type": "number",
+                "description": "The number of papers to retrieve."
+              }
+            },
+            "required": [
+              "region"
+            ]
+          }
+        },
+        {
+          "type": "function",
+          "name": "showCommentsForPaper",
+          "group": "daily_papers",
+          "description": "Retrieve comments or reader feedback for a specified daily paper.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "paperId": {
+                "type": "string",
+                "description": "The unique identifier of the daily paper."
+              },
+              "maxComments": {
+                "type": "number",
+                "description": "The maximum number of comments to fetch."
+              }
+            },
+            "required": [
+              "paperId"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

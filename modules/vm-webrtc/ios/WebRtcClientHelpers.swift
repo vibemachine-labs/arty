@@ -516,32 +516,7 @@ extension OpenAIWebRTCClient {
       return
     }
 
-    var tools: [[String: Any]] = []
-    var definitionsByName: [String: [String: Any]] = [:]
-
-    for definition in toolDefinitions {
-      guard let name = definition["name"] as? String, !name.isEmpty else {
-        self.logger.log("[VmWebrtc] " + "Encountered tool definition without a valid name. Skipping.", attributes: logAttributes(for: .warn))
-        continue
-      }
-      definitionsByName[name] = definition
-    }
-
-    let delegateWarnings: [(BaseTool?, String)] = [
-      (githubConnectorDelegate, "No JavaScript-provided definition found for github connector tool"),
-      (gdriveConnectorDelegate, "No JavaScript-provided definition found for gdrive connector tool"),
-      (gpt5GDriveFixerDelegate, "No JavaScript-provided definition found for GPT5 gdrive fixer tool"),
-      (gpt5WebSearchDelegate, "No JavaScript-provided definition found for GPT5 web search tool")
-    ]
-
-    for (delegate, warning) in delegateWarnings {
-      appendToolDefinition(
-        for: delegate,
-        warningMessage: warning,
-        definitionsByName: definitionsByName,
-        tools: &tools
-      )
-    }
+    let tools = buildTools()
 
     if tools.isEmpty && !toolDefinitions.isEmpty {
       self.logger.log("[VmWebrtc] " + "Tool definitions were provided from JavaScript but none matched configured delegates", attributes: logAttributes(for: .warn, metadata: [
@@ -595,6 +570,69 @@ extension OpenAIWebRTCClient {
 
       strongSelf.sendEvent(["type": "response.create"])
     }
+  }
+
+  private func buildTools() -> [[String: Any]] {
+    let definitionsByName: [String: [String: Any]] = Dictionary(
+      uniqueKeysWithValues: toolDefinitions.compactMap { definition in
+        guard let name = definition["name"] as? String, !name.isEmpty else {
+          self.logger.log(
+            "[VmWebrtc] " + "Encountered tool definition without a valid name. Skipping.",
+            attributes: logAttributes(for: .warn)
+          )
+          return nil
+        }
+        return (name, definition)
+      }
+    )
+
+    // Collect all available delegates (Gen1 legacy tools)
+    let legacyDelegates: [BaseTool?] = [
+      githubConnectorDelegate,
+      gdriveConnectorDelegate,
+      gpt5GDriveFixerDelegate,
+      gpt5WebSearchDelegate
+    ]
+
+    // Match legacy delegates with their definitions
+    let legacyTools = legacyDelegates.compactMap { delegate -> [String: Any]? in
+      guard let delegate else { return nil }
+      let toolName = delegate.toolName
+
+      if let definition = definitionsByName[toolName] {
+        return definition
+      }
+
+      self.logger.log(
+        "[VmWebrtc] " + "No JavaScript-provided definition found for tool",
+        attributes: logAttributes(for: .warn, metadata: [
+          "toolName": toolName,
+          "availableDefinitions": Array(definitionsByName.keys)
+        ])
+      )
+      return nil
+    }
+
+    // Collect all Gen2 toolkit tools (tools that don't match legacy delegates)
+    let legacyToolNames = Set(legacyDelegates.compactMap { $0?.toolName })
+    let gen2Tools = definitionsByName.filter { toolName, _ in
+      !legacyToolNames.contains(toolName)
+    }.map { _, definition in
+      definition
+    }
+
+    if !gen2Tools.isEmpty {
+      self.logger.log(
+        "[VmWebrtc] " + "Found Gen2 toolkit tools",
+        attributes: logAttributes(for: .info, metadata: [
+          "count": gen2Tools.count,
+          "toolNames": gen2Tools.compactMap { $0["name"] as? String }
+        ])
+      )
+    }
+
+    // Combine legacy and Gen2 tools
+    return legacyTools + gen2Tools
   }
 
   @discardableResult

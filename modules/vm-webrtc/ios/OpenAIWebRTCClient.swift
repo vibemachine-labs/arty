@@ -115,6 +115,9 @@ final class OpenAIWebRTCClient: NSObject {
   weak var gpt5GDriveFixerDelegate: BaseTool?
   weak var gpt5WebSearchDelegate: BaseTool?
 
+  // Reference to the Gen2 toolkit helper
+  var toolkitHelper: ToolkitHelper?
+
   var toolDefinitions: [[String: Any]] = []
   lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
@@ -168,6 +171,7 @@ final class OpenAIWebRTCClient: NSObject {
       gdriveConnectorDelegate: gdriveConnectorDelegate,
       gpt5GDriveFixerDelegate: gpt5GDriveFixerDelegate,
       gpt5WebSearchDelegate: gpt5WebSearchDelegate,
+      toolkitHelper: toolkitHelper,
       sendToolCallError: { [weak self] callId, error in
         guard let self else { return }
         self.sendToolCallError(callId: callId, error: error)
@@ -209,6 +213,10 @@ final class OpenAIWebRTCClient: NSObject {
     self.gpt5WebSearchDelegate = delegate
   }
 
+  func setToolkitHelper(_ helper: ToolkitHelper) {
+    self.toolkitHelper = helper
+  }
+
   @MainActor
   func setOutgoingAudioMuted(_ muted: Bool) {
     isOutgoingAudioMuted = muted
@@ -236,30 +244,9 @@ final class OpenAIWebRTCClient: NSObject {
     self.logger.log(
       "[VmWebrtc] " + "Configured tool definitions from JavaScript",
       attributes: logAttributes(for: .debug, metadata: [
-        "count": definitions.count
+        "definitions": definitions
       ])
     )
-  }
-
-  func appendToolDefinition(
-    for delegate: BaseTool?,
-    warningMessage: String,
-    definitionsByName: [String: [String: Any]],
-    tools: inout [[String: Any]]
-  ) {
-    guard let delegate else { return }
-    let toolName = delegate.toolName
-    if let definition = definitionsByName[toolName] {
-      tools.append(definition)
-    } else {
-      self.logger.log(
-        "[VmWebrtc] " + warningMessage,
-        attributes: logAttributes(for: .warn, metadata: [
-          "toolName": toolName,
-          "availableDefinitions": Array(definitionsByName.keys)
-        ])
-      )
-    }
   }
 
   let defaultEndpoint = "https://api.openai.com/v1/realtime"

@@ -40,6 +40,74 @@ export type ToolDefinition = {
   };
 };
 
+// This is a tool definition for the new Gen2 toolkit format
+export type ToolkitDefinition = {
+  type: 'function';
+  name: string;
+  group: string
+  description: string;
+  supported_auth: 'no_auth_required' | 'api_key' | 'oauth2';
+  tool_source_file?: string;
+  // Arbitrary extra parameters passed along to the tool implementation.
+  extra: Record<string, string>;
+  // These are the params that the LLM should call this tool with
+  parameters: {
+    type: 'object';
+    properties: Record<
+      string,
+      {
+        type: string;
+        description: string;
+      }
+    >;
+    required: string[];
+  };
+};
+
+export type ToolkitGroup = {
+  name: string;
+  toolkits: ToolkitDefinition[];
+};
+
+export type ToolkitGroups = {
+  byName: Record<string, ToolkitGroup>;
+  list: ToolkitGroup[];
+};
+
+/**
+ * Converts a ToolkitDefinition to a ToolDefinition by stripping out
+ * extra fields (group, supported_auth, tool_source_file, extra).
+ * This creates the format needed for LLM tool calls.
+ *
+ * @param toolkit - The toolkit definition to convert
+ * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news__showTopStories")
+ */
+export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
+  const toolName = includeGroupInName && toolkit.group
+    ? `${toolkit.group}__${toolkit.name}`
+    : toolkit.name;
+
+  return {
+    type: toolkit.type,
+    name: toolName,
+    description: toolkit.description,
+    parameters: toolkit.parameters,
+  };
+}
+
+/**
+ * Converts all ToolkitDefinitions in a ToolkitGroup to an array of ToolDefinitions.
+ * This creates the format needed for LLM tool calls.
+ *
+ * @param group - The toolkit group to convert
+ * @param includeGroupInName - If true, prepends group name to tool names (default: true)
+ */
+export function exportToolDefinitions(group: ToolkitGroup, includeGroupInName = true): ToolDefinition[] {
+  return group.toolkits.map(toolkit => exportToolDefinition(toolkit, includeGroupInName));
+}
+
+
+
 export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {
   instructions: string;
   toolDefinitions?: ToolDefinition[];

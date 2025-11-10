@@ -9,6 +9,8 @@ public protocol ToolCallResponder: AnyObject {
   func sendToolCallResult(callId: String, result: String)
   /// Send an error response for a tool execution.
   func sendToolCallError(callId: String, error: String)
+  /// Send an arbitrary event to the OpenAI data channel.
+  func sendEvent(_ payload: [String: Any]) -> Bool
 }
 
 // MARK: - Base Tool Helper

@@ -14,6 +14,10 @@ import {
   createGPT5WebSearchTool,
   type GPT5WebSearchNativeModule,
 } from './ToolGPT5WebSearch';
+import {
+  createToolkitHelper,
+  type ToolkitHelperNativeModule,
+} from './ToolkitHelper';
 import type { VadMode } from '../../../lib/vadPreference';
 import toolManager from './ToolManager';
 import {
@@ -21,6 +25,7 @@ import {
     OpenAIConnectionState,
     VmWebrtcModuleEvents,
 } from './VmWebrtc.types';
+import { getToolkitDefinitions } from './ToolkitManager';
 
 const MODULE_NAME = 'VmWebrtc';
 
@@ -42,6 +47,7 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   sendGPT5GDriveFixerResponse(requestId: string, result: string): void;
   gpt5WebSearchOperationFromSwift(query: string): Promise<string>;
   sendGPT5WebSearchResponse(requestId: string, result: string): void;
+  sendToolkitResponse(requestId: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
   logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
@@ -62,6 +68,9 @@ const gpt5GDriveFixerTool = createGPT5GDriveFixerTool(
 const gpt5WebSearchTool = createGPT5WebSearchTool(
   module as unknown as GPT5WebSearchNativeModule | null,
 );
+
+// Initialize Gen2 toolkit helper
+const toolkitHelper = createToolkitHelper(module as unknown as ToolkitHelperNativeModule | null);
 
 export const helloFromExpoModule = () => {
   if (!module) {
@@ -89,8 +98,23 @@ export const openOpenAIConnectionAsync = async (
   );
 
   log.info(`[${MODULE_NAME}] Tool definitions resolved`, {}, {
-    definitionsCount: toolDefinitionsWithPrompts.length,
     definitions: toolDefinitionsWithPrompts,
+  });
+
+  // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
+  const toolDefinitionsFromToolkits = getToolkitDefinitions(); // gen2
+  log.info(`[${MODULE_NAME}] Toolkit definitions resolved`, {}, {
+    definitions: toolDefinitionsFromToolkits,
+  });
+
+  // Merge Gen1 and Gen2 tool definitions
+  const mergedToolDefinitions = [
+    ...(toolDefinitionsWithPrompts || []),
+    ...toolDefinitionsFromToolkits,
+  ];
+
+  log.info(`[${MODULE_NAME}] Merged tool definitions`, {}, {
+    definitions: mergedToolDefinitions,
   });
 
   const resolvedVadMode: VadMode = options.vadMode === 'semantic' ? 'semantic' : 'server';
@@ -104,7 +128,7 @@ export const openOpenAIConnectionAsync = async (
     ...options,
     voice: resolvedVoice,
     instructions: trimmedInstructions,
-    toolDefinitions: toolDefinitionsWithPrompts,
+    toolDefinitions: mergedToolDefinitions,
     vadMode: resolvedVadMode,
     audioSpeed: resolvedAudioSpeed,
   };

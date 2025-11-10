@@ -144,17 +144,6 @@ public class ToolkitHelper: BaseTool {
 
   // MARK: - Private Methods
 
-  /// Add tool details to the beginning of a result string
-  /// - Parameters:
-  ///   - groupName: The toolkit group name (e.g., "hacker_news")
-  ///   - toolName: The tool name (e.g., "showTopStories")
-  ///   - result: The original result string
-  /// - Returns: Enhanced result string with tool details prepended
-  private func addToolDetails(groupName: String, toolName: String, result: String) -> String {
-    let prefix = "The \(groupName) \(toolName) tool returned "
-    return prefix + result
-  }
-
   /// Parse a fully qualified tool name into group and tool name
   /// - Parameter fullName: The full tool name (e.g., "hacker_news__showTopStories")
   /// - Returns: Tuple of (groupName, toolName) or nil if invalid format
@@ -264,11 +253,8 @@ public class ToolkitHelper: BaseTool {
         ]
       )
 
-      // Add tool details to the result
-      let enhancedResult = self.addToolDetails(groupName: groupName, toolName: toolName, result: result)
-
       // Send the result back to OpenAI
-      self.responder?.sendToolCallResult(callId: callId, result: enhancedResult)
+      self.responder?.sendToolCallResult(callId: callId, result: result)
     }
 
     // Emit event to JavaScript

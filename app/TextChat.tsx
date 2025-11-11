@@ -423,6 +423,7 @@ async function callResponsesAPI(
       previous_response_id: responseJson.id,
       input: nextInput,
       instructions: req.instructions,
+      tools: req.tools,
     };
 
     log.info('[callResponsesAPI] Prepared next turn payload', {}, {

@@ -47,6 +47,7 @@
     "expo-system-ui": "~6.0.8",
     "expo-updates": "~29.0.12",
     "expo-web-browser": "~15.0.9",
+    "linkedom": "^0.18.12",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
@@ -60,10 +61,12 @@
     "string-strip-html": "^13.5.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
-    "typescript": "~5.9.2",
     "eslint": "^9.25.0",
-    "eslint-config-expo": "~10.0.0"
+    "eslint-config-expo": "~10.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.2"
   },
   "private": true
 }

@@ -327,57 +327,123 @@ async function callResponsesAPI(
   apiKey: string,
   req: ResponsesCreateRequest
 ): Promise<ResponsesAPIResult> {
-  // First turn: send prompt + tools, allow auto tool selection
-  const firstPayload: any = {
+  let currentPayload: any = {
     ...req,
     tool_choice: "auto",
   };
 
-  const firstJson = await callOpenAIResponses(apiKey, firstPayload, "first");
-  log.info('Received response from LLM');
-
-  // If no tool call, return the model’s direct answer
-  const toolCall = extractFirstToolCall(firstJson);
-  if (!toolCall) {
-    log.info('LLM does not need tool call');
-    return {
-      text: extractOutputText(firstJson),
-      responseId: firstJson.id ?? null,
-    };
-  }
-  log.info('LLM wants to call tool');
-
-  // Tool call present: parse args, run the tool
-  let argsObj: any;
-  try {
-    argsObj = JSON.parse(toolCall.argsJson || "{}");
-  } catch (err: any) {
-    const errorText = `Error parsing tool call: ${err.message}`;
-    return {
-      text: errorText,
-      responseId: firstJson.id ?? null,
-    };
-  }
-
-  const toolResult = await executeToolCall({
-    name: toolCall.name,
-    arguments: argsObj,
+  log.info('[callResponsesAPI] Starting conversation loop', {}, {
+    model: req.model,
+    initialPayload: currentPayload,
+    hasTools: !!req.tools,
+    toolCount: req.tools?.length ?? 0,
   });
 
-  // Second turn: send only function_call_output with previous_response_id
-  const secondInput = buildSecondTurnInput(toolCall.id, toolResult);
-  const secondPayload: any = {
-    model: req.model,
-    previous_response_id: firstJson.id,
-    input: secondInput,
-    instructions: req.instructions,
-  };
+  let responseJson: any = null;
+  let previousResponseId: string | null = null;
+  let safetyCounter = 0; // prevent infinite loops
+  const MAX_TURNS = 8;
 
-  const secondJson = await callOpenAIResponses(apiKey, secondPayload, "second");
-  log.info('Received response from LLM');
+  while (safetyCounter++ < MAX_TURNS) {
+    // Send request to OpenAI
+    log.info(`[callResponsesAPI] Sending request to LLM (turn ${safetyCounter})`, {}, {
+      turnNumber: safetyCounter,
+      payload: currentPayload,
+      previousResponseId: previousResponseId,
+    });
+
+    responseJson = await callOpenAIResponses(apiKey, currentPayload, `turn_${safetyCounter}`);
+
+    log.info(`[callResponsesAPI] Received response from LLM (turn ${safetyCounter})`, {}, {
+      turnNumber: safetyCounter,
+      responseId: responseJson.id,
+      responseJson: responseJson,
+      outputText: extractOutputText(responseJson),
+    });
+
+    const toolCall = extractFirstToolCall(responseJson);
+
+    // If model gives direct text output (no tool call), we're done
+    if (!toolCall) {
+      log.info('[callResponsesAPI] LLM returned final response (no tool call)', {}, {
+        turnNumber: safetyCounter,
+        outputText: extractOutputText(responseJson),
+        responseId: responseJson.id,
+      });
+      return {
+        text: extractOutputText(responseJson),
+        responseId: responseJson.id ?? null,
+      };
+    }
+
+    log.info('[callResponsesAPI] LLM requested tool call', {}, {
+      turnNumber: safetyCounter,
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      toolArgsJson: toolCall.argsJson,
+    });
+
+    // Parse tool args
+    let argsObj: any;
+    try {
+      argsObj = JSON.parse(toolCall.argsJson || "{}");
+      log.info('[callResponsesAPI] Parsed tool arguments', {}, {
+        toolName: toolCall.name,
+        parsedArgs: argsObj,
+      });
+    } catch (err: any) {
+      const errorText = `Error parsing tool call: ${err.message}`;
+      log.error('[callResponsesAPI] Failed to parse tool arguments', {}, {
+        toolName: toolCall.name,
+        argsJson: toolCall.argsJson,
+        error: err.message,
+      });
+      return {
+        text: errorText,
+        responseId: responseJson.id ?? null,
+      };
+    }
+
+    // Execute tool
+    const toolResult = await executeToolCall({
+      name: toolCall.name,
+      arguments: argsObj,
+    });
+
+    log.info('[callResponsesAPI] Tool execution completed', {}, {
+      toolName: toolCall.name,
+      toolResult: toolResult,
+      toolResultLength: typeof toolResult === 'string' ? toolResult.length : undefined,
+    });
+
+    // Prepare next turn with function_call_output
+    // No need to resend tools, since we are using responses api and sending previous response id
+    const nextInput = buildSecondTurnInput(toolCall.id, toolResult);
+    currentPayload = {
+      model: req.model,
+      previous_response_id: responseJson.id,
+      input: nextInput,
+      instructions: req.instructions
+    };
+
+    log.info('[callResponsesAPI] Prepared next turn payload', {}, {
+      turnNumber: safetyCounter + 1,
+      nextPayload: currentPayload,
+      toolCallId: toolCall.id,
+    });
+
+    previousResponseId = responseJson.id;
+  }
+
+  // If we exit due to too many turns, stop gracefully
+  log.warn('[callResponsesAPI] Reached MAX_TURNS limit — possible infinite loop', {}, {
+    maxTurns: MAX_TURNS,
+    finalResponseId: responseJson?.id,
+    finalOutputText: extractOutputText(responseJson),
+  });
   return {
-    text: extractOutputText(secondJson),
-    responseId: secondJson.id ?? null,
+    text: extractOutputText(responseJson) || '[Loop terminated: too many tool calls]',
+    responseId: responseJson?.id ?? null,
   };
 }
 
@@ -447,8 +513,8 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
   };
 
   const handleSend = async () => {
-    const trimmed = draft.trim();
-    if (!trimmed || isSending) return;
+    const userMessage = draft.trim();
+    if (!userMessage || isSending) return;
 
     const apiKey = await getApiKey({ forceSecureStore: true });
     if (!apiKey) {
@@ -456,7 +522,7 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       return;
     }
 
-    appendMessage({ role: 'user', content: trimmed });
+    appendMessage({ role: 'user', content: userMessage });
     setDraft('');
     setIsSending(true);
 
@@ -485,10 +551,13 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         preview: summarizeDescription(resolvedInstructions),
       });
 
-      log.info(`Sent input to LLM: ${trimmed}, waiting for reply`);
+      log.info('[TextChat] Sent input to LLM, waiting for reply', {}, {
+        userMessage: userMessage,
+        userMessageLength: userMessage.length,
+      });
       const requestPayload: ResponsesCreateRequest = {
         model: 'gpt-5-mini',
-        input: trimmed,
+        input: userMessage,
         instructions: resolvedInstructions,
         tools,
         previous_response_id: lastResponseId ?? undefined,

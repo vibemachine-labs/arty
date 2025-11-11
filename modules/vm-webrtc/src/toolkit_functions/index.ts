@@ -7,7 +7,7 @@ import { log } from '../../../../lib/logger';
 
 // MARK: - Types
 
-export type ToolkitFunction = (params: any) => Promise<string>;
+export type ToolkitFunction = (params: any, context_params?: any) => Promise<string>;
 
 export interface ToolkitRegistry {
   [groupName: string]: {
@@ -43,12 +43,14 @@ export const toolkitRegistry: ToolkitRegistry = {
  * @param groupName - The toolkit group (e.g., "hacker_news")
  * @param toolName - The tool name (e.g., "showTopStories")
  * @param params - Parameters to pass to the tool function
+ * @param context_params - Optional context parameters for toolkit functions
  * @returns Promise resolving to the JSON string result
  */
 export async function executeToolkitFunction(
   groupName: string,
   toolName: string,
-  params: any
+  params: any,
+  context_params?: any
 ): Promise<string> {
   log.info('[ToolkitRegistry] Executing toolkit function', {}, {
     groupName,
@@ -78,7 +80,7 @@ export async function executeToolkitFunction(
 
   // Execute the tool function
   try {
-    const result = await toolFunction(params);
+    const result = await toolFunction(params, context_params);
     log.info('[ToolkitRegistry] Tool execution successful', {}, {
       groupName,
       toolName,

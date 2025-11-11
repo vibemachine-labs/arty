@@ -191,6 +191,7 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
       count: stories.length,
+      url,
       stories,
     });
 
@@ -207,6 +208,7 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] Failed to fetch stories', {}, {
       story_type: normalizedType,
+      url,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
@@ -254,6 +256,7 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
     num_results,
     search_by_date,
     endpoint,
+    url,
   });
 
   try {
@@ -271,6 +274,7 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
       query: normalizedQuery,
       count: stories.length,
       search_by_date,
+      url,
     });
 
     return JSON.stringify({
@@ -286,7 +290,9 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] searchStories failed', {}, {
       query: normalizedQuery,
+      url,
       error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
     return JSON.stringify({
@@ -310,10 +316,13 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
     comments_per_level = DEFAULT_NUM_COMMENTS,
   } = params;
 
+  const url = `${BASE_API_URL}/items/${story_id}`;
+
   log.info('[hacker_news] getStoryInfo called', {}, {
     story_id,
     comment_depth,
     comments_per_level,
+    url,
   });
 
   try {
@@ -326,6 +335,7 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
 
     log.info('[hacker_news] Story info fetched successfully', {}, {
       story_id,
+      url,
       hasComments: Array.isArray(formattedStory.comments) && formattedStory.comments.length > 0,
     });
 
@@ -338,9 +348,14 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
     log.error('[hacker_news] getStoryInfo failed', { emit2logfire: true }, {
       story_id,
+      comment_depth,
+      comments_per_level,
+      url,
       error: errorMessage,
+      stack: errorStack,
     }, error);
 
     return JSON.stringify({
@@ -359,15 +374,35 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
  */
 async function getUserStoriesInternal(user_name: string, num_stories: number): Promise<FormattedStory[]> {
   const url = `${BASE_API_URL}/search?tags=author_${encodeURIComponent(user_name)},story&hitsPerPage=${num_stories}`;
+
+  log.info('[hacker_news] Fetching user stories', {}, { user_name, num_stories, url });
+
   const response = await fetch(url);
 
   if (!response.ok) {
     const errorText = await response.text();
+    log.error('[hacker_news] User stories fetch failed', {}, {
+      user_name,
+      num_stories,
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      errorText,
+    });
     throw new Error(`User stories request failed: ${response.status} ${errorText}`);
   }
 
   const data = await response.json();
-  return (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
+  const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
+
+  log.info('[hacker_news] User stories fetched successfully', {}, {
+    user_name,
+    num_stories,
+    url,
+    count: stories.length,
+  });
+
+  return stories;
 }
 
 /**
@@ -398,6 +433,7 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
   log.info('[hacker_news] getUserInfo called', {}, {
     user_name: normalizedUserName,
     num_stories,
+    url,
   });
 
   try {
@@ -405,6 +441,13 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
 
     if (!response.ok) {
       const errorText = await response.text();
+      log.error('[hacker_news] User info fetch failed', {}, {
+        user_name: normalizedUserName,
+        url,
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+      });
       throw new Error(`User request failed: ${response.status} ${errorText}`);
     }
 
@@ -413,6 +456,7 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
 
     log.info('[hacker_news] User info fetched successfully', {}, {
       user_name: normalizedUserName,
+      url,
       story_count: stories.length,
     });
 
@@ -430,7 +474,9 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] getUserInfo failed', {}, {
       user_name: normalizedUserName,
+      url,
       error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
     return JSON.stringify({
@@ -446,12 +492,23 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
 
 async function fetchStoryById(storyId: number): Promise<HNStory> {
   const url = `${BASE_API_URL}/items/${storyId}`;
+
+  log.info('[hacker_news] Fetching story by ID', {}, { story_id: storyId, url });
+
   const response = await fetch(url);
 
   if (!response.ok) {
     const errorText = await response.text();
+    log.error('[hacker_news] Story fetch failed', {}, {
+      story_id: storyId,
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      errorText,
+    });
     throw new Error(`Story request failed: ${response.status} ${errorText}`);
   }
 
+  log.info('[hacker_news] Story fetched successfully', {}, { story_id: storyId, url });
   return response.json();
 }

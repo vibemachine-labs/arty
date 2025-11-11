@@ -20,11 +20,14 @@ public protocol ToolCallResponder: AnyObject {
 public class ToolHelper {
   
   // MARK: - Properties
-  
+
   private weak var module: Module?
   private var callbacks: [String: (Int?, Error?) -> Void] = [:]
   private let timeoutDuration: TimeInterval
   private let logger = VmWebrtcLogging.logger
+
+  // Track callback usage count to detect anomalies
+  private var callbackUsageCount: [String: Int] = [:]
   
   // MARK: - Initialization
   
@@ -73,7 +76,7 @@ public class ToolHelper {
     callbacks[requestId] = callback
   }
   
-  /// Execute and remove a callback
+  /// Execute a callback (without removing it)
   /// - Parameters:
   ///   - requestId: Unique identifier for the request
   ///   - result: Result value (optional)
@@ -81,13 +84,45 @@ public class ToolHelper {
   /// - Returns: True if callback was found and executed, false otherwise
   @discardableResult
   public func executeCallback(requestId: String, result: Int? = nil, error: Error? = nil) -> Bool {
+    // Track usage count for anomaly detection
+    let currentUsageCount = callbackUsageCount[requestId] ?? 0
+    let newUsageCount = currentUsageCount + 1
+    callbackUsageCount[requestId] = newUsageCount
+
+    // Check for anomalous behavior (callback used more than once)
+    if newUsageCount > 1 {
+      self.logger.log(
+        "[ToolHelper] 🚨 ANOMALY DETECTED: Callback used multiple times!",
+        attributes: [
+          "requestId": requestId,
+          "usageCount": newUsageCount,
+          "warning": "This indicates a bug - requestId may be reused or callback invoked multiple times"
+        ]
+      )
+    }
+
     guard let callback = callbacks[requestId] else {
-      self.logger.log("[ToolHelper] No callback found for requestId=\(requestId)")
+      self.logger.log(
+        "[ToolHelper] No callback found for requestId",
+        attributes: [
+          "requestId": requestId,
+          "usageCount": newUsageCount,
+          "note": "Callback may have been cleaned up or never registered"
+        ]
+      )
       return false
     }
-    
+
     callback(result, error)
-    callbacks.removeValue(forKey: requestId)
+    // Don't remove the callback - keep it to track usage patterns
+    self.logger.log(
+      "[ToolHelper] Callback executed",
+      attributes: [
+        "requestId": requestId,
+        "usageCount": newUsageCount,
+        "isFirstUse": newUsageCount == 1
+      ]
+    )
     return true
   }
   
@@ -134,13 +169,30 @@ public class ToolHelper {
   public func setupTimeout(for requestId: String, errorMessage: String = "Request timed out") {
     DispatchQueue.main.asyncAfter(deadline: .now() + timeoutDuration) { [weak self] in
       guard let self = self else { return }
-      
-      if self.callbacks[requestId] != nil {
-        self.logger.log("[ToolHelper] Request timed out: requestId=\(requestId)")
+
+      // Check if callback has already been used
+      let usageCount = self.callbackUsageCount[requestId] ?? 0
+
+      if self.callbacks[requestId] != nil, usageCount == 0 {
+        self.logger.log(
+          "[ToolHelper] Request timed out",
+          attributes: [
+            "requestId": requestId,
+            "usageCount": usageCount
+          ]
+        )
         let error = NSError(domain: "ToolHelper", code: -1, userInfo: [
           NSLocalizedDescriptionKey: errorMessage
         ])
         self.executeCallback(requestId: requestId, error: error)
+      } else if usageCount > 0 {
+        self.logger.log(
+          "[ToolHelper] Timeout fired but callback already used",
+          attributes: [
+            "requestId": requestId,
+            "usageCount": usageCount
+          ]
+        )
       }
     }
   }

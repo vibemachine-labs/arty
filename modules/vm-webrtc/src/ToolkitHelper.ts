@@ -139,8 +139,18 @@ export class ToolkitHelper {
     });
 
     try {
+      // Prepare context parameters based on the toolkit group
+      let context_params;
+      if (groupName === 'web') {
+        context_params = {
+          maxLength: 1500,
+          minHtmlForBody: 15000,
+          maxRawBytes: 3000000,
+        };
+      }
+
       // Route to the appropriate toolkit function
-      const result = await executeToolkitFunction(groupName, toolName, args);
+      const result = await executeToolkitFunction(groupName, toolName, args, context_params);
 
       log.info(`[${this.toolName}] ✅ Toolkit function executed successfully`, {}, {
         groupName,

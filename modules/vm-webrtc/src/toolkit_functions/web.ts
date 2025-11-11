@@ -5,7 +5,10 @@ import { fetch } from 'expo/fetch';
 /**
  * Fetches content from a URL, strips HTML tags, and truncates to approximately 1K characters.
  */
-export async function getContentsFromUrl(params: { url: string }): Promise<string> {
+export async function getContentsFromUrl(
+  params: { url: string },
+  context_params: { maxLength: number; minHtmlForBody: number; maxRawBytes: number }
+): Promise<string> {
   log.info('[web] getContentsFromUrl starting', {}, { url: params.url });
 
   try {
@@ -89,9 +92,7 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
     // Fetch content in chunks until we have enough stripped text
     log.info('[web] Starting chunked content reading', {}, {});
 
-    const MAX_LENGTH = 15000; // 3x increase - enough for good context without overwhelming LLM
-    const MIN_HTML_FOR_BODY = 150000; // 3x increase - 150KB to ensure we get full body content
-    const MAX_RAW_BYTES = 3000000; // 3x increase - 3MB max to handle large pages
+    const { maxLength, minHtmlForBody, maxRawBytes } = context_params;
 
     if (!response.body) {
       log.error('[web] Response body not available', {}, { url });
@@ -133,14 +134,14 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
         const hasClosingBodyTag = rawHtml.includes('</body>');
 
         // Safety limit: stop if we've read too much raw HTML
-        // But make sure we've read at least MIN_HTML_FOR_BODY or found the closing body tag
-        if (totalBytesRead >= MAX_RAW_BYTES) {
-          log.warn('[web] Reached max raw bytes limit', {}, { totalBytesRead, MAX_RAW_BYTES });
+        // But make sure we've read at least minHtmlForBody or found the closing body tag
+        if (totalBytesRead >= maxRawBytes) {
+          log.warn('[web] Reached max raw bytes limit', {}, { totalBytesRead, maxRawBytes });
           break;
         }
 
         // If we've read minimum amount and have complete body, we can stop
-        if (totalBytesRead >= MIN_HTML_FOR_BODY && hasBodyTag && hasClosingBodyTag) {
+        if (totalBytesRead >= minHtmlForBody && hasBodyTag && hasClosingBodyTag) {
           log.info('[web] Have complete body content, stopping read', {}, {
             totalBytesRead,
             hasBodyTag,
@@ -200,8 +201,8 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
       }
 
       // Truncate if necessary
-      if (cleanedText.length > MAX_LENGTH) {
-        const truncated = cleanedText.substring(0, MAX_LENGTH) + '... (truncated)';
+      if (cleanedText.length > maxLength) {
+        const truncated = cleanedText.substring(0, maxLength) + '... (truncated)';
         log.debug('[web] Truncating content', {}, {
           originalLength: cleanedText.length,
           truncatedLength: truncated.length,

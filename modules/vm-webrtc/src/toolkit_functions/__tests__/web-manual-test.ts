@@ -9,9 +9,10 @@ async function runTests() {
   console.log('URL: https://roblillack.net/i-accidentally-built-a-web-browser\n');
 
   try {
-    const result = await getContentsFromUrl({
-      url: 'https://roblillack.net/i-accidentally-built-a-web-browser'
-    });
+    const result = await getContentsFromUrl(
+      { url: 'https://roblillack.net/i-accidentally-built-a-web-browser' },
+      { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
+    );
 
     console.log('✅ Request completed');
     console.log('📊 Result stats:');
@@ -51,7 +52,10 @@ async function runTests() {
   // Test 2: Invalid URL
   console.log('\nTest 2: Invalid URL');
   try {
-    const result = await getContentsFromUrl({ url: 'not-a-valid-url' });
+    const result = await getContentsFromUrl(
+      { url: 'not-a-valid-url' },
+      { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
+    );
     if (result.includes('Error')) {
       console.log('✅ PASS: Invalid URL handled correctly:', result);
     } else {
@@ -66,7 +70,10 @@ async function runTests() {
   // Test 3: Private URL (localhost)
   console.log('\nTest 3: Private URL (localhost)');
   try {
-    const result = await getContentsFromUrl({ url: 'http://localhost:3000' });
+    const result = await getContentsFromUrl(
+      { url: 'http://localhost:3000' },
+      { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
+    );
     if (result.includes('Error') && result.toLowerCase().includes('private')) {
       console.log('✅ PASS: Private URL blocked correctly:', result);
     } else {

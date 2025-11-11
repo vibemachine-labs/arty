@@ -9,7 +9,10 @@ describe('web.ts - getContentsFromUrl', () => {
 
     console.log(`Testing URL: ${testUrl}`);
 
-    const result = await getContentsFromUrl({ url: testUrl });
+    const result = await getContentsFromUrl(
+      { url: testUrl },
+      { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
+    );
 
     console.log('Result length:', result.length);
     console.log('Result preview (first 500 chars):', result.substring(0, 500));
@@ -30,14 +33,20 @@ describe('web.ts - getContentsFromUrl', () => {
   });
 
   it('should handle invalid URLs gracefully', async () => {
-    const result = await getContentsFromUrl({ url: 'not-a-valid-url' });
+    const result = await getContentsFromUrl(
+      { url: 'not-a-valid-url' },
+      { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
+    );
 
     expect(result).toMatch(/Error:/);
     console.log('✅ Test passed - invalid URL handled correctly');
   });
 
   it('should handle private URLs', async () => {
-    const result = await getContentsFromUrl({ url: 'http://localhost:3000' });
+    const result = await getContentsFromUrl(
+      { url: 'http://localhost:3000' },
+      { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
+    );
 
     expect(result).toMatch(/Error.*private/i);
     console.log('✅ Test passed - private URL blocked correctly');

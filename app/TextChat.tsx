@@ -417,13 +417,13 @@ async function callResponsesAPI(
     });
 
     // Prepare next turn with function_call_output
+    // No need to resend tools, since we are using responses api and sending previous response id
     const nextInput = buildSecondTurnInput(toolCall.id, toolResult);
     currentPayload = {
       model: req.model,
       previous_response_id: responseJson.id,
       input: nextInput,
-      instructions: req.instructions,
-      tools: req.tools,
+      instructions: req.instructions
     };
 
     log.info('[callResponsesAPI] Prepared next turn payload', {}, {

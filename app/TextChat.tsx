@@ -332,6 +332,13 @@ async function callResponsesAPI(
     tool_choice: "auto",
   };
 
+  log.info('[callResponsesAPI] Starting conversation loop', {}, {
+    model: req.model,
+    initialPayload: currentPayload,
+    hasTools: !!req.tools,
+    toolCount: req.tools?.length ?? 0,
+  });
+
   let responseJson: any = null;
   let previousResponseId: string | null = null;
   let safetyCounter = 0; // prevent infinite loops
@@ -339,30 +346,58 @@ async function callResponsesAPI(
 
   while (safetyCounter++ < MAX_TURNS) {
     // Send request to OpenAI
+    log.info(`[callResponsesAPI] Sending request to LLM (turn ${safetyCounter})`, {}, {
+      turnNumber: safetyCounter,
+      payload: currentPayload,
+      previousResponseId: previousResponseId,
+    });
+
     responseJson = await callOpenAIResponses(apiKey, currentPayload, `turn_${safetyCounter}`);
-    log.info(`Received response from LLM (turn ${safetyCounter})`, {}, {
-      responseJson
+
+    log.info(`[callResponsesAPI] Received response from LLM (turn ${safetyCounter})`, {}, {
+      turnNumber: safetyCounter,
+      responseId: responseJson.id,
+      responseJson: responseJson,
+      outputText: extractOutputText(responseJson),
     });
 
     const toolCall = extractFirstToolCall(responseJson);
 
     // If model gives direct text output (no tool call), we're done
     if (!toolCall) {
-      log.info('LLM does not need tool call (end of loop)');
+      log.info('[callResponsesAPI] LLM returned final response (no tool call)', {}, {
+        turnNumber: safetyCounter,
+        outputText: extractOutputText(responseJson),
+        responseId: responseJson.id,
+      });
       return {
         text: extractOutputText(responseJson),
         responseId: responseJson.id ?? null,
       };
     }
 
-    log.info(`LLM requested tool call: ${toolCall.name}`);
+    log.info('[callResponsesAPI] LLM requested tool call', {}, {
+      turnNumber: safetyCounter,
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      toolArgsJson: toolCall.argsJson,
+    });
 
     // Parse tool args
     let argsObj: any;
     try {
       argsObj = JSON.parse(toolCall.argsJson || "{}");
+      log.info('[callResponsesAPI] Parsed tool arguments', {}, {
+        toolName: toolCall.name,
+        parsedArgs: argsObj,
+      });
     } catch (err: any) {
       const errorText = `Error parsing tool call: ${err.message}`;
+      log.error('[callResponsesAPI] Failed to parse tool arguments', {}, {
+        toolName: toolCall.name,
+        argsJson: toolCall.argsJson,
+        error: err.message,
+      });
       return {
         text: errorText,
         responseId: responseJson.id ?? null,
@@ -375,6 +410,12 @@ async function callResponsesAPI(
       arguments: argsObj,
     });
 
+    log.info('[callResponsesAPI] Tool execution completed', {}, {
+      toolName: toolCall.name,
+      toolResult: toolResult,
+      toolResultLength: typeof toolResult === 'string' ? toolResult.length : undefined,
+    });
+
     // Prepare next turn with function_call_output
     const nextInput = buildSecondTurnInput(toolCall.id, toolResult);
     currentPayload = {
@@ -384,11 +425,21 @@ async function callResponsesAPI(
       instructions: req.instructions,
     };
 
+    log.info('[callResponsesAPI] Prepared next turn payload', {}, {
+      turnNumber: safetyCounter + 1,
+      nextPayload: currentPayload,
+      toolCallId: toolCall.id,
+    });
+
     previousResponseId = responseJson.id;
   }
 
   // If we exit due to too many turns, stop gracefully
-  log.warn('Reached MAX_TURNS limit — possible infinite loop');
+  log.warn('[callResponsesAPI] Reached MAX_TURNS limit — possible infinite loop', {}, {
+    maxTurns: MAX_TURNS,
+    finalResponseId: responseJson?.id,
+    finalOutputText: extractOutputText(responseJson),
+  });
   return {
     text: extractOutputText(responseJson) || '[Loop terminated: too many tool calls]',
     responseId: responseJson?.id ?? null,

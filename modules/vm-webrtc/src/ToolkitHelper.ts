@@ -80,6 +80,7 @@ export class ToolkitHelper {
         groupName,
         toolName,
         resultLength: String(result).length,
+        result: result,
       });
 
       if (this.module) {
@@ -147,6 +148,7 @@ export class ToolkitHelper {
         requestId,
         callId,
         resultLength: result.length,
+        result: result,
       });
 
       return result;

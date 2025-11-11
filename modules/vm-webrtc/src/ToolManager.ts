@@ -165,6 +165,7 @@ class ToolManager {
         const result = await connector.execute(params);
         log.info('[ToolManager] GitHub connector execution succeeded', {}, {
           resultLength: typeof result === 'string' ? result.length : 0,
+          result: result,
         });
         return result;
       } catch (error) {
@@ -195,6 +196,7 @@ class ToolManager {
         const result = await connector.execute(params);
         log.info('[ToolManager] Google Drive connector execution succeeded', {}, {
           resultLength: typeof result === 'string' ? result.length : 0,
+          result: result,
         });
         return result;
       } catch (error) {

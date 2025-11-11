@@ -309,6 +309,7 @@ async function executeToolCall(toolCall: ToolCall): Promise<string> {
       toolName: toolCall.name,
       durationMs: Date.now() - start,
       resultLength: typeof result === 'string' ? result.length : undefined,
+      result: result,
     });
     return result;
   } catch (error) {

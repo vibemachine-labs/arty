@@ -83,6 +83,7 @@ export async function executeToolkitFunction(
       groupName,
       toolName,
       resultLength: result.length,
+      result: result,
     });
     return result;
   } catch (error) {

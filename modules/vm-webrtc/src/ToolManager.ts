@@ -137,11 +137,9 @@ class ToolManager {
   }
 
   async executeToolCall(toolName: string, args: ToolCallArguments): Promise<string> {
-    const argKeys = Object.keys(args ?? {});
     log.info('[ToolManager] Tool call requested', {}, {
       toolName,
-      argCount: argKeys.length,
-      argKeys,
+      args,
     });
 
     if (toolName === 'github_connector') {

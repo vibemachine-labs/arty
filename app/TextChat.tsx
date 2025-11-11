@@ -327,57 +327,69 @@ async function callResponsesAPI(
   apiKey: string,
   req: ResponsesCreateRequest
 ): Promise<ResponsesAPIResult> {
-  // First turn: send prompt + tools, allow auto tool selection
-  const firstPayload: any = {
+  let currentPayload: any = {
     ...req,
     tool_choice: "auto",
   };
 
-  const firstJson = await callOpenAIResponses(apiKey, firstPayload, "first");
-  log.info('Received response from LLM');
+  let responseJson: any = null;
+  let previousResponseId: string | null = null;
+  let safetyCounter = 0; // prevent infinite loops
+  const MAX_TURNS = 8;
 
-  // If no tool call, return the model’s direct answer
-  const toolCall = extractFirstToolCall(firstJson);
-  if (!toolCall) {
-    log.info('LLM does not need tool call');
-    return {
-      text: extractOutputText(firstJson),
-      responseId: firstJson.id ?? null,
+  while (safetyCounter++ < MAX_TURNS) {
+    // Send request to OpenAI
+    responseJson = await callOpenAIResponses(apiKey, currentPayload, `turn_${safetyCounter}`);
+    log.info(`Received response from LLM (turn ${safetyCounter})`);
+
+    const toolCall = extractFirstToolCall(responseJson);
+
+    // If model gives direct text output (no tool call), we're done
+    if (!toolCall) {
+      log.info('LLM does not need tool call (end of loop)');
+      return {
+        text: extractOutputText(responseJson),
+        responseId: responseJson.id ?? null,
+      };
+    }
+
+    log.info(`LLM requested tool call: ${toolCall.name}`);
+
+    // Parse tool args
+    let argsObj: any;
+    try {
+      argsObj = JSON.parse(toolCall.argsJson || "{}");
+    } catch (err: any) {
+      const errorText = `Error parsing tool call: ${err.message}`;
+      return {
+        text: errorText,
+        responseId: responseJson.id ?? null,
+      };
+    }
+
+    // Execute tool
+    const toolResult = await executeToolCall({
+      name: toolCall.name,
+      arguments: argsObj,
+    });
+
+    // Prepare next turn with function_call_output
+    const nextInput = buildSecondTurnInput(toolCall.id, toolResult);
+    currentPayload = {
+      model: req.model,
+      previous_response_id: responseJson.id,
+      input: nextInput,
+      instructions: req.instructions,
     };
-  }
-  log.info('LLM wants to call tool');
 
-  // Tool call present: parse args, run the tool
-  let argsObj: any;
-  try {
-    argsObj = JSON.parse(toolCall.argsJson || "{}");
-  } catch (err: any) {
-    const errorText = `Error parsing tool call: ${err.message}`;
-    return {
-      text: errorText,
-      responseId: firstJson.id ?? null,
-    };
+    previousResponseId = responseJson.id;
   }
 
-  const toolResult = await executeToolCall({
-    name: toolCall.name,
-    arguments: argsObj,
-  });
-
-  // Second turn: send only function_call_output with previous_response_id
-  const secondInput = buildSecondTurnInput(toolCall.id, toolResult);
-  const secondPayload: any = {
-    model: req.model,
-    previous_response_id: firstJson.id,
-    input: secondInput,
-    instructions: req.instructions,
-  };
-
-  const secondJson = await callOpenAIResponses(apiKey, secondPayload, "second");
-  log.info('Received response from LLM');
+  // If we exit due to too many turns, stop gracefully
+  log.warn('Reached MAX_TURNS limit — possible infinite loop');
   return {
-    text: extractOutputText(secondJson),
-    responseId: secondJson.id ?? null,
+    text: extractOutputText(responseJson) || '[Loop terminated: too many tool calls]',
+    responseId: responseJson?.id ?? null,
   };
 }
 

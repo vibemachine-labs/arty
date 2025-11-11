@@ -121,7 +121,7 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
         totalBytesRead += value.length;
         rawHtml += decoder.decode(value, { stream: true });
 
-        log.info('[web] Chunk received', {}, {
+        log.trace('[web] Chunk received', {}, {
           chunkNumber: chunkCount,
           chunkSize: value.length,
           totalBytesRead,
@@ -152,7 +152,7 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
 
       // Simple, robust approach: Remove unwanted content with regex, then strip all HTML
       // This works with any HTML structure, including malformed HTML
-      log.info('[web] Removing unwanted content', {}, {
+      log.debug('[web] Removing unwanted content', {}, {
         htmlLength: rawHtml.length,
       });
 
@@ -161,26 +161,26 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
 
       // Remove script tags and their content
       cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      log.info('[web] Removed scripts', {}, { length: cleaned.length });
+      log.debug('[web] Removed scripts', {}, { length: cleaned.length });
 
       // Remove style tags and their content
       cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-      log.info('[web] Removed styles', {}, { length: cleaned.length });
+      log.debug('[web] Removed styles', {}, { length: cleaned.length });
 
       // Remove other non-content tags (head, nav, header, footer, etc.)
       cleaned = cleaned.replace(/<(head|nav|header|footer|aside|noscript)\b[^<]*(?:(?!<\/\1>)<[^<]*)*<\/\1>/gi, '');
-      log.info('[web] Removed structural elements', {}, { length: cleaned.length });
+      log.debug('[web] Removed structural elements', {}, { length: cleaned.length });
 
       // Remove self-closing non-content tags (meta, link, svg, iframe)
       cleaned = cleaned.replace(/<(meta|link|svg|iframe)\b[^>]*\/?>/gi, '');
-      log.info('[web] Removed self-closing tags', {}, { length: cleaned.length });
+      log.debug('[web] Removed self-closing tags', {}, { length: cleaned.length });
 
       // Strip all remaining HTML tags to get plain text
-      log.info('[web] Stripping remaining HTML tags', {}, {});
+      log.debug('[web] Stripping remaining HTML tags', {}, {});
       const cleanedText = stripHtml(cleaned).result.trim();
       // codacy-enable Security/DetectUnsafeHTML
 
-      log.info('[web] Completed text cleaning', {}, {
+      log.debug('[web] Completed text cleaning', {}, {
         totalChunks: chunkCount,
         totalBytes: totalBytesRead,
         cleanedTextLength: cleanedText.length,
@@ -202,7 +202,7 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
       // Truncate if necessary
       if (cleanedText.length > MAX_LENGTH) {
         const truncated = cleanedText.substring(0, MAX_LENGTH) + '... (truncated)';
-        log.info('[web] Truncating content', {}, {
+        log.debug('[web] Truncating content', {}, {
           originalLength: cleanedText.length,
           truncatedLength: truncated.length,
         });
@@ -222,7 +222,7 @@ export async function getContentsFromUrl(params: { url: string }): Promise<strin
     } finally {
       // Only release lock if we still have it
       try {
-        log.info('[web] Releasing reader lock', {}, {});
+        log.debug('[web] Releasing reader lock', {}, {});
         reader.releaseLock();
       } catch (releaseError) {
         // Lock may already be released, which is fine

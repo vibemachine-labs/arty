@@ -17,6 +17,7 @@ import {
 } from './ToolGithubConnector';
 import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
+import { toolkitRegistry } from './toolkit_functions/index';
 import type { ToolDefinition } from './VmWebrtc.types';
 
 type ToolCallArguments = Record<string, any>;
@@ -136,13 +137,60 @@ class ToolManager {
       .filter((name): name is string => Boolean(name));
   }
 
+  private async executeGen2ToolCall(
+    groupName: string,
+    toolName: string,
+    args: ToolCallArguments
+  ): Promise<string> {
+    log.info('[ToolManager] Executing gen2 tool', {}, {
+      groupName,
+      toolName,
+      args,
+    });
+
+    const group = toolkitRegistry[groupName];
+    if (!group) {
+      return `Unknown gen2 tool group: ${groupName}`;
+    }
+
+    const toolFunction = group[toolName];
+    if (!toolFunction) {
+      return `Unknown gen2 tool: ${groupName}__${toolName}`;
+    }
+
+    try {
+      const result = await toolFunction(args);
+      log.info('[ToolManager] Gen2 tool execution succeeded', {}, {
+        groupName,
+        toolName,
+        resultLength: result.length,
+        result: result,
+      });
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('[ToolManager] Gen2 tool execution failed', {}, {
+        groupName,
+        toolName,
+        errorMessage,
+      });
+      return `Error executing gen2 tool ${groupName}__${toolName}: ${errorMessage}`;
+    }
+  }
+
   async executeToolCall(toolName: string, args: ToolCallArguments): Promise<string> {
-    const argKeys = Object.keys(args ?? {});
     log.info('[ToolManager] Tool call requested', {}, {
       toolName,
-      argCount: argKeys.length,
-      argKeys,
+      args,
     });
+
+    // Check if this is a gen2 tool (format: groupName__toolName)
+    if (toolName.includes('__')) {
+      const [groupName, toolFunctionName] = toolName.split('__');
+      if (toolkitRegistry[groupName]?.[toolFunctionName]) {
+        return this.executeGen2ToolCall(groupName, toolFunctionName, args);
+      }
+    }
 
     if (toolName === 'github_connector') {
       const connector = this.getGithubConnectorTool();
@@ -165,6 +213,7 @@ class ToolManager {
         const result = await connector.execute(params);
         log.info('[ToolManager] GitHub connector execution succeeded', {}, {
           resultLength: typeof result === 'string' ? result.length : 0,
+          result: result,
         });
         return result;
       } catch (error) {
@@ -195,6 +244,7 @@ class ToolManager {
         const result = await connector.execute(params);
         log.info('[ToolManager] Google Drive connector execution succeeded', {}, {
           resultLength: typeof result === 'string' ? result.length : 0,
+          result: result,
         });
         return result;
       } catch (error) {

@@ -15,6 +15,7 @@ import { log } from '../lib/logger';
 import { composeMainPrompt } from '../lib/mainPrompt';
 import { getApiKey } from '../lib/secure-storage';
 import toolManager from '../modules/vm-webrtc/src/ToolManager';
+import { getToolkitDefinitions } from '../modules/vm-webrtc/src/ToolkitManager';
 import type { ToolDefinition } from '../modules/vm-webrtc/src/VmWebrtc.types';
 
 interface ToolCall {
@@ -459,7 +460,20 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     setIsSending(true);
 
     try {
-      const tools = await toolManager.getAugmentedToolDefinitions();
+      const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions();
+
+      // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
+      const toolDefinitionsFromToolkits = getToolkitDefinitions(); // gen2
+      log.info('[TextChat] Toolkit definitions resolved', {}, {
+        definitions: toolDefinitionsFromToolkits,
+      });
+
+      // Merge Gen1 and Gen2 tool definitions
+      const tools = [
+        ...(toolDefinitionsWithPrompts || []),
+        ...toolDefinitionsFromToolkits,
+      ];
+
       const toolNames = toolManager.getToolNames(tools);
       log.info('[TextChat] tools included:', {}, toolNames);
 

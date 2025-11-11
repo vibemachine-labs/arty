@@ -143,8 +143,8 @@ export class ToolkitHelper {
       let context_params;
       if (groupName === 'web') {
         context_params = {
-          maxLength: 15000,
-          minHtmlForBody: 150000,
+          maxLength: 1500,
+          minHtmlForBody: 15000,
           maxRawBytes: 3000000,
         };
       }

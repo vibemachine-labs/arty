@@ -7,7 +7,7 @@ import { fetch } from 'expo/fetch';
  */
 export async function getContentsFromUrl(
   params: { url: string },
-  context_params: { maxLength: number; minHtmlForBody: number; maxRawBytes: number }
+  context_params?: { maxLength?: number; minHtmlForBody?: number; maxRawBytes?: number }
 ): Promise<string> {
   log.info('[web] getContentsFromUrl starting', {}, { url: params.url });
 
@@ -92,7 +92,12 @@ export async function getContentsFromUrl(
     // Fetch content in chunks until we have enough stripped text
     log.info('[web] Starting chunked content reading', {}, {});
 
-    const { maxLength, minHtmlForBody, maxRawBytes } = context_params;
+    // Provide default values if context_params is undefined
+    const {
+      maxLength = 1500,
+      minHtmlForBody = 15000,
+      maxRawBytes = 3000000
+    } = context_params || {};
 
     if (!response.body) {
       log.error('[web] Response body not available', {}, { url });
@@ -122,7 +127,7 @@ export async function getContentsFromUrl(
         totalBytesRead += value.length;
         rawHtml += decoder.decode(value, { stream: true });
 
-        log.trace('[web] Chunk received', {}, {
+        log.debug('[web] Chunk received', {}, {
           chunkNumber: chunkCount,
           chunkSize: value.length,
           totalBytesRead,

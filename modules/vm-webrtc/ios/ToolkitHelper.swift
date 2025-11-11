@@ -19,6 +19,9 @@ public class ToolkitHelper: BaseTool {
   // Track pending callbacks by requestId
   private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
 
+  // Track callback usage count to detect anomalies
+  private var callbackUsageCount: [String: Int] = [:]
+
   // MARK: - Initialization
 
   public init(module: Module, responder: ToolCallResponder) {
@@ -108,21 +111,42 @@ public class ToolkitHelper: BaseTool {
       ]
     )
 
+    // Track usage count for anomaly detection
+    let currentUsageCount = callbackUsageCount[requestId] ?? 0
+    let newUsageCount = currentUsageCount + 1
+    callbackUsageCount[requestId] = newUsageCount
+
+    // Check for anomalous behavior (callback used more than once)
+    if newUsageCount > 1 {
+      self.logger.log(
+        "[ToolkitHelper] 🚨 ANOMALY DETECTED: Callback used multiple times!",
+        attributes: [
+          "requestId": requestId,
+          "usageCount": newUsageCount,
+          "warning": "This indicates a bug - requestId may be reused or callback invoked multiple times"
+        ]
+      )
+    }
+
     if let callback = stringCallbacks[requestId] {
       callback(result, nil)
-      stringCallbacks.removeValue(forKey: requestId)
+      // Don't remove the callback - keep it to track usage patterns
       self.logger.log(
         "[ToolkitHelper] ✅ Toolkit callback executed successfully",
         attributes: [
           "requestId": requestId,
-          "result_length": result.count
+          "result_length": result.count,
+          "usageCount": newUsageCount,
+          "isFirstUse": newUsageCount == 1
         ]
       )
     } else {
       self.logger.log(
         "[ToolkitHelper] ⚠️ No callback found for requestId",
         attributes: [
-          "requestId": requestId
+          "requestId": requestId,
+          "usageCount": newUsageCount,
+          "note": "Callback may have been cleaned up or never registered"
         ]
       )
     }
@@ -327,11 +351,15 @@ public class ToolkitHelper: BaseTool {
     DispatchQueue.main.asyncAfter(deadline: .now() + 60.0) { [weak self] in
       guard let self = self else { return }
 
-      if let callback = self.stringCallbacks[requestId] {
+      // Check if callback has already been used
+      let usageCount = self.callbackUsageCount[requestId] ?? 0
+
+      if let callback = self.stringCallbacks[requestId], usageCount == 0 {
         self.logger.log(
           "[ToolkitHelper] ⏰ Request timed out",
           attributes: [
-            "requestId": requestId
+            "requestId": requestId,
+            "usageCount": usageCount
           ]
         )
         let error = NSError(
@@ -339,8 +367,20 @@ public class ToolkitHelper: BaseTool {
           code: -1,
           userInfo: [NSLocalizedDescriptionKey: errorMessage]
         )
+
+        // Mark as used before calling callback
+        self.callbackUsageCount[requestId] = 1
+
         callback(nil, error)
-        self.stringCallbacks.removeValue(forKey: requestId)
+        // Don't remove the callback - keep it to track usage patterns
+      } else if usageCount > 0 {
+        self.logger.log(
+          "[ToolkitHelper] ⏰ Timeout fired but callback already used",
+          attributes: [
+            "requestId": requestId,
+            "usageCount": usageCount
+          ]
+        )
       }
     }
   }

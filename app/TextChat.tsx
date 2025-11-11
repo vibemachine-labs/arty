@@ -340,7 +340,9 @@ async function callResponsesAPI(
   while (safetyCounter++ < MAX_TURNS) {
     // Send request to OpenAI
     responseJson = await callOpenAIResponses(apiKey, currentPayload, `turn_${safetyCounter}`);
-    log.info(`Received response from LLM (turn ${safetyCounter})`);
+    log.info(`Received response from LLM (turn ${safetyCounter})`, {}, {
+      responseJson
+    });
 
     const toolCall = extractFirstToolCall(responseJson);
 
@@ -459,8 +461,8 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
   };
 
   const handleSend = async () => {
-    const trimmed = draft.trim();
-    if (!trimmed || isSending) return;
+    const userMessage = draft.trim();
+    if (!userMessage || isSending) return;
 
     const apiKey = await getApiKey({ forceSecureStore: true });
     if (!apiKey) {
@@ -468,7 +470,7 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       return;
     }
 
-    appendMessage({ role: 'user', content: trimmed });
+    appendMessage({ role: 'user', content: userMessage });
     setDraft('');
     setIsSending(true);
 
@@ -497,10 +499,13 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         preview: summarizeDescription(resolvedInstructions),
       });
 
-      log.info(`Sent input to LLM: ${trimmed}, waiting for reply`);
+      log.info('[TextChat] Sent input to LLM, waiting for reply', {}, {
+        userMessage: userMessage,
+        userMessageLength: userMessage.length,
+      });
       const requestPayload: ResponsesCreateRequest = {
         model: 'gpt-5-mini',
-        input: trimmed,
+        input: userMessage,
         instructions: resolvedInstructions,
         tools,
         previous_response_id: lastResponseId ?? undefined,

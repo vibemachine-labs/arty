@@ -279,7 +279,7 @@
               "page_size": {
                 "type": "number",
                 "description": "Number of files to return per page.",
-                "default": 40
+                "default": 5
               },
               "page_token": {
                 "type": "string",

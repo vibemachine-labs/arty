@@ -614,13 +614,13 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
  * List children of a Google Drive folder (or root if no folder_id provided).
  *
  * @param params.folder_id - The folder ID to list children of (undefined = root)
- * @param params.page_size - Number of files to return per page (default: 40)
+ * @param params.page_size - Number of files to return per page (default: 5)
  * @param params.page_token - Pagination token to continue a previous request
  */
 export async function list_drive_folder_children(params: ListDriveFolderChildrenParams): Promise<string> {
   const {
     folder_id,
-    page_size = 40,
+    page_size = DEFAULT_PAGE_SIZE,
     page_token,
   } = params;
 

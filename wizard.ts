@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { spawn } from "bun";
-import { createInterface } from "readline";
+import * as readline from "readline/promises";
 import { promises as fs } from "fs";
 import * as path from "path";
 
@@ -202,18 +202,17 @@ async function main(): Promise<void> {
   }
 
   // Interactive mode
-  const rl = createInterface({
+  const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   showMenu();
 
-  rl.question("\nSelect an option: ", async (answer) => {
-    rl.close();
-    const choice = answer.trim();
-    await executeChoice(choice);
-  });
+  const answer = await rl.question("\nSelect an option: ");
+  rl.close();
+  const choice = answer.trim();
+  await executeChoice(choice);
 }
 
 main().catch((err) => {

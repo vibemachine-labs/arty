@@ -6,7 +6,7 @@
 
 An open-source, privacy-first voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."
 
-Connects to your Google Drive, Github, and the web. 
+Connects to your Google Drive, Github, Hacker News, and the web. 
 
 It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source stack.
 
@@ -128,7 +128,7 @@ This project offers a fully open alternative: local execution, no data monetizat
 
 ## ✨ Features
 
-1. **Supports several connectors: Google Drive, Github, and Web Search** - Voice assistant that can summarize content in Google Drive, interact with Github, and search the web
+1. **Supports several connectors: Google Drive, Github, Hacker News, and Web Search** - Voice assistant that can summarize content in Google Drive, interact with Github, browse Hacker News, and search the web
 3. **Extensible** - Adding connectors is fairly easy.  File an issue to request the connector you'd want to see.
 4. **Customizable prompts** - Edit system and tool prompts directly from the UI
 5. **Multi-mode audio** - Works with speaker, handset, or Bluetooth headphones
@@ -317,7 +317,9 @@ React Native WebRTC libraries did not reliably support speakerphone mode during 
 
 ### Codegen vs Static Tools
 
-Dynamic code generation currently powers connector operations, enabling rapid prototyping. Long-term, the plan is to transition to statically defined tools with codegen as a fallback option.
+Dynamic code generation currently powers some connector operations (Google Drive, GitHub), enabling rapid prototyping. However, the Hacker News tool demonstrates the preferred approach: statically defined tools that don't rely on codegen.
+
+**Migration in progress:** Google Drive and GitHub tools will be converted from the codegen approach to static tools, improving reliability and performance. Long-term, codegen will remain available as a fallback option for rapid prototyping of new connectors.
 
 ### MCP Support
 

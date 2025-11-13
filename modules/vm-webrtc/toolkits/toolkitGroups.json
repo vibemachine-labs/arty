@@ -190,7 +190,7 @@
           "name": "keyword_search",
           "group": "google_drive",
           "description": "Search for files in Google Drive by keyword.",
-          "supported_auth": "no_auth_required",
+          "supported_auth": "oauth",
           "extra": {},
           "parameters": {
             "type": "object",

@@ -57,7 +57,8 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
   }
 
   // Escape single quotes in the search keyword
-  const escapedKeyword = safeKeyword.replace(/'/g, "\\'");
+  // Escape backslashes first, then single quotes
+  const escapedKeyword = safeKeyword.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
   // Build query parameters
   const searchParams = new URLSearchParams({

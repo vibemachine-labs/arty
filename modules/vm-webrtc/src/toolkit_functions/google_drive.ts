@@ -47,12 +47,19 @@ export interface SearchDocumentsParams {
   pagination_token?: string;
 }
 
+export interface ListDriveFolderChildrenParams {
+  folder_id?: string;
+  page_size?: number;
+  page_token?: string;
+}
+
 interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
   modifiedTime: string;
   owners?: { emailAddress?: string }[];
+  parents?: string[];
 }
 
 interface DriveApiResponse {
@@ -598,6 +605,128 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
       group: 'google_drive',
       tool: 'search_documents',
       error: errorMessage,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * List children of a Google Drive folder (or root if no folder_id provided).
+ *
+ * @param params.folder_id - The folder ID to list children of (undefined = root)
+ * @param params.page_size - Number of files to return per page (default: 40)
+ * @param params.page_token - Pagination token to continue a previous request
+ */
+export async function list_drive_folder_children(params: ListDriveFolderChildrenParams): Promise<string> {
+  const {
+    folder_id,
+    page_size = 40,
+    page_token,
+  } = params;
+
+  log.info('[google_drive] list_drive_folder_children called', {}, { params });
+
+  try {
+    // Validate auth prerequisites (client ID + access token)
+    const validationError = await validateAuthPrerequisites('list_drive_folder_children');
+    if (validationError) {
+      return validationError;
+    }
+
+    // Get the validated access token and client ID
+    const accessToken = await getGDriveAccessToken();
+    const clientId = await getGDriveClientId();
+
+    // Build query parts
+    const qParts: string[] = ['trashed = false'];
+
+    if (folder_id) {
+      // List children of that folder
+      qParts.push(`'${folder_id}' in parents`);
+    } else {
+      // Root folder list – use 'root' as special id
+      qParts.push(`'root' in parents`);
+    }
+
+    const requestParams: Record<string, string> = {
+      q: qParts.join(' and '),
+      pageSize: page_size.toString(),
+      fields: 'nextPageToken, files(id, name, mimeType, parents)',
+      spaces: 'drive',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+    };
+
+    if (page_token) {
+      requestParams.pageToken = page_token;
+    }
+
+    const searchParams = new URLSearchParams(requestParams);
+    const url = `${DRIVE_API_BASE_URL}/files?${searchParams.toString()}`;
+
+    const response = await fetchWithTokenRefresh('list_drive_folder_children', url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      log.error('[google_drive] Drive API request failed', {}, {
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+        url,
+        tokenLength: accessToken!.length,
+        clientIdLength: clientId!.length,
+        hasClientId: !!clientId,
+        hasAccessToken: !!accessToken,
+      });
+      throw new Error(`Drive API error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json() as {
+      nextPageToken?: string;
+      files?: Array<{
+        id: string;
+        name: string;
+        mimeType?: string;
+        parents?: string[];
+      }>;
+    };
+
+    const files = data.files ?? [];
+    const nextPageToken = data.nextPageToken;
+
+    log.info('[google_drive] list_drive_folder_children completed', {}, {
+      folder_id: folder_id || 'root',
+      count: files.length,
+      hasNextPage: !!nextPageToken,
+    });
+
+    return JSON.stringify({
+      success: true,
+      group: 'google_drive',
+      tool: 'list_drive_folder_children',
+      folder_id: folder_id || 'root',
+      files,
+      next_page_token: nextPageToken,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log.error('[google_drive] list_drive_folder_children failed', {}, {
+      folder_id: folder_id || 'root',
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    }, error);
+
+    return JSON.stringify({
+      success: false,
+      group: 'google_drive',
+      tool: 'list_drive_folder_children',
+      error: errorMessage,
+      folder_id: folder_id || 'root',
       timestamp: new Date().toISOString(),
     });
   }

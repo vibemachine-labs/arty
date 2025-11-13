@@ -261,6 +261,33 @@
             },
             "required": []
           }
+        },
+        {
+          "type": "function",
+          "name": "list_drive_folder_children",
+          "group": "google_drive",
+          "description": "List children of a Google Drive folder (or root if no folder_id provided).",
+          "supported_auth": "oauth",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "folder_id": {
+                "type": "string",
+                "description": "The folder ID to list children of. If not provided, lists files in the root folder."
+              },
+              "page_size": {
+                "type": "number",
+                "description": "Number of files to return per page.",
+                "default": 40
+              },
+              "page_token": {
+                "type": "string",
+                "description": "Pagination token to continue a previous request."
+              }
+            },
+            "required": []
+          }
         }
       ]
     }

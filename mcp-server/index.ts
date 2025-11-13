@@ -16,6 +16,11 @@ interface BuildAction {
 
 const BUILD_ACTIONS: BuildAction[] = [
   {
+    action: "patch-webrtc",
+    command: "bun run wizard patch-webrtc",
+    description: "Patch WebRTC-lib headers for iOS",
+  },
+  {
     action: "eas-build-dev",
     command: "eas build --platform ios --profile dev_self_contained --non-interactive",
     description: "Build iOS app with dev_self_contained profile",

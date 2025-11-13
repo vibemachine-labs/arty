@@ -2,15 +2,84 @@
 
 import { spawn } from "bun";
 import { createInterface } from "readline";
+import { promises as fs } from "fs";
+import path from "path";
 
 interface BuildOption {
   name: string;
   flag: string;
   command: string;
   description: string;
+  customHandler?: () => Promise<number>;
+}
+
+// Directories containing WebRTC headers that require patching.
+const HEADER_DIRS = [
+  'ios/Pods/WebRTC-lib/WebRTC.xcframework/ios-arm64/WebRTC.framework/Headers',
+  'ios/Pods/WebRTC-lib/WebRTC.xcframework/ios-x86_64_arm64-simulator/WebRTC.framework/Headers',
+];
+
+async function patchHeaderDirectory(relativeDir: string): Promise<void> {
+  const absoluteDir = path.resolve(process.cwd(), relativeDir);
+  try {
+    await fs.access(absoluteDir, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (err) {
+    console.warn(`\n⚠️  Skipping ${relativeDir}: directory not found or inaccessible.`);
+    return;
+  }
+
+  const targetDir = path.join(absoluteDir, 'sdk/objc/base');
+  await fs.mkdir(targetDir, { recursive: true });
+
+  const entries = await fs.readdir(absoluteDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const { name } = entry;
+    if (name === 'sdk') {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      continue;
+    }
+
+    const source = path.join(absoluteDir, name);
+    const destination = path.join(targetDir, name);
+
+    try {
+      await fs.link(source, destination);
+    } catch (err: any) {
+      if (err.code === 'EEXIST') {
+        continue;
+      }
+      throw new Error(`Failed to link ${name} in ${relativeDir}: ${err.message}`);
+    }
+  }
+
+  console.log(`\n✅ Patched headers in ${relativeDir}`);
+}
+
+async function patchHeaders(): Promise<number> {
+  console.log('\nPatching WebRTC-lib headers...');
+  try {
+    for (const dir of HEADER_DIRS) {
+      await patchHeaderDirectory(dir);
+    }
+    console.log('\n🎉 All done!');
+    return 0;
+  } catch (err: any) {
+    console.error(`\n❌ ${err.message}`);
+    return 1;
+  }
 }
 
 const BUILD_OPTIONS: BuildOption[] = [
+  {
+    name: "Patch WebRTC Headers",
+    flag: "patch-webrtc",
+    command: "",
+    description: "Patch WebRTC-lib headers for iOS",
+    customHandler: patchHeaders,
+  },
   {
     name: "EAS Build Dev",
     flag: "eas-build-dev",
@@ -78,7 +147,10 @@ async function executeChoice(choice: string): Promise<void> {
   if (index >= 0 && index < BUILD_OPTIONS.length) {
     const option = BUILD_OPTIONS[index];
     console.log(`\n📦 ${option.name}`);
-    const exitCode = await executeCommand(option.command);
+
+    const exitCode = option.customHandler
+      ? await option.customHandler()
+      : await executeCommand(option.command);
 
     if (exitCode === 0) {
       console.log(`\n✅ ${option.name} completed successfully!`);
@@ -98,7 +170,10 @@ async function handleFlag(flag: string): Promise<void> {
 
   if (option) {
     console.log(`\n📦 ${option.name}`);
-    const exitCode = await executeCommand(option.command);
+
+    const exitCode = option.customHandler
+      ? await option.customHandler()
+      : await executeCommand(option.command);
 
     if (exitCode === 0) {
       console.log(`\n✅ ${option.name} completed successfully!`);

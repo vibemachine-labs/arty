@@ -1,4 +1,5 @@
 import { log } from '../../../../lib/logger';
+import { getGDriveAccessToken } from '../../../../lib/secure-storage';
 
 // MARK: - Constants
 
@@ -77,9 +78,28 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
   });
 
   try {
-    // TODO: Wire up authentication - accessToken needs to be provided
-    // This will be implemented when wiring up the OAuth flow
-    const accessToken = ''; // Placeholder - needs to be wired up
+    // Retrieve access token from secure storage
+    const accessToken = await getGDriveAccessToken();
+
+    if (!accessToken) {
+      const errorMessage = 'Google Drive access token not found. Please authenticate first.';
+      log.error('[google_drive] No access token available', {}, {
+        query: safeKeyword,
+      });
+      return JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'keyword_search',
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Log token info (length only, not the actual token for security)
+    log.info('[google_drive] Using access token', {}, {
+      tokenLength: accessToken.length,
+      hasToken: true,
+    });
 
     const response = await fetch(url, {
       headers: {
@@ -89,6 +109,13 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
 
     if (!response.ok) {
       const errorText = await response.text();
+      log.error('[google_drive] Drive API request failed', {}, {
+        status: response.status,
+        statusText: response.statusText,
+        errorText,
+        url,
+        tokenLength: accessToken.length,
+      });
       throw new Error(`Drive API error: ${response.status} ${errorText}`);
     }
 

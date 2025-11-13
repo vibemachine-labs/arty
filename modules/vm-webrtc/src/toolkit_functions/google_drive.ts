@@ -1,5 +1,10 @@
 import { log } from '../../../../lib/logger';
-import { getGDriveAccessToken } from '../../../../lib/secure-storage';
+import {
+  getGDriveAccessToken,
+  getGDriveRefreshToken,
+  getGDriveClientId,
+  setGDriveAccessToken,
+} from '../../../../lib/secure-storage';
 
 // MARK: - Constants
 
@@ -150,7 +155,7 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
       hasToken: true,
     });
 
-    const response = await fetch(url, {
+    const response = await fetchWithTokenRefresh('keyword_search', url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -212,6 +217,134 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
 }
 
 // MARK: - Helper Functions
+
+/**
+ * Refresh the Google Drive access token using the refresh token.
+ * Returns the new access token or null if refresh fails.
+ */
+async function refreshAccessToken(toolName: string): Promise<string | null> {
+  try {
+    const refreshToken = await getGDriveRefreshToken();
+    const clientId = await getGDriveClientId();
+
+    if (!refreshToken || !clientId) {
+      log.warn(`[${toolName}] Cannot refresh token - missing credentials`, {}, {
+        hasRefreshToken: !!refreshToken,
+        hasClientId: !!clientId,
+      });
+      return null;
+    }
+
+    log.info(`[${toolName}] Refreshing Google Drive access token`, {});
+
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+    }).toString();
+
+    const resp = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      log.error(`[${toolName}] Token refresh failed`, {}, {
+        status: resp.status,
+        statusText: resp.statusText,
+        errorBody: txt,
+      });
+      return null;
+    }
+
+    const json = await resp.json();
+    const newAccessToken: string | undefined = json?.access_token;
+
+    if (!newAccessToken) {
+      log.error(`[${toolName}] Token refresh response missing access_token`, {}, { response: json });
+      return null;
+    }
+
+    // Persist the new token
+    try {
+      await setGDriveAccessToken(newAccessToken, json?.expires_in);
+    } catch (e) {
+      log.warn(`[${toolName}] Failed to persist refreshed token`, {}, {
+        errorMessage: e instanceof Error ? e.message : String(e),
+      }, e);
+    }
+
+    log.info(`[${toolName}] Token refreshed successfully`, {}, {
+      tokenLength: newAccessToken.length,
+      expiresIn: json?.expires_in,
+    });
+
+    return newAccessToken;
+  } catch (error) {
+    log.error(`[${toolName}] Token refresh exception`, {}, {
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    }, error);
+    return null;
+  }
+}
+
+/**
+ * Wrapper around fetch that automatically refreshes the token and retries once on 401.
+ * This is your friendly neighborhood token guardian - handles auth failures gracefully.
+ *
+ * @param toolName - Name of the tool for logging (e.g., 'search_documents')
+ * @param url - The URL to fetch
+ * @param init - Fetch init options (must include Authorization header)
+ * @returns The fetch response
+ */
+async function fetchWithTokenRefresh(
+  toolName: string,
+  url: string,
+  init?: RequestInit
+): Promise<Response> {
+  // First attempt
+  const response = await fetch(url, init);
+
+  // If not a 401, return as-is
+  if (response.status !== 401) {
+    return response;
+  }
+
+  // Got a 401 - let's try to refresh the token
+  log.info(`[${toolName}] 401 Unauthorized - attempting token refresh`, {}, { url });
+
+  const newToken = await refreshAccessToken(toolName);
+  if (!newToken) {
+    log.warn(`[${toolName}] Token refresh failed, returning original 401 response`, {}, { url });
+    return response;
+  }
+
+  // Update the Authorization header with the new token
+  const retryInit: RequestInit = {
+    ...init,
+    headers: {
+      ...(init?.headers || {}),
+      Authorization: `Bearer ${newToken}`,
+    },
+  };
+
+  // Retry the request
+  log.info(`[${toolName}] Retrying request with refreshed token`, {}, { url });
+  try {
+    const retryResponse = await fetch(url, retryInit);
+    return retryResponse;
+  } catch (error) {
+    log.error(`[${toolName}] Retry after refresh failed`, {}, {
+      url,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    }, error);
+    return response; // Return original 401 response
+  }
+}
 
 /**
  * Remove undefined/null values from an object
@@ -406,7 +539,7 @@ async function getDocumentContentById(documentId: string, accessToken: string): 
 
   log.info('[google_drive] Fetching document content', {}, { documentId });
 
-  const response = await fetch(url, {
+  const response = await fetchWithTokenRefresh('get_document_content', url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -559,7 +692,7 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
       const searchParams = new URLSearchParams(requestParams);
       const url = `${DRIVE_API_BASE_URL}/files?${searchParams.toString()}`;
 
-      const response = await fetch(url, {
+      const response = await fetchWithTokenRefresh('search_documents', url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -752,7 +885,7 @@ export async function get_file_tree_structure(params: GetFileTreeStructureParams
       const searchParams = new URLSearchParams(requestParams);
       const url = `${DRIVE_API_BASE_URL}/files?${searchParams.toString()}`;
 
-      const response = await fetch(url, {
+      const response = await fetchWithTokenRefresh('get_file_tree_structure', url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -804,7 +937,7 @@ export async function get_file_tree_structure(params: GetFileTreeStructureParams
         let driveName = `Shared Drive (id: ${driveId})`;
         try {
           const driveUrl = `${DRIVE_API_BASE_URL}/drives/${driveId}`;
-          const driveResponse = await fetch(driveUrl, {
+          const driveResponse = await fetchWithTokenRefresh('get_file_tree_structure', driveUrl, {
             headers: {
               Authorization: `Bearer ${accessToken}`,
             },

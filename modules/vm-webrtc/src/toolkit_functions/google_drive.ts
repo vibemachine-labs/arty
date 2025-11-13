@@ -9,7 +9,6 @@ import {
 // MARK: - Constants
 
 const DRIVE_API_BASE_URL = 'https://www.googleapis.com/drive/v3';
-const DOCS_API_BASE_URL = 'https://www.googleapis.com/docs/v1';
 const DEFAULT_PAGE_SIZE = 40;
 const GOOGLE_DOCS_MIME_TYPE = 'application/vnd.google-apps.document';
 const GOOGLE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
@@ -23,11 +22,6 @@ enum OrderBy {
   CREATED_TIME = 'createdTime',
   NAME = 'name',
   NAME_DESC = 'name desc',
-}
-
-enum DocumentFormat {
-  MARKDOWN = 'markdown',
-  HTML = 'html',
 }
 
 enum Corpora {
@@ -51,10 +45,6 @@ export interface SearchDocumentsParams {
   order_by?: string[];
   limit?: number;
   pagination_token?: string;
-}
-
-export interface SearchAndRetrieveDocumentsParams extends SearchDocumentsParams {
-  return_format?: string;
 }
 
 interface DriveFile {
@@ -489,106 +479,6 @@ function buildFilesListParams(
 }
 
 /**
- * Get document content from Google Docs API
- */
-async function getDocumentContentById(
-  documentId: string,
-  accessToken: string,
-  clientId: string
-): Promise<any> {
-  const url = `${DOCS_API_BASE_URL}/documents/${documentId}`;
-
-  log.info('[google_drive] Fetching document content', {}, { documentId });
-
-  const response = await fetchWithTokenRefresh('get_document_content', url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    log.error('[google_drive] Docs API request failed', {}, {
-      status: response.status,
-      statusText: response.statusText,
-      errorText,
-      documentId,
-      tokenLength: accessToken.length,
-      clientIdLength: clientId.length,
-      hasClientId: !!clientId,
-      hasAccessToken: !!accessToken,
-    });
-    throw new Error(`Docs API error: ${response.status} ${errorText}`);
-  }
-
-  return await response.json();
-}
-
-/**
- * Convert Google Docs document to markdown (basic implementation)
- * Note: This is a simplified conversion. For production use, consider a more robust solution.
- */
-function convertDocumentToMarkdown(document: any): string {
-  const title = document.title || 'Untitled';
-  const body = document.body?.content || [];
-
-  let markdown = `# ${title}\n\n`;
-
-  for (const element of body) {
-    if (element.paragraph) {
-      const paragraph = element.paragraph;
-      let text = '';
-
-      if (paragraph.elements) {
-        for (const elem of paragraph.elements) {
-          if (elem.textRun && elem.textRun.content) {
-            text += elem.textRun.content;
-          }
-        }
-      }
-
-      if (text.trim()) {
-        markdown += text + '\n\n';
-      }
-    }
-  }
-
-  return markdown;
-}
-
-/**
- * Convert Google Docs document to HTML (basic implementation)
- * Note: This is a simplified conversion. For production use, consider a more robust solution.
- */
-function convertDocumentToHtml(document: any): string {
-  const title = document.title || 'Untitled';
-  const body = document.body?.content || [];
-
-  let html = `<h1>${title}</h1>\n`;
-
-  for (const element of body) {
-    if (element.paragraph) {
-      const paragraph = element.paragraph;
-      let text = '';
-
-      if (paragraph.elements) {
-        for (const elem of paragraph.elements) {
-          if (elem.textRun && elem.textRun.content) {
-            text += elem.textRun.content;
-          }
-        }
-      }
-
-      if (text.trim()) {
-        html += `<p>${text}</p>\n`;
-      }
-    }
-  }
-
-  return html;
-}
-
-/**
  * Parse order_by strings to OrderBy enum values
  */
 function parseOrderBy(orderByStrings?: string[]): OrderBy[] {
@@ -707,92 +597,6 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
       success: false,
       group: 'google_drive',
       tool: 'search_documents',
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
-  }
-}
-
-/**
- * Search and retrieve the contents of Google documents in the user's Google Drive.
- */
-export async function search_and_retrieve_documents(params: SearchAndRetrieveDocumentsParams): Promise<string> {
-  const { return_format = 'markdown', ...searchParams } = params;
-
-  log.info('[google_drive] search_and_retrieve_documents called', {}, { params });
-
-  try {
-    // Validate auth prerequisites (client ID + access token)
-    const validationError = await validateAuthPrerequisites('search_and_retrieve_documents');
-    if (validationError) {
-      return validationError;
-    }
-
-    // Get the validated access token and client ID
-    const accessToken = await getGDriveAccessToken();
-    const clientId = await getGDriveClientId();
-
-    // First search for documents
-    const searchResultStr = await search_documents(searchParams);
-    const searchResult = JSON.parse(searchResultStr);
-
-    if (!searchResult.success) {
-      return searchResultStr;
-    }
-
-    const documents = [];
-    for (const item of searchResult.documents) {
-      try {
-        const document = await getDocumentContentById(item.id, accessToken!, clientId!);
-
-        // Convert document content to requested format
-        let documentBody: string;
-        if (return_format === DocumentFormat.HTML) {
-          documentBody = convertDocumentToHtml(document);
-        } else {
-          documentBody = convertDocumentToMarkdown(document);
-        }
-
-        // Extract only useful fields
-        const filteredDocument = {
-          title: document.title || '',
-          body: documentBody,
-          documentId: document.documentId || item.id,
-        };
-
-        documents.push(filteredDocument);
-      } catch (error) {
-        log.error('[google_drive] Failed to retrieve document', {}, {
-          documentId: item.id,
-          error: error instanceof Error ? error.message : String(error),
-        }, error);
-        // Continue with other documents
-      }
-    }
-
-    log.info('[google_drive] search_and_retrieve_documents completed', {}, {
-      count: documents.length,
-    });
-
-    return JSON.stringify({
-      success: true,
-      group: 'google_drive',
-      tool: 'search_and_retrieve_documents',
-      documents_count: documents.length,
-      documents: documents,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error('[google_drive] search_and_retrieve_documents failed', {}, {
-      error: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    }, error);
-
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: 'search_and_retrieve_documents',
       error: errorMessage,
       timestamp: new Date().toISOString(),
     });

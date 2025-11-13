@@ -1,0 +1,16 @@
+{
+  "name": "arty-build-eas-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Arty EAS build and deployment commands",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

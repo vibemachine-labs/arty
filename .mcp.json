@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "arty-build-eas": {
+      "command": "bun",
+      "args": [
+        "run",
+        "/home/tleyden/arty/mcp-server/index.ts"
+      ],
+      "cwd": "/home/tleyden/arty"
+    }
+  }
+}

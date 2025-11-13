@@ -1,15 +1,15 @@
 import { log } from '../../../../lib/logger';
 import {
   getGDriveAccessToken,
-  getGDriveRefreshToken,
   getGDriveClientId,
+  getGDriveRefreshToken,
   setGDriveAccessToken,
 } from '../../../../lib/secure-storage';
 
 // MARK: - Constants
 
 const DRIVE_API_BASE_URL = 'https://www.googleapis.com/drive/v3';
-const DEFAULT_PAGE_SIZE = 40;
+const DEFAULT_PAGE_SIZE = 5;
 const GOOGLE_DOCS_MIME_TYPE = 'application/vnd.google-apps.document';
 const GOOGLE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 
@@ -52,7 +52,7 @@ interface DriveFile {
   name: string;
   mimeType: string;
   modifiedTime: string;
-  owners?: Array<{ emailAddress?: string }>;
+  owners?: { emailAddress?: string }[];
 }
 
 interface DriveApiResponse {

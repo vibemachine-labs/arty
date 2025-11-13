@@ -3,7 +3,7 @@
 import { spawn } from "bun";
 import { createInterface } from "readline";
 import { promises as fs } from "fs";
-import path from "path";
+import * as path from "path";
 
 interface BuildOption {
   name: string;

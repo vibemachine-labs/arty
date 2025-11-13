@@ -117,7 +117,7 @@
           "type": "function",
           "name": "showDailyPapers",
           "group": "daily_papers",
-          "description": "Retrieve a list of today\u2019s daily papers from major publications.",
+          "description": "This tool doesn't work yet.  Ignore it.  Retrieve a list of today\u2019s daily papers from major publications.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
@@ -139,7 +139,7 @@
           "type": "function",
           "name": "showCommentsForPaper",
           "group": "daily_papers",
-          "description": "Retrieve comments or reader feedback for a specified daily paper.",
+          "description": "This tool doesn't work yet.  Ignore it. Retrieve comments or reader feedback for a specified daily paper.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
@@ -178,6 +178,29 @@
               }
             },
             "required": ["url"]
+          }
+        }
+      ]
+    },
+    "google_drive": {
+      "name": "google_drive",
+      "toolkits": [
+        {
+          "type": "function",
+          "name": "keyword_search",
+          "group": "google_drive",
+          "description": "Search for files in Google Drive by keyword.",
+          "supported_auth": "oauth",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "The search query to find files in Google Drive."
+              }
+            },
+            "required": ["query"]
           }
         }
       ]

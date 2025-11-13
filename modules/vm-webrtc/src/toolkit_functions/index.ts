@@ -3,6 +3,7 @@
 import * as hackerNews from './hacker_news';
 import * as dailyPapers from './daily_papers';
 import * as web from './web';
+import * as googleDrive from './google_drive';
 import { log } from '../../../../lib/logger';
 
 // MARK: - Types
@@ -33,6 +34,9 @@ export const toolkitRegistry: ToolkitRegistry = {
   },
   web: {
     getContentsFromUrl: web.getContentsFromUrl,
+  },
+  google_drive: {
+    keyword_search: googleDrive.keyword_search,
   },
 };
 
@@ -101,4 +105,4 @@ export async function executeToolkitFunction(
 
 // MARK: - Exports
 
-export { hackerNews, dailyPapers, web };
+export { hackerNews, dailyPapers, web, googleDrive };

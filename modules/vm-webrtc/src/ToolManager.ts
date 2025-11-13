@@ -24,6 +24,10 @@ type ToolCallArguments = Record<string, any>;
 
 const MODULE_NAME = 'VmWebrtc';
 
+// Feature flag to enable/disable legacy gdrive connector
+// Set to false since we now have gen2 google_drive toolkit
+const ENABLE_LEGACY_GDRIVE = false;
+
 const summarizeDescription = (value: string): string => {
   const trimmed = value.trim();
   if (trimmed.length <= 60) {
@@ -61,7 +65,7 @@ const cloneDefinition = (definition: ToolDefinition): ToolDefinition => ({
 class ToolManager {
   private readonly defaultDefinitions: ToolDefinition[] = [
     githubConnectorDefinition,
-    gdriveConnectorDefinition,
+    ...(ENABLE_LEGACY_GDRIVE ? [gdriveConnectorDefinition] : []),
     gpt5GDriveFixerDefinition,
     gpt5WebSearchDefinition,
   ];
@@ -103,10 +107,11 @@ class ToolManager {
   private prewarmNativeToolListeners() {
     try {
       const github = this.getGithubConnectorTool();
-      const gdrive = this.getGDriveConnectorTool();
+      const gdrive = ENABLE_LEGACY_GDRIVE ? this.getGDriveConnectorTool() : null;
       log.info('[ToolManager] Tool listener prewarm complete', {}, {
         githubListenerActive: Boolean(github),
         gdriveListenerActive: Boolean(gdrive),
+        legacyGDriveEnabled: ENABLE_LEGACY_GDRIVE,
       });
     } catch (error) {
       log.error('[ToolManager] Failed to prewarm native tool listeners', {}, {

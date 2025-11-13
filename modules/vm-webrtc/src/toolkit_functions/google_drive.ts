@@ -132,28 +132,15 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
   });
 
   try {
-    // Retrieve access token from secure storage
-    const accessToken = await getGDriveAccessToken();
-
-    if (!accessToken) {
-      const errorMessage = 'Google Drive access token not found. Please authenticate first.';
-      log.error('[google_drive] No access token available', {}, {
-        query: safeKeyword,
-      });
-      return JSON.stringify({
-        success: false,
-        group: 'google_drive',
-        tool: 'keyword_search',
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      });
+    // Validate auth prerequisites (client ID + access token)
+    const validationError = await validateAuthPrerequisites('keyword_search');
+    if (validationError) {
+      return validationError;
     }
 
-    // Log token info (length only, not the actual token for security)
-    log.info('[google_drive] Using access token', {}, {
-      tokenLength: accessToken.length,
-      hasToken: true,
-    });
+    // Get the validated access token
+    const accessToken = await getGDriveAccessToken();
+    const clientId = await getGDriveClientId();
 
     const response = await fetchWithTokenRefresh('keyword_search', url, {
       headers: {
@@ -168,7 +155,10 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
         statusText: response.statusText,
         errorText,
         url,
-        tokenLength: accessToken.length,
+        tokenLength: accessToken!.length,
+        clientIdLength: clientId!.length,
+        hasClientId: !!clientId,
+        hasAccessToken: !!accessToken,
       });
       throw new Error(`Drive API error: ${response.status} ${errorText}`);
     }
@@ -217,6 +207,57 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
 }
 
 // MARK: - Helper Functions
+
+/**
+ * Validate that we have the necessary auth prerequisites.
+ * Returns an error response if validation fails, or null if everything is good.
+ */
+async function validateAuthPrerequisites(toolName: string): Promise<string | null> {
+  // Check for client ID first - without this, auth/refresh will fail
+  const clientId = await getGDriveClientId();
+  if (!clientId) {
+    const errorMessage = 'Google Drive Client ID not found. Cannot authenticate without a Client ID. Please configure EXPO_PUBLIC_GOOGLE_DRIVE_CLIENT_ID in your environment.';
+    log.error(`[google_drive] ${toolName} - Missing Client ID`, {}, {
+      hasClientId: false,
+      errorMessage,
+    });
+    return JSON.stringify({
+      success: false,
+      group: 'google_drive',
+      tool: toolName,
+      error: errorMessage,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // Check for access token
+  const accessToken = await getGDriveAccessToken();
+  if (!accessToken) {
+    const errorMessage = 'Google Drive access token not found. Please authenticate first.';
+    log.error(`[google_drive] ${toolName} - No access token available`, {}, {
+      hasClientId: true,
+      clientIdLength: clientId.length,
+      hasAccessToken: false,
+    });
+    return JSON.stringify({
+      success: false,
+      group: 'google_drive',
+      tool: toolName,
+      error: errorMessage,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // All good - log that we have everything we need
+  log.info(`[google_drive] ${toolName} - Auth prerequisites validated`, {}, {
+    hasClientId: true,
+    clientIdLength: clientId.length,
+    hasAccessToken: true,
+    tokenLength: accessToken.length,
+  });
+
+  return null;
+}
 
 /**
  * Refresh the Google Drive access token using the refresh token.
@@ -555,7 +596,11 @@ function buildFileTree(files: Record<string, any>): Record<string, any[]> {
 /**
  * Get document content from Google Docs API
  */
-async function getDocumentContentById(documentId: string, accessToken: string): Promise<any> {
+async function getDocumentContentById(
+  documentId: string,
+  accessToken: string,
+  clientId: string
+): Promise<any> {
   const url = `${DOCS_API_BASE_URL}/documents/${documentId}`;
 
   log.info('[google_drive] Fetching document content', {}, { documentId });
@@ -573,6 +618,10 @@ async function getDocumentContentById(documentId: string, accessToken: string): 
       statusText: response.statusText,
       errorText,
       documentId,
+      tokenLength: accessToken.length,
+      clientIdLength: clientId.length,
+      hasClientId: !!clientId,
+      hasAccessToken: !!accessToken,
     });
     throw new Error(`Docs API error: ${response.status} ${errorText}`);
   }
@@ -678,19 +727,15 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
   log.info('[google_drive] search_documents called', {}, { params });
 
   try {
-    const accessToken = await getGDriveAccessToken();
-
-    if (!accessToken) {
-      const errorMessage = 'Google Drive access token not found. Please authenticate first.';
-      log.error('[google_drive] No access token available', {}, {});
-      return JSON.stringify({
-        success: false,
-        group: 'google_drive',
-        tool: 'search_documents',
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      });
+    // Validate auth prerequisites (client ID + access token)
+    const validationError = await validateAuthPrerequisites('search_documents');
+    if (validationError) {
+      return validationError;
     }
+
+    // Get the validated access token and client ID
+    const accessToken = await getGDriveAccessToken();
+    const clientId = await getGDriveClientId();
 
     const orderByEnums = parseOrderBy(order_by);
     const pageSize = Math.min(10, limit);
@@ -726,6 +771,10 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
           statusText: response.statusText,
           errorText,
           url,
+          tokenLength: accessToken!.length,
+          clientIdLength: clientId!.length,
+          hasClientId: !!clientId,
+          hasAccessToken: !!accessToken,
         });
         throw new Error(`Drive API error: ${response.status} ${errorText}`);
       }
@@ -778,19 +827,15 @@ export async function search_and_retrieve_documents(params: SearchAndRetrieveDoc
   log.info('[google_drive] search_and_retrieve_documents called', {}, { params });
 
   try {
-    const accessToken = await getGDriveAccessToken();
-
-    if (!accessToken) {
-      const errorMessage = 'Google Drive access token not found. Please authenticate first.';
-      log.error('[google_drive] No access token available', {}, {});
-      return JSON.stringify({
-        success: false,
-        group: 'google_drive',
-        tool: 'search_and_retrieve_documents',
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      });
+    // Validate auth prerequisites (client ID + access token)
+    const validationError = await validateAuthPrerequisites('search_and_retrieve_documents');
+    if (validationError) {
+      return validationError;
     }
+
+    // Get the validated access token and client ID
+    const accessToken = await getGDriveAccessToken();
+    const clientId = await getGDriveClientId();
 
     // First search for documents
     const searchResultStr = await search_documents(searchParams);
@@ -803,7 +848,7 @@ export async function search_and_retrieve_documents(params: SearchAndRetrieveDoc
     const documents = [];
     for (const item of searchResult.documents) {
       try {
-        const document = await getDocumentContentById(item.id, accessToken);
+        const document = await getDocumentContentById(item.id, accessToken!, clientId!);
 
         // Convert document content to requested format
         let documentBody: string;
@@ -874,19 +919,15 @@ export async function get_file_tree_structure(params: GetFileTreeStructureParams
   log.info('[google_drive] get_file_tree_structure called', {}, { params });
 
   try {
-    const accessToken = await getGDriveAccessToken();
-
-    if (!accessToken) {
-      const errorMessage = 'Google Drive access token not found. Please authenticate first.';
-      log.error('[google_drive] No access token available', {}, {});
-      return JSON.stringify({
-        success: false,
-        group: 'google_drive',
-        tool: 'get_file_tree_structure',
-        error: errorMessage,
-        timestamp: new Date().toISOString(),
-      });
+    // Validate auth prerequisites (client ID + access token)
+    const validationError = await validateAuthPrerequisites('get_file_tree_structure');
+    if (validationError) {
+      return validationError;
     }
+
+    // Get the validated access token and client ID
+    const accessToken = await getGDriveAccessToken();
+    const clientId = await getGDriveClientId();
 
     const orderByEnums = parseOrderBy(order_by);
     let keepPaginating = true;
@@ -919,6 +960,10 @@ export async function get_file_tree_structure(params: GetFileTreeStructureParams
           statusText: response.statusText,
           errorText,
           url,
+          tokenLength: accessToken!.length,
+          clientIdLength: clientId!.length,
+          hasClientId: !!clientId,
+          hasAccessToken: !!accessToken,
         });
         throw new Error(`Drive API error: ${response.status} ${errorText}`);
       }

@@ -10,14 +10,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import { GDriveConnectorConfigCore } from '../components/settings/GDriveConnectorConfigCore';
-import { getApiKey, hasGDriveTokens } from '../lib/secure-storage';
+import { getApiKey } from '../lib/secure-storage';
 import {
   ConfigureApiKeyActionState,
   ConfigureApiKeyCore,
 } from './ConfigureApiKeyCore';
 
-type OnboardingStep = 'intro' | 'apiKey' | 'gdrive' | 'help';
+type OnboardingStep = 'intro' | 'apiKey' | 'help';
 type ApiKeyActionSnapshot = Pick<ConfigureApiKeyActionState, 'canSubmit' | 'isSubmitting' | 'onSubmit'>;
 
 interface OnboardingWizardProps {
@@ -95,7 +94,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [step, setStep] = useState<OnboardingStep>('intro');
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
-  const [gdriveConnected, setGdriveConnected] = useState(false);
   const [apiKeyActionState, setApiKeyActionState] = useState<ApiKeyActionSnapshot | null>(null);
   const pendingAdvanceRef = useRef(false);
 
@@ -106,7 +104,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setStep('intro');
     setApiKeySaved(false);
     setApiKeyDirty(false);
-    setGdriveConnected(false);
     setApiKeyActionState(null);
     pendingAdvanceRef.current = false;
   }, []);
@@ -161,17 +158,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const preloadState = useCallback(async () => {
     try {
-      const [storedKey, hasTokens] = await Promise.all([
-        getApiKey({ forceSecureStore: true }),
-        hasGDriveTokens(),
-      ]);
+      const storedKey = await getApiKey({ forceSecureStore: true });
       setApiKeySaved(Boolean(storedKey));
       setApiKeyDirty(false);
-      setGdriveConnected(Boolean(hasTokens));
     } catch {
       setApiKeySaved(false);
       setApiKeyDirty(false);
-      setGdriveConnected(false);
     }
   }, []);
 
@@ -204,10 +196,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       if (!apiKeyDirty && apiKeySaved) return true;
       return Boolean(apiKeyActionState?.canSubmit);
     }
-    if (step === 'gdrive') return gdriveConnected;
     if (step === 'help') return true;
     return false;
-  }, [apiKeyActionState, apiKeyDirty, apiKeySaved, gdriveConnected, step]);
+  }, [apiKeyActionState, apiKeyDirty, apiKeySaved, step]);
 
   const handleCancel = useCallback(() => {
     closeWizard();
@@ -245,14 +236,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         return;
       }
       if (apiKeySaved) {
-        setStep('gdrive');
+        setStep('help');
         return;
       }
       Alert.alert('Add Your API Key', 'Please enter your OpenAI API key before continuing.');
-      return;
-    }
-    if (step === 'gdrive') {
-      setStep('help');
       return;
     }
     if (step === 'help') {
@@ -265,13 +252,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setApiKeyDirty(false);
     if (pendingAdvanceRef.current) {
       pendingAdvanceRef.current = false;
-      setStep('gdrive');
+      setStep('help');
     }
   }, [setStep]);
-
-  const handleGdriveStatusChange = useCallback((connected: boolean) => {
-    setGdriveConnected(connected);
-  }, []);
 
   const renderHeader = () => {
     const title =
@@ -279,8 +262,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         ? '👋 Welcome'
         : step === 'apiKey'
         ? 'Add API Key'
-        : step === 'gdrive'
-        ? '📂 Connect Google Drive'
         : 'All Set';
 
     return (
@@ -303,7 +284,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const renderIntro = () => (
     <ScrollView contentContainerStyle={styles.introContent}>
-      <Text style={styles.introHeadline}>Let’s get you ready to vibe.</Text>
+      <Text style={styles.introHeadline}>Let's get you ready to vibe.</Text>
 
       <View style={styles.introRoadmap}>
         <Text style={styles.introStepTitle}>Onboarding is quick and easy</Text>
@@ -318,24 +299,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </Text>
           </View>
         </View>
+
         <View style={styles.introStepRow}>
           <View style={styles.introStepBadge}>
             <Text style={styles.introStepBadgeText}>2</Text>
           </View>
           <View style={styles.introStepContent}>
-            <Text style={styles.introStepLabel}>📂 Connect Google Drive</Text>
-            <Text style={styles.introStepDescription}>
-              Full access to your Google Drive.  No files or auth keys leave your device.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.introStepRow}>
-          <View style={styles.introStepBadge}>
-            <Text style={styles.introStepBadgeText}>3</Text>
-          </View>
-          <View style={styles.introStepContent}>
-            <Text style={styles.introStepLabel}>🎙️ Access your data via voice</Text>
+            <Text style={styles.introStepLabel}>🎙️ Start chatting via voice or text</Text>
             <Text style={styles.introStepDescription}>
               Access your data in a natural conversational way.  Switch to text mode in loud environments.
             </Text>
@@ -369,21 +339,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     />
   );
 
-  const renderGdriveStep = () => (
-    <GDriveConnectorConfigCore
-      isVisible={step === 'gdrive'}
-      renderHeader={() => null}
-      renderFooter={() => null}
-      onConnectionStatusChange={handleGdriveStatusChange}
-      showSuccessAlert={false}
-      successAlertMessage=""
-    />
-  );
-
   const renderHelpStep = () => (
     <ScrollView contentContainerStyle={styles.helpContent}>
       <Text style={styles.helpHeadline}>Onboarding complete! 🙌</Text>
-      <Text style={styles.helpBody}>How to get started:</Text>
+      <Text style={styles.helpBody}>What to do next:</Text>
 
       <View style={styles.helpStepsCard}>
         <View style={styles.helpStepRow}>
@@ -405,9 +364,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Text style={styles.introStepBadgeText}>2</Text>
           </View>
           <View style={styles.helpStepContent}>
-            <Text style={styles.helpStepLabel}>🔎 Ask about Drive files</Text>
+            <Text style={styles.helpStepLabel}>📰 Try the Hacker News tool</Text>
             <Text style={styles.helpStepDescription}>
-              Say things like "Find my project plan" or "Open the meeting notes folder."
+              Ask questions about Hacker News stories - this tool is built-in and ready to use!
             </Text>
           </View>
         </View>
@@ -419,23 +378,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Text style={styles.introStepBadgeText}>3</Text>
           </View>
           <View style={styles.helpStepContent}>
-            <Text style={styles.helpStepLabel}>🗣️ Hear quick summaries</Text>
+            <Text style={styles.helpStepLabel}>🔌 Connect Google Drive or GitHub</Text>
             <Text style={styles.helpStepDescription}>
-              Have Vibemachine read or summarize docs so you stay in the flow.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.helpStepDivider} />
-
-        <View style={styles.helpStepRow}>
-          <View style={styles.introStepBadge}>
-            <Text style={styles.introStepBadgeText}>4</Text>
-          </View>
-          <View style={styles.helpStepContent}>
-            <Text style={styles.helpStepLabel}>📝 Create and edit Google Docs</Text>
-            <Text style={styles.helpStepDescription}>
-              Spin up new docs or update existing ones without leaving the conversation.
+              Open the hamburger menu and go to Settings to connect your Google Drive or GitHub account.
             </Text>
           </View>
         </View>
@@ -446,8 +391,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         <Text style={styles.helpBodyEmphasis}>Configure Chat Mode</Text> to switch to text.
       </Text>
       <Text style={styles.helpBody}>
-        🔌 Ready for more integrations? Add connectors like GitHub from{' '}
-        <Text style={styles.helpBodyEmphasis}>Configure Connectors</Text> whenever you are ready. 🚀
+        💡 Once connected, you can ask about Drive files, create and edit Google Docs, or work with GitHub repositories via voice or text. 🚀
       </Text>
     </ScrollView>
   );
@@ -455,7 +399,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const renderContent = () => {
     if (step === 'intro') return renderIntro();
     if (step === 'apiKey') return renderApiKeyStep();
-    if (step === 'gdrive') return renderGdriveStep();
     return renderHelpStep();
   };
 

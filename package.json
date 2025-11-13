@@ -9,11 +9,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "wizard": "node ./wizard.js",
+    "wizard": "bun ./wizard.ts",
     "eas-build-post-install": "./eas-build-post-install.sh"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@modelcontextprotocol/sdk": "^1.21.1",
     "@octokit/rest": "^22.0.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.206.0",
@@ -61,6 +62,7 @@
     "string-strip-html": "^13.5.0"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",

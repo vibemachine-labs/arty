@@ -582,7 +582,7 @@ export const executeGDriveSnippet = async ({
     return next;
   };
 
-  const wrappedFetch: typeof fetch = async (input: any, init?: RequestInit): Promise<Response> => {
+  const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     if (!originalFetch) {
       return fetch(input, init);
     }

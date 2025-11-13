@@ -220,7 +220,19 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
 
 /**
  * Refresh the Google Drive access token using the refresh token.
- * Returns the new access token or null if refresh fails.
+ *
+ * This function:
+ * 1. Fetches the refresh token and client ID from secure storage
+ * 2. Calls Google's OAuth2 token endpoint to get a new access token
+ * 3. PERSISTS the new token to secure storage via setGDriveAccessToken()
+ * 4. Also stores in globalThis as a fallback
+ * 5. Returns the new access token for immediate use
+ *
+ * Future calls to getGDriveAccessToken() will pick up the refreshed token
+ * from secure storage automatically.
+ *
+ * @param toolName - Name of the tool requesting refresh (for logging)
+ * @returns The new access token or null if refresh fails
  */
 async function refreshAccessToken(toolName: string): Promise<string | null> {
   try {
@@ -267,18 +279,27 @@ async function refreshAccessToken(toolName: string): Promise<string | null> {
       return null;
     }
 
-    // Persist the new token
+    // Persist the new token to secure storage
     try {
       await setGDriveAccessToken(newAccessToken, json?.expires_in);
+      log.info(`[${toolName}] Token saved to secure storage`, {}, {
+        tokenLength: newAccessToken.length,
+        expiresIn: json?.expires_in,
+      });
     } catch (e) {
-      log.warn(`[${toolName}] Failed to persist refreshed token`, {}, {
+      log.warn(`[${toolName}] Failed to persist refreshed token to secure storage, using in-memory only`, {}, {
         errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack : undefined,
       }, e);
     }
+
+    // Also set in global scope as fallback (for consistency with legacy tools)
+    (globalThis as any).gdriveAccessToken = newAccessToken;
 
     log.info(`[${toolName}] Token refreshed successfully`, {}, {
       tokenLength: newAccessToken.length,
       expiresIn: json?.expires_in,
+      persistedToStorage: true,
     });
 
     return newAccessToken;

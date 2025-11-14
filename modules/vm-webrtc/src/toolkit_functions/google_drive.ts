@@ -211,7 +211,7 @@ async function validateAuthPrerequisites(toolName: string): Promise<string | nul
   // Check for client ID first - without this, auth/refresh will fail
   const clientId = await getGDriveClientId();
   if (!clientId) {
-    const errorMessage = 'Google Drive Client ID not found. Cannot authenticate without a Client ID. Please configure EXPO_PUBLIC_GOOGLE_DRIVE_CLIENT_ID in your environment.';
+    const errorMessage = 'Google Drive Client ID not found. Cannot authenticate without a Client ID. Please configure EXPO_PUBLIC_GOOGLE_API_CLIENT_ID in your environment.';
     log.error(`[google_drive] ${toolName} - Missing Client ID`, {}, {
       hasClientId: false,
       errorMessage,
@@ -428,8 +428,8 @@ function buildFilesListQuery(
 
   if (documentContains && documentContains.length > 0) {
     for (const keyword of documentContains) {
-      const nameContains = keyword.replace(/'/g, "\\'");
-      const fullTextContains = keyword.replace(/'/g, "\\'");
+      const nameContains = keyword.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const fullTextContains = keyword.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const keywordQuery = `(name contains '${nameContains}' or fullText contains '${fullTextContains}')`;
       query.push(keywordQuery);
     }
@@ -437,8 +437,8 @@ function buildFilesListQuery(
 
   if (documentNotContains && documentNotContains.length > 0) {
     for (const keyword of documentNotContains) {
-      const nameNotContains = keyword.replace(/'/g, "\\'");
-      const fullTextNotContains = keyword.replace(/'/g, "\\'");
+      const nameNotContains = keyword.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const fullTextNotContains = keyword.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const keywordQuery = `(name not contains '${nameNotContains}' and fullText not contains '${fullTextNotContains}')`;
       query.push(keywordQuery);
     }
@@ -647,8 +647,9 @@ export async function list_drive_folder_children(params: ListDriveFolderChildren
     const qParts: string[] = ['trashed = false'];
 
     if (folder_id) {
-      // List children of that folder
-      qParts.push(`'${folder_id}' in parents`);
+      // List children of that folder – escape to keep Drive query well-formed
+      const safeFolderId = folder_id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      qParts.push(`'${safeFolderId}' in parents`);
     } else {
       // Root folder list – use 'root' as special id
       qParts.push(`'root' in parents`);

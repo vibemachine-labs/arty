@@ -288,6 +288,32 @@
             },
             "required": []
           }
+        },
+        {
+          "type": "function",
+          "name": "get_gdrive_file_content",
+          "group": "google_drive",
+          "description": "Get the content of a Google Drive file. Supports Google Docs (exports as plain text), PDFs (converts to temporary Google Doc then exports as text), and plain text files. Returns an error for unsupported file types.",
+          "supported_auth": "oauth",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "file_id": {
+                "type": "string",
+                "description": "The Google Drive file ID to get content from."
+              },
+              "file_name": {
+                "type": "string",
+                "description": "Optional file name for logging and output."
+              },
+              "mime_type": {
+                "type": "string",
+                "description": "Optional MIME type. If not provided, will be fetched from Google Drive API."
+              }
+            },
+            "required": ["file_id"]
+          }
         }
       ]
     }

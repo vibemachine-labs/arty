@@ -53,6 +53,12 @@ export interface ListDriveFolderChildrenParams {
   page_token?: string;
 }
 
+export interface GetGDriveFileContentParams {
+  file_id: string;
+  file_name?: string;
+  mime_type?: string;
+}
+
 interface DriveFile {
   id: string;
   name: string;
@@ -727,6 +733,266 @@ export async function list_drive_folder_children(params: ListDriveFolderChildren
       tool: 'list_drive_folder_children',
       error: errorMessage,
       folder_id: folder_id || 'root',
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * Get the content of a Google Drive file.
+ * Supports Google Docs, PDFs, and plain text files.
+ *
+ * @param params.file_id - The file ID to get content from
+ * @param params.file_name - Optional file name (for logging/output)
+ * @param params.mime_type - Optional mime type (if not provided, will be fetched)
+ */
+export async function get_gdrive_file_content(params: GetGDriveFileContentParams): Promise<string> {
+  const { file_id, file_name, mime_type } = params;
+
+  const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB limit
+  const INCLUDE_ALL_DRIVES = 'true';
+
+  log.info('[google_drive] get_gdrive_file_content called', {}, { params });
+
+  try {
+    // Validate auth prerequisites
+    const validationError = await validateAuthPrerequisites('get_gdrive_file_content');
+    if (validationError) {
+      return validationError;
+    }
+
+    // Get the validated access token
+    const accessToken = await getGDriveAccessToken();
+
+    // Helper to make authenticated requests
+    const authFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+      return fetchWithTokenRefresh('get_gdrive_file_content', url, {
+        ...init,
+        headers: {
+          ...(init?.headers || {}),
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+    };
+
+    const fetchJSON = async (url: string, init?: RequestInit): Promise<any> => {
+      const response = await authFetch(url, init);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Drive API error ${response.status}: ${errorText}`);
+      }
+      return response.json();
+    };
+
+    // Step 1: Get file metadata if mime_type not provided
+    let actualMimeType = mime_type;
+    let actualFileName = file_name;
+    let fileSize: number | null = null;
+
+    if (!actualMimeType) {
+      const metaUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(file_id)}?fields=id,name,mimeType,size&supportsAllDrives=${INCLUDE_ALL_DRIVES}`;
+      const meta = await fetchJSON(metaUrl);
+
+      actualMimeType = meta.mimeType;
+      actualFileName = meta.name || file_name;
+      fileSize = typeof meta.size === 'string' ? parseInt(meta.size, 10) : (meta.size || null);
+
+      log.info('[google_drive] get_gdrive_file_content - fetched metadata', {}, {
+        file_id,
+        mimeType: actualMimeType,
+        name: actualFileName,
+        size: fileSize,
+      });
+    }
+
+    // Step 2: Handle different file types
+    if (actualMimeType === GOOGLE_DOCS_MIME_TYPE) {
+      // Handle Google Docs - export as plain text
+      log.info('[google_drive] get_gdrive_file_content - exporting Google Doc', {}, { file_id });
+
+      const exportUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(file_id)}/export?${new URLSearchParams({
+        mimeType: 'text/plain',
+        supportsAllDrives: INCLUDE_ALL_DRIVES,
+      }).toString()}`;
+
+      const response = await authFetch(exportUrl);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Drive API error ${response.status}: ${errorText}`);
+      }
+
+      const text = await response.text();
+
+      log.info('[google_drive] get_gdrive_file_content - Google Doc exported', {}, {
+        file_id,
+        textLength: text.length,
+      });
+
+      return JSON.stringify({
+        success: true,
+        group: 'google_drive',
+        tool: 'get_gdrive_file_content',
+        file_id,
+        name: actualFileName || null,
+        mime_type: actualMimeType,
+        content: text,
+        timestamp: new Date().toISOString(),
+      });
+
+    } else if (actualMimeType === 'application/pdf') {
+      // Handle PDF - convert to temp Google Doc, export as text, delete temp doc
+      log.info('[google_drive] get_gdrive_file_content - processing PDF', {}, { file_id, size: fileSize });
+
+      // Check size limit
+      if (fileSize && fileSize > MAX_PDF_BYTES) {
+        throw new Error(`PDF too large (${fileSize} bytes). Cap is ${MAX_PDF_BYTES} bytes.`);
+      }
+
+      // Convert PDF to temporary Google Doc
+      const copyUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(file_id)}/copy?supportsAllDrives=${INCLUDE_ALL_DRIVES}`;
+      const copyBody = {
+        name: `${actualFileName || 'PDF'} (temp text extract)`,
+        mimeType: GOOGLE_DOCS_MIME_TYPE,
+      };
+
+      log.info('[google_drive] get_gdrive_file_content - creating temp Google Doc from PDF', {}, { file_id });
+
+      const tempFile = await fetchJSON(copyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(copyBody),
+      });
+
+      if (!tempFile || !tempFile.id) {
+        throw new Error('Failed to create temporary Google Doc.');
+      }
+
+      const tempFileId = tempFile.id;
+      log.info('[google_drive] get_gdrive_file_content - temp doc created', {}, { tempFileId });
+
+      try {
+        // Export the temp doc as text
+        const exportUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(tempFileId)}/export?mimeType=text/plain&supportsAllDrives=${INCLUDE_ALL_DRIVES}`;
+
+        const exportResponse = await authFetch(exportUrl);
+        if (!exportResponse.ok) {
+          const errorText = await exportResponse.text();
+          throw new Error(`Drive API error ${exportResponse.status}: ${errorText}`);
+        }
+
+        const text = await exportResponse.text();
+
+        log.info('[google_drive] get_gdrive_file_content - PDF exported as text', {}, {
+          file_id,
+          textLength: text.length,
+        });
+
+        // Cleanup - delete temp doc
+        const deleteUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(tempFileId)}?supportsAllDrives=${INCLUDE_ALL_DRIVES}`;
+        await authFetch(deleteUrl, { method: 'DELETE' })
+          .catch(err => {
+            log.warn('[google_drive] get_gdrive_file_content - temp doc cleanup failed (ignored)', {}, {
+              tempFileId,
+              error: String(err),
+            });
+          });
+
+        return JSON.stringify({
+          success: true,
+          group: 'google_drive',
+          tool: 'get_gdrive_file_content',
+          file_id,
+          name: actualFileName || null,
+          mime_type: actualMimeType,
+          bytes: fileSize,
+          content: text,
+          timestamp: new Date().toISOString(),
+        });
+
+      } catch (error) {
+        // Cleanup on error - delete temp doc
+        log.warn('[google_drive] get_gdrive_file_content - error during PDF processing, cleaning up temp doc', {}, {
+          tempFileId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        const deleteUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(tempFileId)}?supportsAllDrives=${INCLUDE_ALL_DRIVES}`;
+        await authFetch(deleteUrl, { method: 'DELETE' })
+          .catch(err => {
+            log.warn('[google_drive] get_gdrive_file_content - temp doc cleanup failed (ignored)', {}, {
+              tempFileId,
+              error: String(err),
+            });
+          });
+
+        throw error;
+      }
+
+    } else if (actualMimeType === 'text/plain' || actualMimeType?.startsWith('text/')) {
+      // Handle plain text files - download directly
+      log.info('[google_drive] get_gdrive_file_content - downloading text file', {}, { file_id, mimeType: actualMimeType });
+
+      const downloadUrl = `${DRIVE_API_BASE_URL}/files/${encodeURIComponent(file_id)}?alt=media&supportsAllDrives=${INCLUDE_ALL_DRIVES}`;
+
+      const response = await authFetch(downloadUrl);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Drive API error ${response.status}: ${errorText}`);
+      }
+
+      const text = await response.text();
+
+      log.info('[google_drive] get_gdrive_file_content - text file downloaded', {}, {
+        file_id,
+        textLength: text.length,
+      });
+
+      return JSON.stringify({
+        success: true,
+        group: 'google_drive',
+        tool: 'get_gdrive_file_content',
+        file_id,
+        name: actualFileName || null,
+        mime_type: actualMimeType,
+        content: text,
+        timestamp: new Date().toISOString(),
+      });
+
+    } else {
+      // Unsupported file type
+      const errorMessage = `Unsupported file type: ${actualMimeType}. We currently support Google Docs (application/vnd.google-apps.document), PDFs (application/pdf), and text files (text/*).`;
+
+      log.warn('[google_drive] get_gdrive_file_content - unsupported file type', {}, {
+        file_id,
+        mimeType: actualMimeType,
+      });
+
+      return JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'get_gdrive_file_content',
+        error: errorMessage,
+        file_id,
+        name: actualFileName || null,
+        mime_type: actualMimeType,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log.error('[google_drive] get_gdrive_file_content failed', {}, {
+      file_id,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    }, error);
+
+    return JSON.stringify({
+      success: false,
+      group: 'google_drive',
+      tool: 'get_gdrive_file_content',
+      error: errorMessage,
+      file_id,
       timestamp: new Date().toISOString(),
     });
   }

@@ -39,6 +39,7 @@ export const toolkitRegistry: ToolkitRegistry = {
     keyword_search: googleDrive.keyword_search,
     search_documents: googleDrive.search_documents,
     list_drive_folder_children: googleDrive.list_drive_folder_children,
+    get_gdrive_file_content: googleDrive.get_gdrive_file_content,
   },
 };
 

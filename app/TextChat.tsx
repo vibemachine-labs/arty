@@ -527,7 +527,7 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     setIsSending(true);
 
     try {
-      const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions();
+      // const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions();
 
       // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
       const toolDefinitionsFromToolkits = getToolkitDefinitions(); // gen2
@@ -536,10 +536,12 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       });
 
       // Merge Gen1 and Gen2 tool definitions
-      const tools = [
-        ...(toolDefinitionsWithPrompts || []),
-        ...toolDefinitionsFromToolkits,
-      ];
+      // const tools = [
+      //   ...(toolDefinitionsWithPrompts || []),
+      //   ...toolDefinitionsFromToolkits,
+      // ];
+
+      const tools = toolDefinitionsFromToolkits;
 
       const toolNames = toolManager.getToolNames(tools);
       log.info('[TextChat] tools included:', {}, toolNames);

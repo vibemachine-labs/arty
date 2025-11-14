@@ -22,6 +22,11 @@ final class WebRTCEventHandler {
   private struct ConversationItem {
     let id: String
     let isTurn: Bool  // true for user/assistant messages that count as turns
+    let createdAt: Date
+    let role: String?
+    let type: String?
+    let contentSnippet: String?  // First 100 chars of content for logging
+    let turnNumber: Int?  // Turn number if this is a turn item
   }
 
   private var conversationItems: [ConversationItem] = []
@@ -641,23 +646,58 @@ final class WebRTCEventHandler {
     }
 
     conversationQueue.async {
-      // Check if this is a user or assistant message (counts as a turn)
-      let isTurn = (item["role"] as? String).map { $0 == "user" || $0 == "assistant" } ?? false
+      // Extract metadata
+      let role = item["role"] as? String
+      let type = item["type"] as? String
+      let isTurn = (role == "user" || role == "assistant")
 
-      // Add item to tracking
-      let conversationItem = ConversationItem(id: itemId, isTurn: isTurn)
+      // Extract content snippet for logging
+      var contentSnippet: String?
+      if let content = item["content"] as? [[String: Any]] {
+        // Content is an array of content blocks
+        for contentBlock in content {
+          if let text = contentBlock["text"] as? String, !text.isEmpty {
+            contentSnippet = String(text.prefix(100))
+            break
+          } else if let transcript = contentBlock["transcript"] as? String, !transcript.isEmpty {
+            contentSnippet = String(transcript.prefix(100))
+            break
+          }
+        }
+      }
+
+      // Increment turn count if this is a turn
+      let turnNumber = isTurn ? self.conversationTurnCount + 1 : nil
+      if isTurn {
+        self.conversationTurnCount += 1
+      }
+
+      // Create conversation item with full metadata
+      let conversationItem = ConversationItem(
+        id: itemId,
+        isTurn: isTurn,
+        createdAt: Date(),
+        role: role,
+        type: type,
+        contentSnippet: contentSnippet,
+        turnNumber: turnNumber
+      )
       self.conversationItems.append(conversationItem)
 
       if isTurn {
-        self.conversationTurnCount += 1
-
+        let ageInSeconds = Date().timeIntervalSince(conversationItem.createdAt)
         self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Turn item created",
+          "[TurnLimit] Turn item created: \(itemId)",
           attributes: logAttributes(for: .debug, metadata: [
             "itemId": itemId,
-            "role": item["role"] as Any,
+            "role": role as Any,
+            "turnNumber": turnNumber as Any,
             "turnCount": self.conversationTurnCount,
             "totalItems": self.conversationItems.count,
+            "position": self.conversationItems.count - 1,
+            "contentLength": contentSnippet?.count as Any,
+            "contentSnippet": contentSnippet as Any,
+            "createdAt": ISO8601DateFormatter().string(from: conversationItem.createdAt),
             "maxTurns": self.maxConversationTurns as Any
           ])
         )
@@ -703,6 +743,9 @@ final class WebRTCEventHandler {
     conversationQueue.async {
       if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
         let item = self.conversationItems[index]
+        let ageInSeconds = Date().timeIntervalSince(item.createdAt)
+        let formatter = ISO8601DateFormatter()
+
         self.conversationItems.remove(at: index)
 
         // Decrement turn count if this was a turn item
@@ -712,11 +755,25 @@ final class WebRTCEventHandler {
 
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Item deleted confirmation",
-          attributes: logAttributes(for: .debug, metadata: [
+          attributes: logAttributes(for: .info, metadata: [
             "itemId": itemId,
             "wasTurn": item.isTurn,
+            "turnNumber": item.turnNumber as Any,
+            "role": item.role as Any,
+            "positionWas": index,
+            "ageSeconds": String(format: "%.2f", ageInSeconds),
+            "createdAt": formatter.string(from: item.createdAt),
+            "contentLength": item.contentSnippet?.count as Any,
+            "contentSnippet": item.contentSnippet as Any,
             "remainingItems": self.conversationItems.count,
             "remainingTurns": self.conversationTurnCount
+          ])
+        )
+      } else {
+        self.logger.log(
+          "[WebRTCEventHandler] [TurnLimit] Item deleted but not found in tracking",
+          attributes: logAttributes(for: .warn, metadata: [
+            "itemId": itemId
           ])
         )
       }
@@ -747,19 +804,54 @@ final class WebRTCEventHandler {
       ])
     )
 
-    var itemsToDelete: [String] = []
+    var itemsToDelete: [(item: ConversationItem, position: Int)] = []
     var turnsRemoved = 0
+    let now = Date()
+    let formatter = ISO8601DateFormatter()
 
     // Iterate from oldest (front of array) and collect items to delete
-    for item in self.conversationItems {
-      itemsToDelete.append(item.id)
+    for (index, item) in self.conversationItems.enumerated() {
+      itemsToDelete.append((item, index))
 
       if item.isTurn {
         turnsRemoved += 1
+
+        // Log details about the turn being pruned
+        let ageInSeconds = now.timeIntervalSince(item.createdAt)
+        self.logger.log(
+          "[WebRTCEventHandler] [TurnLimit] Marking turn for deletion",
+          attributes: logAttributes(for: .info, metadata: [
+            "itemId": item.id,
+            "turnNumber": item.turnNumber as Any,
+            "role": item.role as Any,
+            "position": index,
+            "ageSeconds": String(format: "%.2f", ageInSeconds),
+            "createdAt": formatter.string(from: item.createdAt),
+            "contentLength": item.contentSnippet?.count as Any,
+            "contentSnippet": item.contentSnippet as Any,
+            "turnsRemovedSoFar": turnsRemoved,
+            "turnsToRemove": turnsToRemove
+          ])
+        )
+
         // Stop once we've identified enough turns to remove
         if turnsRemoved >= turnsToRemove {
           break
         }
+      } else {
+        // Log non-turn items being pruned (associated with turns)
+        let ageInSeconds = now.timeIntervalSince(item.createdAt)
+        self.logger.log(
+          "[WebRTCEventHandler] [TurnLimit] Marking non-turn item for deletion",
+          attributes: logAttributes(for: .debug, metadata: [
+            "itemId": item.id,
+            "type": item.type as Any,
+            "role": item.role as Any,
+            "position": index,
+            "ageSeconds": String(format: "%.2f", ageInSeconds),
+            "createdAt": formatter.string(from: item.createdAt)
+          ])
+        )
       }
     }
 
@@ -767,21 +859,27 @@ final class WebRTCEventHandler {
       "[WebRTCEventHandler] [TurnLimit] Identified items to prune",
       attributes: logAttributes(for: .info, metadata: [
         "itemsToDelete": itemsToDelete.count,
-        "turnsToRemove": turnsRemoved
+        "turnsToRemove": turnsRemoved,
+        "oldestItemAge": itemsToDelete.first.map { String(format: "%.2f", now.timeIntervalSince($0.item.createdAt)) } as Any,
+        "newestPrunedItemAge": itemsToDelete.last.map { String(format: "%.2f", now.timeIntervalSince($0.item.createdAt)) } as Any
       ])
     )
 
     // Send delete events for identified items
-    for itemId in itemsToDelete {
+    for (item, position) in itemsToDelete {
       let deleteEvent: [String: Any] = [
         "type": "conversation.item.delete",
-        "item_id": itemId
+        "item_id": item.id
       ]
 
       self.logger.log(
-        "[WebRTCEventHandler] [TurnLimit] Sending prune delete event",
+        "[TurnLimit] Sending prune delete event for item: \(item.id)",
         attributes: logAttributes(for: .debug, metadata: [
-          "itemId": itemId
+          "itemId": item.id,
+          "position": position,
+          "isTurn": item.isTurn,
+          "turnNumber": item.turnNumber as Any,
+          "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
         ])
       )
 

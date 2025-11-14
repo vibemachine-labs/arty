@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Slider from "@react-native-community/slider";
 
 import { BottomSheet } from "../ui/BottomSheet";
@@ -7,9 +7,9 @@ import { BottomSheet } from "../ui/BottomSheet";
 interface ConfigureContextWindowProps {
   visible: boolean;
   retentionRatio: number;
-  maxConversationTurns: number | undefined;
+  maxConversationTurns: number;
   onRetentionRatioChange: (value: number) => void;
-  onMaxConversationTurnsChange: (value: number | undefined) => void;
+  onMaxConversationTurnsChange: (value: number) => void;
   onClose: () => void;
 }
 
@@ -21,15 +21,8 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
   onMaxConversationTurnsChange,
   onClose,
 }) => {
-  const handleTurnsTextChange = (text: string) => {
-    if (text === "") {
-      onMaxConversationTurnsChange(undefined);
-    } else {
-      const num = parseInt(text, 10);
-      if (!isNaN(num) && num > 0) {
-        onMaxConversationTurnsChange(num);
-      }
-    }
+  const handleTurnsSliderChange = (value: number) => {
+    onMaxConversationTurnsChange(Math.round(value));
   };
 
   return (
@@ -64,18 +57,20 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Max Conversation Turns</Text>
+            <Text style={styles.sectionValue}>{maxConversationTurns}</Text>
           </View>
           <Text style={styles.settingSubtitle}>
-            Limit total conversation turns (leave empty for unlimited)
+            Limit conversation history to most recent {maxConversationTurns} turn{maxConversationTurns === 1 ? '' : 's'}
           </Text>
-          <TextInput
-            style={styles.textInput}
-            value={maxConversationTurns?.toString() ?? ""}
-            onChangeText={handleTurnsTextChange}
-            placeholder="Unlimited"
-            placeholderTextColor="#8E8E93"
-            keyboardType="number-pad"
-            accessibilityLabel="Maximum conversation turns"
+          <Slider
+            style={styles.slider}
+            minimumValue={1}
+            maximumValue={20}
+            step={1}
+            value={maxConversationTurns}
+            onValueChange={handleTurnsSliderChange}
+            minimumTrackTintColor="#0A84FF"
+            maximumTrackTintColor="#D1D1D6"
           />
         </View>
       </View>
@@ -119,15 +114,5 @@ const styles = StyleSheet.create({
   slider: {
     width: "100%",
     height: 40,
-  },
-  textInput: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#D1D1D6",
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: "#1C1C1E",
   },
 });

@@ -45,7 +45,7 @@ type VoiceChatProps = {
   selectedVadMode: VadMode;
   mainPromptAddition: string;
   retentionRatio: number;
-  maxConversationTurns: number | undefined;
+  maxConversationTurns: number;
 };
 
 export function VoiceChat({
@@ -401,6 +401,8 @@ export function VoiceChat({
     selectedVadMode,
     voiceSpeed,
     isRecordingEnabled,
+    maxConversationTurns,
+    retentionRatio,
   ]);
 
   const handleStopVoiceSession = useCallback(async () => {

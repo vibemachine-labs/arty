@@ -181,8 +181,56 @@ final class OpenAIWebRTCClient: NSObject {
         Task { @MainActor in
           self.emitModuleEvent(name, payload: payload)
         }
+      },
+      sendDataChannelMessage: { [weak self] event in
+        guard let self else { return }
+        self.sendDataChannelMessage(event)
       }
     )
+  }
+
+  func sendDataChannelMessage(_ event: [String: Any]) {
+    guard let dataChannel = dataChannel, dataChannel.readyState == .open else {
+      logger.log(
+        "[VmWebrtc] Cannot send data channel message - channel not open",
+        attributes: logAttributes(for: .warn, metadata: [
+          "channelState": dataChannel?.readyState.rawValue as Any,
+          "eventType": event["type"] as Any
+        ])
+      )
+      return
+    }
+
+    do {
+      let jsonData = try JSONSerialization.data(withJSONObject: event, options: [])
+      let buffer = RTCDataBuffer(data: jsonData, isBinary: false)
+      let success = dataChannel.sendData(buffer)
+
+      if success {
+        logger.log(
+          "[VmWebrtc] Data channel message sent",
+          attributes: logAttributes(for: .debug, metadata: [
+            "eventType": event["type"] as Any,
+            "dataSize": jsonData.count
+          ])
+        )
+      } else {
+        logger.log(
+          "[VmWebrtc] Failed to send data channel message",
+          attributes: logAttributes(for: .warn, metadata: [
+            "eventType": event["type"] as Any
+          ])
+        )
+      }
+    } catch {
+      logger.log(
+        "[VmWebrtc] Failed to serialize data channel message",
+        attributes: logAttributes(for: .error, metadata: [
+          "eventType": event["type"] as Any,
+          "error": error.localizedDescription
+        ])
+      )
+    }
   }
 
   func quantizedRetentionRatio(_ ratio: Double) -> NSNumber {
@@ -347,6 +395,10 @@ final class OpenAIWebRTCClient: NSObject {
     self.maxConversationTurns = maxConversationTurns
     self.retentionRatio = retentionRatio
 
+    // Configure conversation turn limit in event handler
+    eventHandler.configureConversationTurnLimit(maxTurns: maxConversationTurns)
+    eventHandler.resetConversationTracking()
+
     eventHandler.stopIdleMonitoring(reason: "starting_new_connection")
 
     self.logger.log("[VmWebrtc] " + "Starting OpenAI WebRTC connection", attributes: logAttributes(for: .info, metadata: [
@@ -467,6 +519,7 @@ final class OpenAIWebRTCClient: NSObject {
       self.logger.log("[VmWebrtc] " + "Closing OpenAI WebRTC connection", attributes: logAttributes(for: .info))
 
       eventHandler.stopIdleMonitoring(reason: "connection_closed")
+      eventHandler.resetConversationTracking()
       stopInboundAudioStatsMonitoring()
       stopOutboundAudioStatsMonitoring()
       remoteAudioTrackId = nil

@@ -28,10 +28,11 @@ export const toolkitRegistry: ToolkitRegistry = {
     getStoryInfo: hackerNews.getStoryInfo,
     getUserInfo: hackerNews.getUserInfo,
   },
-  daily_papers: {
-    showDailyPapers: dailyPapers.showDailyPapers,
-    showCommentsForPaper: dailyPapers.showCommentsForPaper,
-  },
+  // disable until working again
+  // daily_papers: {
+  //   showDailyPapers: dailyPapers.showDailyPapers,
+  //   showCommentsForPaper: dailyPapers.showCommentsForPaper,
+  // },
   web: {
     getContentsFromUrl: web.getContentsFromUrl,
   },

@@ -23,6 +23,13 @@ import { HamburgerMenu, type MenuSection } from "../components/ui/HamburgerMenu"
 import { log } from "../lib/logger";
 import { DEFAULT_VAD_MODE, loadVadPreference, saveVadPreference, type VadMode } from "../lib/vadPreference";
 import { DEFAULT_VOICE, loadVoicePreference, saveVoicePreference } from "../lib/voicePreference";
+import {
+  DEFAULT_RETENTION_RATIO,
+  DEFAULT_MAX_CONVERSATION_TURNS,
+  loadContextWindowPreferences,
+  saveRetentionRatio,
+  saveMaxConversationTurns
+} from "../lib/contextWindowPreference";
 import { getApiKey } from "../lib/secure-storage";
 import { loadMainPromptAddition } from "../lib/mainPrompt";
 import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
@@ -81,8 +88,8 @@ export default function Index() {
   const [mainPromptDraft, setMainPromptDraft] = useState("");
   const [mainPromptAddition, setMainPromptAddition] = useState("");
   const [contextWindowVisible, setContextWindowVisible] = useState(false);
-  const [retentionRatio, setRetentionRatio] = useState(0.8);
-  const [maxConversationTurns, setMaxConversationTurns] = useState<number | undefined>(undefined);
+  const [retentionRatio, setRetentionRatio] = useState(DEFAULT_RETENTION_RATIO);
+  const [maxConversationTurns, setMaxConversationTurns] = useState<number>(DEFAULT_MAX_CONVERSATION_TURNS);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
@@ -147,6 +154,29 @@ export default function Index() {
     };
 
     hydrateVoicePreference();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateContextWindowPreferences = async () => {
+      const stored = await loadContextWindowPreferences();
+      if (!isMounted) {
+        return;
+      }
+      setRetentionRatio(stored.retentionRatio);
+      setMaxConversationTurns(stored.maxConversationTurns);
+      log.info("Context window preferences loaded from storage", {}, {
+        retentionRatio: stored.retentionRatio,
+        maxConversationTurns: stored.maxConversationTurns,
+      });
+    };
+
+    hydrateContextWindowPreferences();
 
     return () => {
       isMounted = false;
@@ -221,17 +251,21 @@ export default function Index() {
   );
 
   const handleMaxConversationTurnsChange = useCallback(
-    (value: number | undefined) => {
-      if (value !== undefined) {
-        Alert.alert(
-          "Not Implemented",
-          "Maximum conversation turns is not currently implemented. This setting will be available in a future update.",
-          [{ text: "OK" }]
-        );
-        setMaxConversationTurns(undefined);
-      } else {
-        setMaxConversationTurns(value);
-      }
+    (value: number) => {
+      // Enforce range 1-20
+      const clampedValue = Math.max(1, Math.min(20, Math.round(value)));
+      setMaxConversationTurns(clampedValue);
+      void saveMaxConversationTurns(clampedValue);
+      log.info("Max conversation turns preference updated and saved", {}, { maxConversationTurns: clampedValue });
+    },
+    []
+  );
+
+  const handleRetentionRatioChange = useCallback(
+    (value: number) => {
+      setRetentionRatio(value);
+      void saveRetentionRatio(value);
+      log.info("Retention ratio preference updated and saved", {}, { retentionRatio: value });
     },
     []
   );
@@ -401,7 +435,7 @@ export default function Index() {
         visible={contextWindowVisible}
         retentionRatio={retentionRatio}
         maxConversationTurns={maxConversationTurns}
-        onRetentionRatioChange={setRetentionRatio}
+        onRetentionRatioChange={handleRetentionRatioChange}
         onMaxConversationTurnsChange={handleMaxConversationTurnsChange}
         onClose={() => setContextWindowVisible(false)}
       />

@@ -7,9 +7,9 @@ import { BottomSheet } from "../ui/BottomSheet";
 interface ConfigureContextWindowProps {
   visible: boolean;
   retentionRatio: number;
-  maxConversationTurns: number | undefined;
+  maxConversationTurns: number;
   onRetentionRatioChange: (value: number) => void;
-  onMaxConversationTurnsChange: (value: number | undefined) => void;
+  onMaxConversationTurnsChange: (value: number) => void;
   onClose: () => void;
 }
 
@@ -57,17 +57,17 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Max Conversation Turns</Text>
-            <Text style={styles.sectionValue}>{maxConversationTurns ?? "Unlimited"}</Text>
+            <Text style={styles.sectionValue}>{maxConversationTurns}</Text>
           </View>
           <Text style={styles.settingSubtitle}>
-            Limit total conversation turns (1-20)
+            Limit conversation history to most recent {maxConversationTurns} turn{maxConversationTurns === 1 ? '' : 's'}
           </Text>
           <Slider
             style={styles.slider}
             minimumValue={1}
             maximumValue={20}
             step={1}
-            value={maxConversationTurns ?? 7}
+            value={maxConversationTurns}
             onValueChange={handleTurnsSliderChange}
             minimumTrackTintColor="#0A84FF"
             maximumTrackTintColor="#D1D1D6"

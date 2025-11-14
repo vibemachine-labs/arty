@@ -82,7 +82,7 @@ export default function Index() {
   const [mainPromptAddition, setMainPromptAddition] = useState("");
   const [contextWindowVisible, setContextWindowVisible] = useState(false);
   const [retentionRatio, setRetentionRatio] = useState(0.8);
-  const [maxConversationTurns, setMaxConversationTurns] = useState<number | undefined>(7);
+  const [maxConversationTurns, setMaxConversationTurns] = useState<number>(7);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
@@ -221,17 +221,10 @@ export default function Index() {
   );
 
   const handleMaxConversationTurnsChange = useCallback(
-    (value: number | undefined) => {
-      if (value !== undefined) {
-        Alert.alert(
-          "Not Implemented",
-          "Maximum conversation turns is not currently implemented. This setting will be available in a future update.",
-          [{ text: "OK" }]
-        );
-        setMaxConversationTurns(undefined);
-      } else {
-        setMaxConversationTurns(value);
-      }
+    (value: number) => {
+      // Enforce range 1-20
+      const clampedValue = Math.max(1, Math.min(20, Math.round(value)));
+      setMaxConversationTurns(clampedValue);
     },
     []
   );

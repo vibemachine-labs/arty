@@ -45,7 +45,7 @@ type VoiceChatProps = {
   selectedVadMode: VadMode;
   mainPromptAddition: string;
   retentionRatio: number;
-  maxConversationTurns: number | undefined;
+  maxConversationTurns: number;
 };
 
 export function VoiceChat({

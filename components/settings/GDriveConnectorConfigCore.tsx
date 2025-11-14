@@ -235,6 +235,7 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
   const [clientIdOverride, setClientIdOverride] = useState("");
   const [initialClientIdOverride, setInitialClientIdOverride] = useState("");
   const [hasAuthTokens, setHasAuthTokens] = useState(false);
+  const [hasClientId, setHasClientId] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isAdvancedVisible, setIsAdvancedVisible] = useState(false);
 
@@ -243,14 +244,16 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
 
     const load = async () => {
       try {
-        const [override, tokens] = await Promise.all([
+        const [override, tokens, clientId] = await Promise.all([
           getGDriveClientIdOverride(),
           hasGDriveTokens(),
+          getGDriveClientId(),
         ]);
         const overrideValue = override ?? "";
         setClientIdOverride(overrideValue);
         setInitialClientIdOverride(overrideValue);
         setHasAuthTokens(Boolean(tokens));
+        setHasClientId(Boolean(clientId));
       } catch {
         // ignore load errors; alerts will surface on interaction
       }
@@ -260,8 +263,8 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
   }, [isVisible]);
 
   useEffect(() => {
-    onConnectionStatusChange?.(hasAuthTokens);
-  }, [hasAuthTokens, onConnectionStatusChange]);
+    onConnectionStatusChange?.(hasAuthTokens && hasClientId);
+  }, [hasAuthTokens, hasClientId, onConnectionStatusChange]);
 
   const handleSave = useCallback(async () => {
     setIsLoading(true);
@@ -273,6 +276,11 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
         await saveGDriveClientIdOverride(value);
       }
       setInitialClientIdOverride(value);
+
+      // Refresh client ID status
+      const clientId = await getGDriveClientId();
+      setHasClientId(Boolean(clientId));
+
       Alert.alert("Saved", "Google Client ID override has been updated.", [
         {
           text: "OK",
@@ -373,10 +381,15 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
         showsVerticalScrollIndicator={true}
         bounces={true}
       >
-        {hasAuthTokens ? (
+        {hasAuthTokens && hasClientId ? (
           <View style={styles.statusBannerConnected}>
             <Text style={styles.statusIcon}>✓</Text>
             <Text style={styles.statusTextConnected}>Connected to Google Drive</Text>
+          </View>
+        ) : !hasClientId ? (
+          <View style={styles.statusBannerDisconnected}>
+            <Text style={styles.statusIcon}>•</Text>
+            <Text style={styles.statusTextDisconnected}>Status: Not connected yet (missing client id)</Text>
           </View>
         ) : (
           <View style={styles.statusBannerDisconnected}>
@@ -389,9 +402,13 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
           <ButtonCard
             icon="🔗"
             title="Connect with Google Drive"
-            note={'⚠️ Tap "Advanced" during Google sign-in and continue despite the unverified app warning.'}
+            note={
+              !hasClientId
+                ? 'Configure a Client ID first (see Advanced Options below)'
+                : '⚠️ Tap "Advanced" during Google sign-in and continue despite the unverified app warning.'
+            }
             variant="primary"
-            disabled={isLoading || hasAuthTokens}
+            disabled={isLoading || hasAuthTokens || !hasClientId}
             onPress={handleConnect}
           />
           <ButtonCard

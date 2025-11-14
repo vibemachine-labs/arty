@@ -93,13 +93,13 @@ export const openOpenAIConnectionAsync = async (
   if (trimmedInstructions.length === 0) {
     throw new Error(`[${MODULE_NAME}] instructions must be a non-empty string.`);
   }
-  const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions(
-    options.toolDefinitions,
-  );
+  // const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions(
+  //   options.toolDefinitions,
+  // );
 
-  log.info(`[${MODULE_NAME}] Tool definitions resolved`, {}, {
-    definitions: toolDefinitionsWithPrompts,
-  });
+  // log.info(`[${MODULE_NAME}] Tool definitions resolved`, {}, {
+  //   definitions: toolDefinitionsWithPrompts,
+  // });
 
   // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
   const toolDefinitionsFromToolkits = getToolkitDefinitions(); // gen2
@@ -108,10 +108,12 @@ export const openOpenAIConnectionAsync = async (
   });
 
   // Merge Gen1 and Gen2 tool definitions
-  const mergedToolDefinitions = [
-    ...(toolDefinitionsWithPrompts || []),
-    ...toolDefinitionsFromToolkits,
-  ];
+  // const mergedToolDefinitions = [
+  //   ...(toolDefinitionsWithPrompts || []),
+  //   ...toolDefinitionsFromToolkits,
+  // ];
+
+  const mergedToolDefinitions = toolDefinitionsFromToolkits;
 
   log.info(`[${MODULE_NAME}] Merged tool definitions`, {}, {
     definitions: mergedToolDefinitions,

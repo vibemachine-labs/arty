@@ -376,7 +376,7 @@ export async function getGDriveClientId(): Promise<string | null> {
   if (envDefault) {
     log.info('ℹ️ Using GDrive Client ID from .env (EXPO_PUBLIC_GOOGLE_API_CLIENT_ID)', {});
   } else {
-    log.warn('ℹ️ No GDrive Client ID override or .env default found', {});
+    log.debug('🔍 No GDrive Client ID in override or .env - look for one in secure-storage', {});
   }
   return envDefault;
 }

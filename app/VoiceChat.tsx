@@ -401,6 +401,8 @@ export function VoiceChat({
     selectedVadMode,
     voiceSpeed,
     isRecordingEnabled,
+    maxConversationTurns,
+    retentionRatio,
   ]);
 
   const handleStopVoiceSession = useCallback(async () => {

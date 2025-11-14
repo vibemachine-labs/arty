@@ -13,9 +13,16 @@ final class WebRTCEventHandler {
     let toolkitHelper: ToolkitHelper?
     let sendToolCallError: (_ callId: String, _ error: String) -> Void
     let emitModuleEvent: (_ name: String, _ payload: [String: Any]) -> Void
+    let sendDataChannelMessage: (_ event: [String: Any]) -> Void
   }
 
   private let logger = VmWebrtcLogging.logger
+
+  // Conversation turn tracking
+  private var conversationItemIDs: [String] = []
+  private var conversationTurnCount: Int = 0
+  private var maxConversationTurns: Int?
+  private let conversationQueue = DispatchQueue(label: "com.vibemachine.webrtc.conversation-tracker")
   private let idleQueue = DispatchQueue(label: "com.vibemachine.webrtc.idle-monitor")
   private var idleTimer: DispatchSourceTimer?
   private var idleDebugTimer: DispatchSourceTimer?
@@ -68,6 +75,10 @@ final class WebRTCEventHandler {
       handleTranscriptDeltaEvent(event, context: context, type: "text")
     case "response.text.done":
       handleTranscriptDoneEvent(event, context: context, type: "text")
+    case "conversation.item.created":
+      handleConversationItemCreated(event, context: context)
+    case "conversation.item.deleted":
+      handleConversationItemDeleted(event, context: context)
     default:
       logger.log(
         "[WebRTCEventHandler] Unhandled WebRTC event",
@@ -586,5 +597,159 @@ final class WebRTCEventHandler {
         context.sendToolCallError(callId, "Unknown tool: \(toolName)")
       }
     }
+  }
+
+  // MARK: - Conversation Turn Management
+
+  func configureConversationTurnLimit(maxTurns: Int?) {
+    conversationQueue.async {
+      self.maxConversationTurns = maxTurns
+      self.logger.log(
+        "[WebRTCEventHandler] [TurnLimit] Configuration updated",
+        attributes: logAttributes(for: .info, metadata: [
+          "maxTurns": maxTurns as Any,
+          "enabled": maxTurns != nil
+        ])
+      )
+    }
+  }
+
+  func resetConversationTracking() {
+    conversationQueue.async {
+      self.conversationItemIDs.removeAll()
+      self.conversationTurnCount = 0
+      self.logger.log(
+        "[WebRTCEventHandler] [TurnLimit] Conversation tracking reset",
+        attributes: logAttributes(for: .info)
+      )
+    }
+  }
+
+  private func handleConversationItemCreated(_ event: [String: Any], context: ToolContext) {
+    guard let item = event["item"] as? [String: Any],
+          let itemId = item["id"] as? String else {
+      logger.log(
+        "[WebRTCEventHandler] [TurnLimit] conversation.item.created missing item.id",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
+      )
+      return
+    }
+
+    conversationQueue.async {
+      self.conversationItemIDs.append(itemId)
+
+      // Check if this is a user or assistant message (not function calls)
+      if let role = item["role"] as? String, role == "user" || role == "assistant" {
+        self.conversationTurnCount += 1
+
+        self.logger.log(
+          "[WebRTCEventHandler] [TurnLimit] Item created",
+          attributes: logAttributes(for: .debug, metadata: [
+            "itemId": itemId,
+            "role": role,
+            "turnCount": self.conversationTurnCount,
+            "totalItems": self.conversationItemIDs.count,
+            "maxTurns": self.maxConversationTurns as Any
+          ])
+        )
+
+        // Check if we've exceeded the turn limit
+        if let maxTurns = self.maxConversationTurns, self.conversationTurnCount >= maxTurns {
+          self.logger.log(
+            "[WebRTCEventHandler] [TurnLimit] Turn limit reached, deleting all items",
+            attributes: logAttributes(for: .info, metadata: [
+              "turnCount": self.conversationTurnCount,
+              "maxTurns": maxTurns,
+              "itemsToDelete": self.conversationItemIDs.count
+            ])
+          )
+
+          // Delete all items
+          self.deleteAllConversationItems(context: context)
+        }
+      } else {
+        self.logger.log(
+          "[WebRTCEventHandler] [TurnLimit] Non-message item created (not counted)",
+          attributes: logAttributes(for: .trace, metadata: [
+            "itemId": itemId,
+            "role": item["role"] as Any,
+            "type": item["type"] as Any
+          ])
+        )
+      }
+    }
+  }
+
+  private func handleConversationItemDeleted(_ event: [String: Any], context: ToolContext) {
+    guard let itemId = event["item_id"] as? String else {
+      logger.log(
+        "[WebRTCEventHandler] [TurnLimit] conversation.item.deleted missing item_id",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
+      )
+      return
+    }
+
+    conversationQueue.async {
+      if let index = self.conversationItemIDs.firstIndex(of: itemId) {
+        self.conversationItemIDs.remove(at: index)
+        self.logger.log(
+          "[WebRTCEventHandler] [TurnLimit] Item deleted confirmation",
+          attributes: logAttributes(for: .debug, metadata: [
+            "itemId": itemId,
+            "remainingItems": self.conversationItemIDs.count
+          ])
+        )
+      }
+    }
+  }
+
+  private func deleteAllConversationItems(context: ToolContext) {
+    let itemsToDelete = self.conversationItemIDs
+
+    guard !itemsToDelete.isEmpty else {
+      self.logger.log(
+        "[WebRTCEventHandler] [TurnLimit] No items to delete",
+        attributes: logAttributes(for: .debug)
+      )
+      return
+    }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [TurnLimit] Starting deletion of all conversation items",
+      attributes: logAttributes(for: .info, metadata: [
+        "itemCount": itemsToDelete.count
+      ])
+    )
+
+    // Send delete event for each item
+    for itemId in itemsToDelete {
+      let deleteEvent: [String: Any] = [
+        "type": "conversation.item.delete",
+        "item_id": itemId
+      ]
+
+      self.logger.log(
+        "[WebRTCEventHandler] [TurnLimit] Sending delete event",
+        attributes: logAttributes(for: .debug, metadata: [
+          "itemId": itemId
+        ])
+      )
+
+      // Send via data channel
+      DispatchQueue.main.async {
+        context.sendDataChannelMessage(deleteEvent)
+      }
+    }
+
+    // Reset tracking after deletion
+    self.conversationTurnCount = 0
+    // Don't clear conversationItemIDs here - wait for deletion confirmations
+
+    self.logger.log(
+      "[WebRTCEventHandler] [TurnLimit] All delete events sent, awaiting confirmations",
+      attributes: logAttributes(for: .info, metadata: [
+        "itemsSent": itemsToDelete.count
+      ])
+    )
   }
 }

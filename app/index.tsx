@@ -82,7 +82,7 @@ export default function Index() {
   const [mainPromptAddition, setMainPromptAddition] = useState("");
   const [contextWindowVisible, setContextWindowVisible] = useState(false);
   const [retentionRatio, setRetentionRatio] = useState(0.8);
-  const [maxConversationTurns, setMaxConversationTurns] = useState<number | undefined>(undefined);
+  const [maxConversationTurns, setMaxConversationTurns] = useState<number | undefined>(7);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);

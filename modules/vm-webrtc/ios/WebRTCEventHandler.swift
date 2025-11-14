@@ -19,7 +19,12 @@ final class WebRTCEventHandler {
   private let logger = VmWebrtcLogging.logger
 
   // Conversation turn tracking
-  private var conversationItemIDs: [String] = []
+  private struct ConversationItem {
+    let id: String
+    let isTurn: Bool  // true for user/assistant messages that count as turns
+  }
+
+  private var conversationItems: [ConversationItem] = []
   private var conversationTurnCount: Int = 0
   private var maxConversationTurns: Int?
   private let conversationQueue = DispatchQueue(label: "com.vibemachine.webrtc.conversation-tracker")
@@ -616,7 +621,7 @@ final class WebRTCEventHandler {
 
   func resetConversationTracking() {
     conversationQueue.async {
-      self.conversationItemIDs.removeAll()
+      self.conversationItems.removeAll()
       self.conversationTurnCount = 0
       self.logger.log(
         "[WebRTCEventHandler] [TurnLimit] Conversation tracking reset",
@@ -636,44 +641,50 @@ final class WebRTCEventHandler {
     }
 
     conversationQueue.async {
-      self.conversationItemIDs.append(itemId)
+      // Check if this is a user or assistant message (counts as a turn)
+      let isTurn = (item["role"] as? String).map { $0 == "user" || $0 == "assistant" } ?? false
 
-      // Check if this is a user or assistant message (not function calls)
-      if let role = item["role"] as? String, role == "user" || role == "assistant" {
+      // Add item to tracking
+      let conversationItem = ConversationItem(id: itemId, isTurn: isTurn)
+      self.conversationItems.append(conversationItem)
+
+      if isTurn {
         self.conversationTurnCount += 1
 
         self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Item created",
+          "[WebRTCEventHandler] [TurnLimit] Turn item created",
           attributes: logAttributes(for: .debug, metadata: [
             "itemId": itemId,
-            "role": role,
+            "role": item["role"] as Any,
             "turnCount": self.conversationTurnCount,
-            "totalItems": self.conversationItemIDs.count,
+            "totalItems": self.conversationItems.count,
             "maxTurns": self.maxConversationTurns as Any
           ])
         )
 
         // Check if we've exceeded the turn limit
-        if let maxTurns = self.maxConversationTurns, self.conversationTurnCount >= maxTurns {
+        if let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
           self.logger.log(
-            "[WebRTCEventHandler] [TurnLimit] Turn limit reached, deleting all items",
+            "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, pruning oldest items",
             attributes: logAttributes(for: .info, metadata: [
               "turnCount": self.conversationTurnCount,
               "maxTurns": maxTurns,
-              "itemsToDelete": self.conversationItemIDs.count
+              "totalItems": self.conversationItems.count,
+              "turnsToRemove": self.conversationTurnCount - maxTurns
             ])
           )
 
-          // Delete all items
-          self.deleteAllConversationItems(context: context)
+          // Prune oldest items to get back to maxTurns
+          self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
         }
       } else {
         self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Non-message item created (not counted)",
-          attributes: logAttributes(for: .debug, metadata: [
+          "[WebRTCEventHandler] [TurnLimit] Non-turn item created",
+          attributes: logAttributes(for: .trace, metadata: [
             "itemId": itemId,
             "role": item["role"] as Any,
-            "type": item["type"] as Any
+            "type": item["type"] as Any,
+            "totalItems": self.conversationItems.count
           ])
         )
       }
@@ -690,21 +701,106 @@ final class WebRTCEventHandler {
     }
 
     conversationQueue.async {
-      if let index = self.conversationItemIDs.firstIndex(of: itemId) {
-        self.conversationItemIDs.remove(at: index)
+      if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
+        let item = self.conversationItems[index]
+        self.conversationItems.remove(at: index)
+
+        // Decrement turn count if this was a turn item
+        if item.isTurn {
+          self.conversationTurnCount -= 1
+        }
+
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Item deleted confirmation",
           attributes: logAttributes(for: .debug, metadata: [
             "itemId": itemId,
-            "remainingItems": self.conversationItemIDs.count
+            "wasTurn": item.isTurn,
+            "remainingItems": self.conversationItems.count,
+            "remainingTurns": self.conversationTurnCount
           ])
         )
       }
     }
   }
 
+  private func pruneOldestConversationItems(context: ToolContext, targetTurnCount: Int) {
+    let turnsToRemove = self.conversationTurnCount - targetTurnCount
+
+    guard turnsToRemove > 0 else {
+      self.logger.log(
+        "[WebRTCEventHandler] [TurnLimit] No pruning needed",
+        attributes: logAttributes(for: .debug, metadata: [
+          "currentTurns": self.conversationTurnCount,
+          "targetTurns": targetTurnCount
+        ])
+      )
+      return
+    }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [TurnLimit] Starting to prune oldest conversation items",
+      attributes: logAttributes(for: .info, metadata: [
+        "currentTurns": self.conversationTurnCount,
+        "targetTurns": targetTurnCount,
+        "turnsToRemove": turnsToRemove,
+        "totalItems": self.conversationItems.count
+      ])
+    )
+
+    var itemsToDelete: [String] = []
+    var turnsRemoved = 0
+
+    // Iterate from oldest (front of array) and collect items to delete
+    for item in self.conversationItems {
+      itemsToDelete.append(item.id)
+
+      if item.isTurn {
+        turnsRemoved += 1
+        // Stop once we've identified enough turns to remove
+        if turnsRemoved >= turnsToRemove {
+          break
+        }
+      }
+    }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [TurnLimit] Identified items to prune",
+      attributes: logAttributes(for: .info, metadata: [
+        "itemsToDelete": itemsToDelete.count,
+        "turnsToRemove": turnsRemoved
+      ])
+    )
+
+    // Send delete events for identified items
+    for itemId in itemsToDelete {
+      let deleteEvent: [String: Any] = [
+        "type": "conversation.item.delete",
+        "item_id": itemId
+      ]
+
+      self.logger.log(
+        "[WebRTCEventHandler] [TurnLimit] Sending prune delete event",
+        attributes: logAttributes(for: .debug, metadata: [
+          "itemId": itemId
+        ])
+      )
+
+      DispatchQueue.main.async {
+        context.sendDataChannelMessage(deleteEvent)
+      }
+    }
+
+    // Note: Turn count and items will be decremented as delete confirmations come in
+    self.logger.log(
+      "[WebRTCEventHandler] [TurnLimit] Prune delete events sent, awaiting confirmations",
+      attributes: logAttributes(for: .info, metadata: [
+        "itemsSent": itemsToDelete.count
+      ])
+    )
+  }
+
   private func deleteAllConversationItems(context: ToolContext) {
-    let itemsToDelete = self.conversationItemIDs
+    let itemsToDelete = self.conversationItems.map { $0.id }
 
     guard !itemsToDelete.isEmpty else {
       self.logger.log(
@@ -741,9 +837,7 @@ final class WebRTCEventHandler {
       }
     }
 
-    // Reset tracking after deletion
-    self.conversationTurnCount = 0
-    // Don't clear conversationItemIDs here - wait for deletion confirmations
+    // Note: Turn count and items will be decremented as delete confirmations come in via handleConversationItemDeleted
 
     self.logger.log(
       "[WebRTCEventHandler] [TurnLimit] All delete events sent, awaiting confirmations",

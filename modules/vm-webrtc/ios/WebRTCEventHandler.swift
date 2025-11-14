@@ -670,7 +670,7 @@ final class WebRTCEventHandler {
       } else {
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Non-message item created (not counted)",
-          attributes: logAttributes(for: .trace, metadata: [
+          attributes: logAttributes(for: .debug, metadata: [
             "itemId": itemId,
             "role": item["role"] as Any,
             "type": item["type"] as Any

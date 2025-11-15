@@ -265,8 +265,29 @@ async function callOpenAIResponsesStreaming(
     }
 
     if (!resp.body) {
-      throw new Error('Response body is null');
+      log.error('[Streaming] Response body is null - streaming not supported in this environment', {}, {
+        hasBody: !!resp.body,
+        bodyType: typeof resp.body,
+        headers: headerMap,
+        status: resp.status,
+        statusText: resp.statusText,
+      });
+      throw new Error('Streaming not supported: Response body is null. This may be a React Native limitation.');
     }
+
+    if (typeof resp.body.getReader !== 'function') {
+      log.error('[Streaming] ReadableStream not supported', {}, {
+        hasGetReader: typeof resp.body.getReader,
+        bodyType: typeof resp.body,
+        bodyConstructor: resp.body.constructor?.name,
+      });
+      throw new Error('Streaming not supported: ReadableStream.getReader not available in this environment.');
+    }
+
+    log.info('[Streaming] Response body is readable, starting stream', {}, {
+      hasBody: !!resp.body,
+      hasGetReader: typeof resp.body.getReader === 'function',
+    });
 
     // Parse SSE stream
     const reader = resp.body.getReader();
@@ -882,14 +903,50 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         previous_response_id: lastResponseId ?? undefined,
       };
 
-      const { text: responseText, responseId } = await callResponsesAPIStreaming(
-        apiKey,
-        requestPayload,
-        (chunk) => {
-          // Update the last message with each chunk
-          updateLastMessage(chunk);
-        }
-      );
+      let responseText: string;
+      let responseId: string | null;
+
+      try {
+        // Try streaming first
+        log.info('[TextChat] Attempting streaming response', {}, {});
+        const result = await callResponsesAPIStreaming(
+          apiKey,
+          requestPayload,
+          (chunk) => {
+            // Update the last message with each chunk
+            updateLastMessage(chunk);
+          }
+        );
+        responseText = result.text;
+        responseId = result.responseId;
+        log.info('[TextChat] Streaming completed successfully', {}, {
+          textLength: responseText.length,
+        });
+      } catch (streamError) {
+        log.warn('[TextChat] Streaming failed, falling back to non-streaming', {}, {
+          errorMessage: streamError instanceof Error ? streamError.message : String(streamError),
+          errorName: streamError instanceof Error ? streamError.name : undefined,
+        });
+
+        // Remove the empty assistant message we created for streaming
+        setMessages((prev) => {
+          if (prev.length > 0 && prev[prev.length - 1].role === 'assistant' && prev[prev.length - 1].content === '') {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+
+        // Fallback to non-streaming
+        const result = await callResponsesAPI(apiKey, requestPayload);
+        responseText = result.text;
+        responseId = result.responseId;
+
+        // Add the complete message since we removed the placeholder
+        appendMessage({ role: 'assistant', content: responseText });
+        setLastResponseId(responseId ?? null);
+        setIsSending(false);
+        return; // Exit early since we've already added the message
+      }
 
       // Final update to ensure completeness
       setMessages((prev) => {
@@ -907,7 +964,12 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
 
       setLastResponseId(responseId ?? null);
     } catch (error) {
-      log.error('[TextChat] send failed', {}, error);
+      log.error('[TextChat] send failed', {}, {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorName: error instanceof Error ? error.name : undefined,
+        error: error,
+      });
       Alert.alert('Error', 'Unable to reach OpenAI. Please try again.');
 
       // Update the last (empty) assistant message with error

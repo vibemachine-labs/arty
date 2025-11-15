@@ -101,11 +101,18 @@ async function readRemoteToolkitCache(serverUrl: string): Promise<RemoteToolkitC
     const contents = await cacheFile.text();
     const parsed = JSON.parse(contents) as RemoteToolkitCacheEntry;
 
-    // Validate cache structure
-    if (!parsed.lastFetched || !Array.isArray(parsed.tools)) {
+    // Validate cache structure - lastFetched must be a finite number (including 0), tools must be an array
+    if (
+      typeof parsed.lastFetched !== 'number' ||
+      !Number.isFinite(parsed.lastFetched) ||
+      !Array.isArray(parsed.tools)
+    ) {
       log.warn('[ToolkitManager] Invalid cache structure, ignoring', {}, {
         serverUrl,
         uri: cacheFile.uri,
+        hasLastFetched: typeof parsed.lastFetched,
+        isFinite: Number.isFinite(parsed.lastFetched),
+        hasTools: Array.isArray(parsed.tools),
       });
       return null;
     }

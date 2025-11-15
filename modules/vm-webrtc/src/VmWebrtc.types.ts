@@ -42,7 +42,7 @@ export type ToolDefinition = {
 
 // This is a tool definition for the new Gen2 toolkit format
 export type ToolkitDefinition = {
-  type: 'function';
+  type: 'function' | 'remote_mcp_server';
   name: string;
   group: string
   description: string;
@@ -50,6 +50,11 @@ export type ToolkitDefinition = {
   tool_source_file?: string;
   // Arbitrary extra parameters passed along to the tool implementation.
   extra: Record<string, string>;
+  // Remote MCP server configuration (only used when type is 'remote_mcp_server')
+  remote_mcp_server?: {
+    url: string;
+    protocol: 'sse' | 'stdio' | 'websocket';
+  };
   // These are the params that the LLM should call this tool with
   parameters: {
     type: 'object';

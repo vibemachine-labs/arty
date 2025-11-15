@@ -245,7 +245,13 @@ async function callOpenAIResponsesStreaming(
     let accumulatedText = '';
     let eventCount = 0;
 
-    log.info('[Streaming] Starting EventSource connection', {}, { url: BASE_URL });
+    const requestBody = { ...payload, stream: true };
+    log.info('[Streaming] Starting EventSource connection', {}, {
+      url: BASE_URL,
+      requestBody: requestBody,
+      hasTools: !!requestBody.tools,
+      toolCount: requestBody.tools?.length,
+    });
 
     const es = new EventSource(BASE_URL, {
       method: 'POST',
@@ -253,7 +259,7 @@ async function callOpenAIResponsesStreaming(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ ...payload, stream: true }),
+      body: JSON.stringify(requestBody),
       pollingInterval: 0, // Disable polling, use true SSE
     });
 
@@ -263,16 +269,21 @@ async function callOpenAIResponsesStreaming(
 
     es.addEventListener('message', (event: any) => {
       eventCount++;
-      const raw = event.data;
+
+      log.info('[Streaming] Message event received', {}, {
+        eventCount,
+        eventData: event.data,
+        eventType: typeof event.data,
+      });
 
       try {
-        if (!raw) {
-          log.debug('[Streaming] Empty event data', {}, {});
-          return;
-        }
+        if (event.data === '[DONE]') {
+          log.info('[Streaming] Received [DONE] marker', {}, {
+            eventCount,
+            accumulatedTextLength: accumulatedText.length
+          });
 
-        if (raw === '[DONE]') {
-          log.info('[Streaming] Received [DONE] marker', {}, { eventCount, accumulatedTextLength: accumulatedText.length });
+          es.removeAllEventListeners();
           es.close();
 
           instr.endTime = Date.now();
@@ -298,52 +309,55 @@ async function callOpenAIResponsesStreaming(
           return;
         }
 
-        const obj = JSON.parse(raw);
-        const eventType = obj.event;
-        const data = obj.data;
-
-        log.debug('[Streaming] Received SSE event', {}, {
-          eventType: eventType,
-          eventNumber: eventCount,
-          hasData: !!data,
-          rawDataSnippet: raw.slice(0, 200)
+        const data = JSON.parse(event.data);
+        log.info('[Streaming] Parsed event data', {}, {
+          eventCount,
+          data: data,
+          dataKeys: Object.keys(data),
         });
 
-        // Handle text delta events
-        if (eventType === 'response.output_text.delta' && data?.delta) {
-          const delta = data.delta as string;
+        // Check for Responses API format
+        if (data.event) {
+          const eventType = data.event;
+          const eventData = data.data;
+
+          log.info('[Streaming] Processing Responses API event', {}, {
+            eventType,
+            hasData: !!eventData,
+          });
+
+          if (eventType === 'response.output_text.delta' && eventData?.delta) {
+            const delta = eventData.delta as string;
+            accumulatedText += delta;
+            onChunk(delta);
+            log.info('[Streaming] Sent delta chunk to UI', {}, {
+              chunkLength: delta.length,
+              totalLength: accumulatedText.length,
+            });
+          } else if (eventType === 'response.completed' || eventType === 'response.done') {
+            log.info('[Streaming] Response completed', {}, { eventType });
+            if (eventData) {
+              fullResponse = eventData;
+            }
+            es.removeAllEventListeners();
+            es.close();
+          }
+        }
+        // Check for Chat Completions API format (fallback)
+        else if (data.choices && data.choices[0]?.delta?.content !== undefined) {
+          const delta = data.choices[0].delta.content;
           accumulatedText += delta;
           onChunk(delta);
-          log.debug('[Streaming] Sent chunk to UI', {}, {
+          log.info('[Streaming] Sent chat delta to UI', {}, {
             chunkLength: delta.length,
             totalLength: accumulatedText.length,
-            chunkPreview: delta.slice(0, 50)
-          });
-        } else if (eventType === 'response.completed') {
-          log.info('[Streaming] Received response.completed event', {}, {
-            hasResponseData: !!data,
-            accumulatedTextLength: accumulatedText.length
-          });
-          if (data) {
-            fullResponse = data;
-          }
-          es.close();
-        } else if (eventType === 'response.done') {
-          log.info('[Streaming] Received response.done event', {}, { hasResponseData: !!data });
-          if (data) {
-            fullResponse = data;
-          }
-        } else {
-          log.debug('[Streaming] Unhandled event type', {}, {
-            eventType: eventType,
-            dataKeys: data ? Object.keys(data) : []
           });
         }
       } catch (parseErr) {
-        log.warn('[Streaming] Failed to parse SSE event', {}, {
-          data: raw?.slice(0, 100),
-          error: String(parseErr)
-        });
+        log.error('[Streaming] Failed to parse SSE event', {}, {
+          rawData: event.data?.slice(0, 200),
+          error: String(parseErr),
+        }, parseErr);
       }
     });
 
@@ -356,6 +370,7 @@ async function callOpenAIResponsesStreaming(
         accumulatedTextLength: accumulatedText.length,
       });
 
+      es.removeAllEventListeners();
       es.close();
 
       instr.endTime = Date.now();

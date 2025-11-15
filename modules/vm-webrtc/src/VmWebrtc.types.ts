@@ -23,7 +23,8 @@ export type BaseOpenAIConnectionOptions = {
   voice?: string;
 };
 
-export type ToolDefinition = {
+// Function tool definition (local/native tools)
+export type FunctionToolDefinition = {
   type: 'function';
   name: string;
   description: string;
@@ -39,6 +40,18 @@ export type ToolDefinition = {
     required: string[];
   };
 };
+
+// MCP tool definition (remote MCP server tools)
+export type McpToolDefinition = {
+  type: 'mcp';
+  server_label: string;
+  server_url: string;
+  headers: Record<string, string>;
+  require_approval: 'never' | 'always' | 'auto';
+};
+
+// Union type for all tool definitions
+export type ToolDefinition = FunctionToolDefinition | McpToolDefinition;
 
 // This is a tool definition for the new Gen2 toolkit format
 export type ToolkitDefinition = {
@@ -88,12 +101,32 @@ export type ToolkitGroups = {
  * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news__showTopStories")
  */
 export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
+  // Handle remote MCP server toolkits
+  if (toolkit.type === 'remote_mcp_server') {
+    if (!toolkit.remote_mcp_server?.url) {
+      throw new Error(`Remote MCP server toolkit "${toolkit.name}" is missing URL configuration`);
+    }
+
+    const serverLabel = includeGroupInName && toolkit.group
+      ? `${toolkit.group}__${toolkit.name}`
+      : toolkit.name;
+
+    return {
+      type: 'mcp',
+      server_label: serverLabel,
+      server_url: toolkit.remote_mcp_server.url,
+      headers: {}, // Empty headers for now as requested
+      require_approval: 'never',
+    };
+  }
+
+  // Handle function toolkits
   const toolName = includeGroupInName && toolkit.group
     ? `${toolkit.group}__${toolkit.name}`
     : toolkit.name;
 
   return {
-    type: toolkit.type,
+    type: 'function',
     name: toolName,
     description: toolkit.description,
     parameters: toolkit.parameters,

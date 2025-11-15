@@ -138,7 +138,11 @@ class ToolManager {
 
   getToolNames(definitions: ToolDefinition[]): string[] {
     return definitions
-      .map((definition) => definition?.name)
+      .map((definition) => {
+        if (!definition) return undefined;
+        // MCP tools use server_label, function tools use name
+        return definition.type === 'mcp' ? definition.server_label : definition.name;
+      })
       .filter((name): name is string => Boolean(name));
   }
 
@@ -263,6 +267,17 @@ class ToolManager {
   }
 
   private async applyPromptAddition(definition: ToolDefinition): Promise<ToolDefinition> {
+    // MCP tools don't have descriptions - they're just pointers to remote servers
+    // Skip prompt additions for MCP tools
+    if (definition.type === 'mcp') {
+      log.info('[ToolManager] Skipping prompt addition for MCP tool', {}, {
+        serverLabel: definition.server_label,
+        serverUrl: definition.server_url,
+      });
+      return { ...definition };
+    }
+
+    // Apply prompt additions only to function tools
     const addition = await loadToolPromptAddition(definition.name);
     const trimmedAddition = addition.trim();
     const beforeLength = definition.description.length;

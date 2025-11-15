@@ -296,9 +296,17 @@ function buildSecondTurnInput(callId: string, toolResult: unknown) {
 
 async function executeToolCall(toolCall: ToolCall): Promise<string> {
   const argSummary = summarizeToolCallArguments(toolCall.arguments);
+
+  // Get all known tools for logging (includes static and dynamic MCP tools)
+  const knownTools = await getToolkitDefinitions();
+  const knownToolNames = toolManager.getToolNames(knownTools);
+
   log.info('[TextChat] Dispatching tool call to ToolManager', {}, {
     toolName: toolCall.name,
     ...argSummary,
+    knownToolCount: knownTools.length,
+    knownToolNames: knownToolNames,
+    knownTools: knownTools,
   });
 
   const start = Date.now();
@@ -310,6 +318,9 @@ async function executeToolCall(toolCall: ToolCall): Promise<string> {
       durationMs: Date.now() - start,
       resultLength: typeof result === 'string' ? result.length : undefined,
       result: result,
+      checkedToolCount: knownTools.length,
+      checkedToolNames: knownToolNames,
+      checkedTools: knownTools,
     });
     return result;
   } catch (error) {

@@ -20,6 +20,7 @@ export interface ToolkitRegistry {
 
 /**
  * Registry of all toolkit functions organized by group and tool name.
+ * This registry is mutable and can be extended at runtime with MCP tools.
  */
 export const toolkitRegistry: ToolkitRegistry = {
   hacker_news: {
@@ -43,6 +44,22 @@ export const toolkitRegistry: ToolkitRegistry = {
     get_gdrive_file_content: googleDrive.get_gdrive_file_content,
   },
 };
+
+/**
+ * Register a runtime MCP tool function in the toolkit registry.
+ * This allows MCP tools to be treated the same as local tools.
+ */
+export function registerMcpTool(groupName: string, toolName: string, toolFunction: ToolkitFunction): void {
+  if (!toolkitRegistry[groupName]) {
+    toolkitRegistry[groupName] = {};
+  }
+  toolkitRegistry[groupName][toolName] = toolFunction;
+
+  log.info('[ToolkitRegistry] Registered MCP tool', {}, {
+    groupName,
+    toolName,
+  });
+}
 
 // MARK: - Executor
 

@@ -19,8 +19,6 @@ import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
 import { toolkitRegistry } from './toolkit_functions/index';
 import type { ToolDefinition } from './VmWebrtc.types';
-import { getRawToolkitDefinitions } from './ToolkitManager';
-import { MCPClient } from './mcp_client/client';
 
 type ToolCallArguments = Record<string, any>;
 
@@ -148,86 +146,6 @@ class ToolManager {
       .filter((name): name is string => Boolean(name));
   }
 
-  private isRemoteMcpTool(groupName: string, toolName: string): boolean {
-    try {
-      const rawToolkits = getRawToolkitDefinitions();
-      const toolkit = rawToolkits.find(
-        (t) => t.group === groupName && t.name === toolName
-      );
-      return toolkit?.type === 'remote_mcp_server';
-    } catch (error) {
-      log.error('[ToolManager] Error checking if tool is remote MCP', {}, {
-        groupName,
-        toolName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
-
-  private async executeRemoteMcpToolCall(
-    groupName: string,
-    toolName: string,
-    args: ToolCallArguments
-  ): Promise<string> {
-    log.info('[ToolManager] Executing remote MCP tool', {}, {
-      groupName,
-      toolName,
-      args,
-    });
-
-    // Get the toolkit definition to find the remote MCP server URL
-    const rawToolkits = getRawToolkitDefinitions();
-    const toolkit = rawToolkits.find(
-      (t) => t.group === groupName && t.name === toolName
-    );
-
-    if (!toolkit || toolkit.type !== 'remote_mcp_server') {
-      const errorMsg = `Remote MCP toolkit not found: ${groupName}__${toolName}`;
-      log.error('[ToolManager] Remote MCP toolkit not found', {}, {
-        groupName,
-        toolName,
-      });
-      return errorMsg;
-    }
-
-    if (!toolkit.remote_mcp_server?.url) {
-      const errorMsg = `Remote MCP server URL not configured for ${groupName}__${toolName}`;
-      log.error('[ToolManager] Remote MCP server URL missing', {}, {
-        groupName,
-        toolName,
-      });
-      return errorMsg;
-    }
-
-    try {
-      const mcpClient = new MCPClient(toolkit.remote_mcp_server.url);
-      const result = await mcpClient.callTool({
-        name: toolName,
-        arguments: args,
-      });
-
-      log.info('[ToolManager] Remote MCP tool execution succeeded', {}, {
-        groupName,
-        toolName,
-        serverUrl: toolkit.remote_mcp_server.url,
-        isError: result.isError,
-        result: result,
-      });
-
-      // Return the entire result as JSON string
-      return JSON.stringify(result, null, 2);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      log.error('[ToolManager] Remote MCP tool execution failed', {}, {
-        groupName,
-        toolName,
-        serverUrl: toolkit.remote_mcp_server?.url,
-        errorMessage,
-      });
-      return `Error executing remote MCP tool ${groupName}__${toolName}: ${errorMessage}`;
-    }
-  }
 
   private async executeGen2ToolCall(
     groupName: string,
@@ -280,12 +198,7 @@ class ToolManager {
     if (toolName.includes('__')) {
       const [groupName, toolFunctionName] = toolName.split('__');
 
-      // Check if this is a remote MCP server tool
-      if (this.isRemoteMcpTool(groupName, toolFunctionName)) {
-        return this.executeRemoteMcpToolCall(groupName, toolFunctionName, args);
-      }
-
-      // Execute local gen2 tools
+      // Execute gen2 tools (includes both local and cached MCP tools)
       if (toolkitRegistry[groupName]?.[toolFunctionName]) {
         return this.executeGen2ToolCall(groupName, toolFunctionName, args);
       }

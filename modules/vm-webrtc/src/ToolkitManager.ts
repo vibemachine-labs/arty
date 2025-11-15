@@ -5,6 +5,7 @@ import { exportToolDefinition } from './VmWebrtc.types';
 import { MCPClient } from './mcp_client/client';
 import { log } from '../../../lib/logger';
 import type { Tool } from './mcp_client/types';
+import { registerMcpTool } from './toolkit_functions/index';
 
 const buildToolkitGroups = (): ToolkitGroups => {
   const data = toolkitGroupsData as unknown as ToolkitGroups;
@@ -20,6 +21,10 @@ const buildToolkitGroups = (): ToolkitGroups => {
 const toolkitGroups = buildToolkitGroups();
 
 export const getToolkitGroups = (): ToolkitGroups => toolkitGroups;
+
+// Cache for toolkit definitions to avoid repeated MCP server calls
+let toolkitDefinitionsCache: ToolDefinition[] | null = null;
+let toolkitDefinitionsPromise: Promise<ToolDefinition[]> | null = null;
 
 /**
  * Convert MCP Tool to ToolDefinition format
@@ -52,9 +57,42 @@ function mcpToolToToolDefinition(tool: Tool, groupName: string): ToolDefinition 
  * Gets all toolkit definitions and converts them to tool definitions with
  * fully qualified names (group:name format, e.g., "hacker_news:showTopStories").
  *
- * For remote MCP servers, this fetches the actual tools dynamically from the server.
+ * For remote MCP servers, this fetches the actual tools dynamically from the server
+ * on the first call, then caches them for subsequent calls.
  */
 export const getToolkitDefinitions = async (): Promise<ToolDefinition[]> => {
+  // Return cached result if available
+  if (toolkitDefinitionsCache) {
+    log.info('[ToolkitManager] Returning cached toolkit definitions', {}, {
+      count: toolkitDefinitionsCache.length,
+    });
+    return toolkitDefinitionsCache;
+  }
+
+  // If a fetch is already in progress, return that promise
+  if (toolkitDefinitionsPromise) {
+    log.info('[ToolkitManager] Toolkit definitions fetch already in progress, awaiting...', {}, {});
+    return toolkitDefinitionsPromise;
+  }
+
+  // Start fetching and cache the promise
+  toolkitDefinitionsPromise = fetchToolkitDefinitions();
+
+  try {
+    const result = await toolkitDefinitionsPromise;
+    toolkitDefinitionsCache = result;
+    return result;
+  } catch (error) {
+    // Reset promise on error so next call can retry
+    toolkitDefinitionsPromise = null;
+    throw error;
+  }
+};
+
+/**
+ * Internal function that actually fetches toolkit definitions.
+ */
+async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
   const staticTools: ToolDefinition[] = [];
   const remoteMcpToolkits = getRawToolkitDefinitions().filter(
     (toolkit) => toolkit.type === 'remote_mcp_server'
@@ -96,7 +134,29 @@ export const getToolkitDefinitions = async (): Promise<ToolDefinition[]> => {
         );
         dynamicTools.push(...convertedTools);
 
-        log.info('[ToolkitManager] Successfully loaded MCP tools for toolkit definitions', {}, {
+        // Register each MCP tool in the toolkit registry for caching
+        for (const tool of result.tools) {
+          const mcpClient = new MCPClient(toolkit.remote_mcp_server.url);
+          const toolFunction = async (args: any) => {
+            log.info('[ToolkitManager] Executing cached MCP tool', {}, {
+              group: toolkit.group,
+              toolName: tool.name,
+              serverUrl: toolkit.remote_mcp_server?.url,
+            });
+
+            const result = await mcpClient.callTool({
+              name: tool.name,
+              arguments: args,
+            });
+
+            // Return the result as JSON string
+            return JSON.stringify(result, null, 2);
+          };
+
+          registerMcpTool(toolkit.group, tool.name, toolFunction);
+        }
+
+        log.info('[ToolkitManager] Successfully loaded and cached MCP tools', {}, {
           group: toolkit.group,
           toolCount: convertedTools.length,
           tools: convertedTools.map((t) => t.name),
@@ -131,79 +191,11 @@ export const getRawToolkitDefinitions = (): ToolkitDefinition[] => {
 };
 
 /**
- * Gets tools from remote MCP servers by finding all ToolkitDefinitions
- * with type 'remote_mcp_server' and fetching their tool lists.
+ * Clears the toolkit definitions cache, forcing a fresh fetch on next call.
+ * Useful for testing or when MCP servers are updated.
  */
-export const getRemoteMcpServerTools = async (): Promise<Tool[]> => {
-  log.info('[ToolkitManager] Starting remote MCP server tool discovery', {}, {});
-
-  // Find all remote MCP server toolkit definitions
-  const remoteMcpToolkits = getRawToolkitDefinitions().filter(
-    (toolkit) => toolkit.type === 'remote_mcp_server'
-  );
-
-  log.info('[ToolkitManager] Found remote MCP servers', {}, {
-    count: remoteMcpToolkits.length,
-    servers: remoteMcpToolkits.map((t) => ({
-      name: t.name,
-      group: t.group,
-      url: t.remote_mcp_server?.url,
-    })),
-  });
-
-  if (remoteMcpToolkits.length === 0) {
-    log.info('[ToolkitManager] No remote MCP servers configured', {}, {});
-    return [];
-  }
-
-  // Fetch tools from each remote MCP server
-  const allTools: Tool[] = [];
-
-  for (const toolkit of remoteMcpToolkits) {
-    if (!toolkit.remote_mcp_server?.url) {
-      log.warn('[ToolkitManager] Remote MCP toolkit missing URL', {}, {
-        name: toolkit.name,
-        group: toolkit.group,
-      });
-      continue;
-    }
-
-    try {
-      log.info('[ToolkitManager] Fetching tools from remote MCP server', {}, {
-        name: toolkit.name,
-        group: toolkit.group,
-        url: toolkit.remote_mcp_server.url,
-        protocol: toolkit.remote_mcp_server.protocol,
-      });
-
-      const client = new MCPClient(toolkit.remote_mcp_server.url);
-      const result = await client.listTools();
-
-      log.info('[ToolkitManager] Successfully retrieved tools from MCP server', {}, {
-        name: toolkit.name,
-        group: toolkit.group,
-        url: toolkit.remote_mcp_server.url,
-        toolCount: result.tools?.length || 0,
-      });
-
-      if (result.tools && result.tools.length > 0) {
-        allTools.push(...result.tools);
-      }
-    } catch (error) {
-      log.error('[ToolkitManager] Failed to fetch tools from MCP server', {}, {
-        name: toolkit.name,
-        group: toolkit.group,
-        url: toolkit.remote_mcp_server?.url,
-        error: error instanceof Error ? error.message : String(error),
-      }, error);
-      // Continue with other servers even if one fails
-    }
-  }
-
-  log.info('[ToolkitManager] Completed remote MCP server tool discovery', {}, {
-    totalServers: remoteMcpToolkits.length,
-    totalTools: allTools.length,
-  });
-
-  return allTools;
+export const clearToolkitDefinitionsCache = (): void => {
+  log.info('[ToolkitManager] Clearing toolkit definitions cache', {}, {});
+  toolkitDefinitionsCache = null;
+  toolkitDefinitionsPromise = null;
 };

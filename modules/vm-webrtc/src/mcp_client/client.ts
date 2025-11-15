@@ -89,7 +89,18 @@ export class MCPClient {
         });
       }
 
-      const json = await res.json();
+      // Check if response is SSE format (text/event-stream)
+      const contentType = res.headers.get('content-type') || '';
+      let json: any;
+
+      if (contentType.includes('text/event-stream')) {
+        // Parse SSE format response
+        const text = await res.text();
+        json = this.parseSSEResponse(text);
+      } else {
+        // Parse regular JSON response
+        json = await res.json();
+      }
 
       if ('error' in json) {
         const errorResponse = json as JSONRPCError;
@@ -119,6 +130,54 @@ export class MCPClient {
       this.initializePromise = this.initialize();
     }
     await this.initializePromise;
+  }
+
+  /**
+   * Parse Server-Sent Events (SSE) format response to extract JSON-RPC message
+   * SSE format is:
+   *   event: message
+   *   data: {"jsonrpc":"2.0",...}
+   */
+  private parseSSEResponse(sseText: string): any {
+    const lines = sseText.trim().split('\n');
+    let eventType = '';
+    let data = '';
+
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        eventType = line.substring(6).trim();
+      } else if (line.startsWith('data:')) {
+        data = line.substring(5).trim();
+      }
+    }
+
+    // We're looking for the "message" event which contains the JSON-RPC response
+    if (eventType === 'message' && data) {
+      try {
+        return JSON.parse(data);
+      } catch (error) {
+        log.error('[MCPClient] Failed to parse SSE data as JSON', {}, {
+          data,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error(`Failed to parse SSE data: ${error}`);
+      }
+    }
+
+    // If no message event found, try to parse the first data line as JSON
+    if (data) {
+      try {
+        return JSON.parse(data);
+      } catch (error) {
+        log.error('[MCPClient] Failed to parse SSE data', {}, {
+          sseText,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error(`No valid JSON-RPC message in SSE response`);
+      }
+    }
+
+    throw new Error('No data found in SSE response');
   }
 
   /**
@@ -183,7 +242,18 @@ export class MCPClient {
         throw new Error(`Network error: ${res.status} ${res.statusText}`);
       }
 
-      const json = await res.json();
+      // Check if response is SSE format (text/event-stream)
+      const contentType = res.headers.get('content-type') || '';
+      let json: any;
+
+      if (contentType.includes('text/event-stream')) {
+        // Parse SSE format response
+        const text = await res.text();
+        json = this.parseSSEResponse(text);
+      } else {
+        // Parse regular JSON response
+        json = await res.json();
+      }
 
       // Check if it's an error response
       if ('error' in json) {

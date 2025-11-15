@@ -8,6 +8,7 @@ import {
   JSONRPC_VERSION,
 } from './types';
 import { ZodSchema } from 'zod';
+import { log } from '../../../../lib/logger';
 
 export interface RequestOptions {
   headers?: Record<string, string>;
@@ -40,6 +41,12 @@ export class MCPClient {
       params: req.params as any,
     };
 
+    log.info('[MCPClient] Sending JSON-RPC request', {}, {
+      endpoint: this.endpoint,
+      method: req.method,
+      requestId: body.id,
+    });
+
     const controller = new AbortController();
     const timeoutId = options?.timeout
       ? setTimeout(() => controller.abort(), options.timeout)
@@ -61,6 +68,11 @@ export class MCPClient {
       }
 
       if (!res.ok) {
+        log.error('[MCPClient] Network error from MCP server', {}, {
+          endpoint: this.endpoint,
+          status: res.status,
+          statusText: res.statusText,
+        });
         throw new Error(`Network error: ${res.status} ${res.statusText}`);
       }
 
@@ -69,6 +81,11 @@ export class MCPClient {
       // Check if it's an error response
       if ('error' in json) {
         const errorResponse = json as JSONRPCError;
+        log.error('[MCPClient] MCP server returned error', {}, {
+          endpoint: this.endpoint,
+          errorCode: errorResponse.error.code,
+          errorMessage: errorResponse.error.message,
+        });
         throw new Error(
           `RPC Error ${errorResponse.error.code}: ${errorResponse.error.message}`
         );
@@ -77,16 +94,30 @@ export class MCPClient {
       // Parse as success response
       const response = json as JSONRPCResponse;
       if (response.result === undefined) {
+        log.error('[MCPClient] Response missing result field', {}, {
+          endpoint: this.endpoint,
+          responseId: response.id,
+        });
         throw new Error(`RPC Response missing result for id ${response.id}`);
       }
 
       // Validate the result against the schema
       const parsed = resultSchema.safeParse(response.result);
       if (!parsed.success) {
+        log.error('[MCPClient] Response validation failed', {}, {
+          endpoint: this.endpoint,
+          validationError: parsed.error.message,
+        });
         throw new Error(
           `Invalid response format: ${parsed.error.message}`
         );
       }
+
+      log.info('[MCPClient] JSON-RPC request successful', {}, {
+        endpoint: this.endpoint,
+        method: req.method,
+        requestId: body.id,
+      });
 
       return parsed.data;
     } catch (error) {
@@ -95,6 +126,10 @@ export class MCPClient {
       }
 
       if (error instanceof Error && error.name === 'AbortError') {
+        log.error('[MCPClient] Request timeout', {}, {
+          endpoint: this.endpoint,
+          timeout: options?.timeout,
+        });
         throw new Error('Request timeout');
       }
 
@@ -109,10 +144,21 @@ export class MCPClient {
     params?: ListToolsRequest['params'],
     options?: RequestOptions
   ): Promise<ListToolsResult> {
-    return this.request<ListToolsRequest['params'], ListToolsResult>(
+    log.info('[MCPClient] Listing tools from MCP server', {}, {
+      endpoint: this.endpoint,
+    });
+
+    const result = await this.request<ListToolsRequest['params'], ListToolsResult>(
       { method: 'tools/list', params },
       ListToolsResultSchema,
       options
     );
+
+    log.info('[MCPClient] Retrieved tools from MCP server', {}, {
+      endpoint: this.endpoint,
+      toolCount: result.tools?.length || 0,
+    });
+
+    return result;
   }
 }

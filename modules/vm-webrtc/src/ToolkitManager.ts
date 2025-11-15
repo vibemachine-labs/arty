@@ -155,7 +155,7 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
             const result = await client.callTool({
               name: tool.name,
               arguments: args,
-            });
+            }, discoveryOptions);
 
             return JSON.stringify(result, null, 2);
           };

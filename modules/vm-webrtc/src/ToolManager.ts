@@ -19,6 +19,7 @@ import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
 import { toolkitRegistry } from './toolkit_functions/index';
 import type { ToolDefinition } from './VmWebrtc.types';
+import { getRawToolkitDefinitions } from './ToolkitManager';
 
 type ToolCallArguments = Record<string, any>;
 
@@ -140,10 +141,27 @@ class ToolManager {
     return definitions
       .map((definition) => {
         if (!definition) return undefined;
-        // MCP tools use server_label, function tools use name
-        return definition.type === 'mcp' ? definition.server_label : definition.name;
+        // All tools are now exported as 'function' type
+        return definition.name;
       })
       .filter((name): name is string => Boolean(name));
+  }
+
+  private isRemoteMcpTool(groupName: string, toolName: string): boolean {
+    try {
+      const rawToolkits = getRawToolkitDefinitions();
+      const toolkit = rawToolkits.find(
+        (t) => t.group === groupName && t.name === toolName
+      );
+      return toolkit?.type === 'remote_mcp_server';
+    } catch (error) {
+      log.error('[ToolManager] Error checking if tool is remote MCP', {}, {
+        groupName,
+        toolName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   private async executeGen2ToolCall(
@@ -196,6 +214,19 @@ class ToolManager {
     // Check if this is a gen2 tool (format: groupName__toolName)
     if (toolName.includes('__')) {
       const [groupName, toolFunctionName] = toolName.split('__');
+
+      // Check if this is a remote MCP server tool
+      if (this.isRemoteMcpTool(groupName, toolFunctionName)) {
+        log.warn('[ToolManager] Remote MCP server tool call detected - not executing (implementation pending)', {}, {
+          toolName,
+          groupName,
+          toolFunctionName,
+          args,
+        });
+        return `Remote MCP server tool ${toolName} is not yet supported for execution. Implementation pending.`;
+      }
+
+      // Execute local gen2 tools
       if (toolkitRegistry[groupName]?.[toolFunctionName]) {
         return this.executeGen2ToolCall(groupName, toolFunctionName, args);
       }
@@ -267,18 +298,8 @@ class ToolManager {
   }
 
   private async applyPromptAddition(definition: ToolDefinition): Promise<ToolDefinition> {
-    // MCP tools have server_description which shouldn't be modified
-    // Skip prompt additions for MCP tools
-    if (definition.type === 'mcp') {
-      log.info('[ToolManager] Skipping prompt addition for MCP tool', {}, {
-        serverLabel: definition.server_label,
-        serverDescription: definition.server_description,
-        serverUrl: definition.server_url,
-      });
-      return { ...definition };
-    }
-
-    // Apply prompt additions only to function tools
+    // All tools are now exported as 'function' type, including remote MCP tools
+    // Apply prompt additions to all function tools
     const addition = await loadToolPromptAddition(definition.name);
     const trimmedAddition = addition.trim();
     const beforeLength = definition.description.length;

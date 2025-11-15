@@ -42,6 +42,10 @@ export type FunctionToolDefinition = {
 };
 
 // MCP tool definition (remote MCP server tools)
+// NOTE: This type is kept for reference but is no longer used in the codebase.
+// Remote MCP server tools are now exported as FunctionToolDefinition to maintain
+// compatibility with LLM tool calling. The actual dispatch logic checks the
+// toolkit registry to determine if a tool is a remote MCP tool.
 export type McpToolDefinition = {
   type: 'mcp';
   server_label: string;
@@ -52,7 +56,9 @@ export type McpToolDefinition = {
 };
 
 // Union type for all tool definitions
-export type ToolDefinition = FunctionToolDefinition | McpToolDefinition;
+// NOTE: Currently only FunctionToolDefinition is used since remote MCP tools
+// are also exported as 'function' type for LLM compatibility.
+export type ToolDefinition = FunctionToolDefinition;
 
 // This is a tool definition for the new Gen2 toolkit format
 export type ToolkitDefinition = {
@@ -103,22 +109,22 @@ export type ToolkitGroups = {
  */
 export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
   // Handle remote MCP server toolkits
+  // NOTE: We export remote MCP server toolkits as 'function' type for LLM compatibility.
+  // The actual dispatch logic will check the toolkit registry to determine if it's a remote MCP tool.
   if (toolkit.type === 'remote_mcp_server') {
     if (!toolkit.remote_mcp_server?.url) {
       throw new Error(`Remote MCP server toolkit "${toolkit.name}" is missing URL configuration`);
     }
 
-    const serverLabel = includeGroupInName && toolkit.group
+    const toolName = includeGroupInName && toolkit.group
       ? `${toolkit.group}__${toolkit.name}`
       : toolkit.name;
 
     return {
-      type: 'mcp',
-      server_label: serverLabel,
-      server_description: toolkit.description,
-      server_url: toolkit.remote_mcp_server.url,
-      headers: {}, // Empty headers for now as requested
-      require_approval: 'never',
+      type: 'function',
+      name: toolName,
+      description: toolkit.description,
+      parameters: toolkit.parameters,
     };
   }
 

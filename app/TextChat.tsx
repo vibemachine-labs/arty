@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import EventSource from 'react-native-sse';
 import { log } from '../lib/logger';
 import { composeMainPrompt } from '../lib/mainPrompt';
 import { getApiKey } from '../lib/secure-storage';
@@ -239,164 +240,114 @@ async function callOpenAIResponsesStreaming(
     requestPayload: { ...payload, stream: true },
   };
 
-  try {
-    const resp = await fetch(BASE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ ...payload, stream: true }),
-    });
-
-    instr.endTime = Date.now();
-    instr.durationMs = instr.endTime - instr.startTime;
-
-    const headerMap: Record<string, string> = {};
-    resp.headers.forEach((v, k) => { headerMap[k] = v; });
-    instr.responseHeaders = headerMap;
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      instr.status = "error";
-      instr.errorMessage = `HTTP ${resp.status} ${resp.statusText}`;
-      logInstrumentation(instr);
-      throw new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
-    }
-
-    if (!resp.body) {
-      log.error('[Streaming] Response body is null - streaming not supported in this environment', {}, {
-        hasBody: !!resp.body,
-        bodyType: typeof resp.body,
-        headers: headerMap,
-        status: resp.status,
-        statusText: resp.statusText,
-      });
-      throw new Error('Streaming not supported: Response body is null. This may be a React Native limitation.');
-    }
-
-    if (typeof resp.body.getReader !== 'function') {
-      log.error('[Streaming] ReadableStream not supported', {}, {
-        hasGetReader: typeof resp.body.getReader,
-        bodyType: typeof resp.body,
-        bodyConstructor: resp.body.constructor?.name,
-      });
-      throw new Error('Streaming not supported: ReadableStream.getReader not available in this environment.');
-    }
-
-    log.info('[Streaming] Response body is readable, starting stream', {}, {
-      hasBody: !!resp.body,
-      hasGetReader: typeof resp.body.getReader === 'function',
-    });
-
-    // Parse SSE stream
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+  return new Promise((resolve, reject) => {
     let fullResponse: any = null;
     let accumulatedText = '';
     let eventCount = 0;
 
-    log.info('[Streaming] Starting SSE stream parsing', {}, {});
+    log.info('[Streaming] Starting EventSource connection', {}, { url: BASE_URL });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        log.info('[Streaming] Stream finished', {}, { eventCount, accumulatedTextLength: accumulatedText.length });
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-
-        // Log raw line for debugging
-        if (line.length < 200) {
-          log.debug('[Streaming] Raw line', {}, { line });
-        }
-
-        if (line.startsWith(':')) {
-          log.debug('[Streaming] Comment line', {}, { line });
-          continue;
-        }
-
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') {
-            log.info('[Streaming] Received [DONE] marker', {}, {});
-            continue;
-          }
-
-          try {
-            const event: StreamEvent = JSON.parse(data);
-            eventCount++;
-
-            log.debug('[Streaming] Parsed event', {}, {
-              type: event.type,
-              eventNumber: eventCount,
-              hasDelta: !!event.delta
-            });
-
-            // Handle text deltas - try multiple possible delta field names
-            const delta = event.delta || event.text || (event as any).output_text_delta;
-            if (delta && typeof delta === 'string') {
-              accumulatedText += delta;
-              onChunk(delta);
-              log.debug('[Streaming] Sent chunk', {}, { chunkLength: delta.length, totalLength: accumulatedText.length });
-            }
-
-            // Store the final response object
-            if (event.type === 'response.done' || event.type === 'done') {
-              fullResponse = event.response || event;
-              log.info('[Streaming] Received response.done event', {}, { hasResponse: !!fullResponse });
-            }
-          } catch (parseErr) {
-            log.warn('[Streaming] Failed to parse SSE event', {}, {
-              line: line.slice(0, 100),
-              error: String(parseErr)
-            });
-          }
-        }
-      }
-    }
-
-    log.info('[Streaming] Finalizing response', {}, {
-      hasFullResponse: !!fullResponse,
-      accumulatedTextLength: accumulatedText.length,
-      eventCount
+    const es = new EventSource(BASE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ ...payload, stream: true }),
+      pollingInterval: 0, // Disable polling, use true SSE
     });
 
-    // Construct final response object
-    const finalResponse: ResponsesCreateResponse = fullResponse || {
-      id: 'unknown',
-      model: payload.model,
-      created: Date.now(),
-      output: [{
-        type: 'message',
-        content: [{ text: accumulatedText }]
-      }]
-    };
+    es.addEventListener('open', () => {
+      log.info('[Streaming] EventSource connection opened', {}, {});
+    });
 
-    instr.responsePayload = finalResponse;
-    instr.responseId = finalResponse.id;
-    instr.model = finalResponse.model;
-    instr.responseText = accumulatedText;
-    logInstrumentation(instr);
+    es.addEventListener('message', (event: any) => {
+      eventCount++;
 
-    return finalResponse;
-  } catch (err: any) {
-    if (!instr.endTime) {
+      try {
+        if (event.data === '[DONE]') {
+          log.info('[Streaming] Received [DONE] marker', {}, { eventCount });
+          es.close();
+
+          instr.endTime = Date.now();
+          instr.durationMs = instr.endTime - instr.startTime;
+
+          const finalResponse: ResponsesCreateResponse = fullResponse || {
+            id: 'unknown',
+            model: payload.model,
+            created: Date.now(),
+            output: [{
+              type: 'message',
+              content: [{ text: accumulatedText }]
+            }]
+          };
+
+          instr.responsePayload = finalResponse;
+          instr.responseId = finalResponse.id;
+          instr.model = finalResponse.model;
+          instr.responseText = accumulatedText;
+          logInstrumentation(instr);
+
+          resolve(finalResponse);
+          return;
+        }
+
+        const parsedEvent: StreamEvent = JSON.parse(event.data);
+
+        log.debug('[Streaming] Parsed event', {}, {
+          type: parsedEvent.type,
+          eventNumber: eventCount,
+          hasDelta: !!parsedEvent.delta
+        });
+
+        // Handle text deltas - try multiple possible delta field names
+        const delta = parsedEvent.delta || parsedEvent.text || (parsedEvent as any).output_text_delta;
+        if (delta && typeof delta === 'string') {
+          accumulatedText += delta;
+          onChunk(delta);
+          log.debug('[Streaming] Sent chunk', {}, { chunkLength: delta.length, totalLength: accumulatedText.length });
+        }
+
+        // Store the final response object
+        if (parsedEvent.type === 'response.done' || parsedEvent.type === 'done') {
+          fullResponse = parsedEvent.response || parsedEvent;
+          log.info('[Streaming] Received response.done event', {}, { hasResponse: !!fullResponse });
+        }
+      } catch (parseErr) {
+        log.warn('[Streaming] Failed to parse SSE event', {}, {
+          data: event.data?.slice(0, 100),
+          error: String(parseErr)
+        });
+      }
+    });
+
+    es.addEventListener('error', (error: any) => {
+      log.error('[Streaming] EventSource error', {}, {
+        error: String(error),
+        type: error?.type,
+        message: error?.message,
+        eventCount,
+        accumulatedTextLength: accumulatedText.length,
+      });
+
+      es.close();
+
       instr.endTime = Date.now();
       instr.durationMs = instr.endTime - instr.startTime;
-    }
-    instr.status = "error";
-    instr.errorMessage = err?.message ?? String(err);
-    logInstrumentation(instr);
-    throw err;
-  }
+      instr.status = "error";
+      instr.errorMessage = String(error);
+      logInstrumentation(instr);
+
+      reject(new Error(`Streaming error: ${String(error)}`));
+    });
+
+    es.addEventListener('close', () => {
+      log.info('[Streaming] EventSource closed', {}, {
+        eventCount,
+        accumulatedTextLength: accumulatedText.length
+      });
+    });
+  });
 }
 
 async function callOpenAIResponses(apiKey: string, payload: any, label: string): Promise<ResponsesCreateResponse> {

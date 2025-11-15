@@ -126,7 +126,7 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
 
     const serverUrl = toolkit.remote_mcp_server.url;
     const client = new MCPClient(serverUrl);
-    const discoveryOptions: RequestOptions = { timeout: 15_000 };
+    const discoveryOptions: RequestOptions = { timeout: 30000 };
 
     try {
       log.info('[ToolkitManager] Fetching tools from remote MCP server for toolkit definitions', {}, {

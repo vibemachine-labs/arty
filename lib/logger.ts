@@ -19,6 +19,7 @@ const SENSITIVE_KEYWORDS = [
 ] as const;
 
 const levelPriority = {
+  trace: 5,
   debug: 10,
   info: 20,
   warn: 30,
@@ -102,7 +103,13 @@ const getMinimumLevel = (): LogLevel => {
     return 'debug';
   }
 
-  if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') {
+  if (
+    raw === 'trace' ||
+    raw === 'debug' ||
+    raw === 'info' ||
+    raw === 'warn' ||
+    raw === 'error'
+  ) {
     return raw;
   }
 
@@ -163,6 +170,9 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
   const prefix = `[${LOG_PREFIX}][${level.toUpperCase()}][${timestamp}]`;
 
   switch (level) {
+    case 'trace':
+      console.trace(prefix, safeMessage, ...safeArgs);
+      break;
     case 'debug':
       console.debug(prefix, safeMessage, ...safeArgs);
       break;
@@ -251,6 +261,9 @@ export const log = {
     return () => {
       redactionListeners.delete(listener);
     };
+  },
+  trace(message: string, options: LogOptions = {}, ...args: unknown[]) {
+    emit('trace', message, options, ...args);
   },
   debug(message: string, options: LogOptions = {}, ...args: unknown[]) {
     emit('debug', message, options, ...args);

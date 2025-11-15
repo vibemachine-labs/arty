@@ -1,23 +1,20 @@
 import type { RequestParams } from './types';
 
+import { ZodSchema } from 'zod';
+import { log } from '../../../../lib/logger';
 import {
+  CallToolRequest,
+  CallToolResult,
+  JSONRPC_VERSION,
+  JSONRPCError,
   JSONRPCRequest,
   JSONRPCResponse,
-  JSONRPCError,
+  LATEST_PROTOCOL_VERSION,
   ListToolsRequest,
   ListToolsResult,
   ListToolsResultSchema,
-  CallToolRequest,
-  CallToolResult,
-  ResultSchema,
-  InitializeRequest,
-  InitializeResult,
-  InitializeResultSchema,
-  JSONRPC_VERSION,
-  LATEST_PROTOCOL_VERSION,
+  ResultSchema
 } from './types';
-import { ZodSchema } from 'zod';
-import { log } from '../../../../lib/logger';
 
 export interface RequestOptions {
   headers?: Record<string, string>;
@@ -84,7 +81,7 @@ export class MCPClient {
       const sessionId = res.headers.get('Mcp-Session-Id');
       if (sessionId) {
         this.sessionId = sessionId;
-        log.info('[MCPClient] Session established', {}, {
+        log.info('[MCPClient] Session established for mcp server', {}, {
           endpoint: this.endpoint,
           sessionId: this.sessionId,
         });

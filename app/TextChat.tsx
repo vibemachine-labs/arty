@@ -803,9 +803,6 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     setDraft('');
     setIsSending(true);
 
-    // Create an empty assistant message that we'll update as chunks arrive
-    appendMessage({ role: 'assistant', content: '' });
-
     try {
       // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
       // This now includes dynamic MCP tools fetched from remote servers
@@ -830,7 +827,7 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         preview: summarizeDescription(resolvedInstructions),
       });
 
-      log.info('[TextChat] Sent input to LLM, waiting for streaming reply', {}, {
+      log.info('[TextChat] Sent input to LLM, waiting for reply', {}, {
         userMessage: userMessage,
         userMessageLength: userMessage.length,
       });
@@ -841,48 +838,18 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         instructions: resolvedInstructions,
         tools,
         previous_response_id: lastResponseId ?? undefined,
+        // tool_choice is added inside callResponsesAPI for first call
       };
 
-      const { text: responseText, responseId } = await callResponsesAPIStreaming(
-        apiKey,
-        requestPayload,
-        (chunk) => {
-          // Update the last message with each chunk
-          updateLastMessage(chunk);
-        }
-      );
-
-      // Final update to ensure completeness
-      setMessages((prev) => {
-        if (prev.length === 0) return prev;
-        const updated = [...prev];
-        const lastMsg = updated[updated.length - 1];
-        if (lastMsg.role === 'assistant') {
-          updated[updated.length - 1] = {
-            ...lastMsg,
-            content: responseText,
-          };
-        }
-        return updated;
-      });
-
+      const { text: responseText, responseId } = await callResponsesAPI(apiKey, requestPayload);
+      appendMessage({ role: 'assistant', content: responseText });
       setLastResponseId(responseId ?? null);
     } catch (error) {
       log.error('[TextChat] send failed', {}, error);
       Alert.alert('Error', 'Unable to reach OpenAI. Please try again.');
-
-      // Update the last (empty) assistant message with error
-      setMessages((prev) => {
-        if (prev.length === 0) return prev;
-        const updated = [...prev];
-        const lastMsg = updated[updated.length - 1];
-        if (lastMsg.role === 'assistant') {
-          updated[updated.length - 1] = {
-            ...lastMsg,
-            content: 'I\'m having trouble replying right now. Could you try again in a moment?',
-          };
-        }
-        return updated;
+      appendMessage({
+        role: 'assistant',
+        content: 'I\'m having trouble replying right now. Could you try again in a moment?',
       });
     } finally {
       setIsSending(false);

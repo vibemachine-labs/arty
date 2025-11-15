@@ -77,7 +77,8 @@ async function ensureCacheDirectoryExists(): Promise<void> {
       return;
     }
 
-    await REMOTE_TOOLKIT_CACHE_DIR.create();
+    // Create directory with intermediates to ensure parent directories exist
+    await REMOTE_TOOLKIT_CACHE_DIR.create({ intermediates: true, idempotent: true });
     log.debug('[ToolkitManager] Cache directory created successfully', {}, {
       uri: REMOTE_TOOLKIT_CACHE_DIR.uri,
     });

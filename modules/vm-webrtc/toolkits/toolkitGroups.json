@@ -316,6 +316,28 @@
           }
         }
       ]
+    },
+    "deepwiki": {
+      "name": "deepwiki",
+      "toolkits": [
+        {
+          "type": "remote_mcp_server",
+          "name": "deepwiki",
+          "group": "deepwiki",
+          "description": "MCP server for fetching documentation from public GitHub repositories via DeepWiki",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "remote_mcp_server": {
+            "url": "https://mcp.deepwiki.com/sse",
+            "protocol": "sse"
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      ]
     }
   }
 }

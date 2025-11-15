@@ -5,6 +5,9 @@ import {
   ListToolsRequest,
   ListToolsResult,
   ListToolsResultSchema,
+  CallToolRequest,
+  CallToolResult,
+  ResultSchema,
   JSONRPC_VERSION,
 } from './types';
 import { ZodSchema } from 'zod';
@@ -157,6 +160,36 @@ export class MCPClient {
     log.info('[MCPClient] Retrieved tools from MCP server', {}, {
       endpoint: this.endpoint,
       toolCount: result.tools?.length || 0,
+    });
+
+    return result;
+  }
+
+  /**
+   * Call a tool on the MCP server
+   */
+  async callTool(
+    params: CallToolRequest['params'],
+    options?: RequestOptions
+  ): Promise<CallToolResult> {
+    log.info('[MCPClient] Calling tool on MCP server', {}, {
+      endpoint: this.endpoint,
+      toolName: params.name,
+      arguments: params.arguments,
+    });
+
+    const result = await this.request<CallToolRequest['params'], any>(
+      { method: 'tools/call', params },
+      ResultSchema.passthrough() as any,
+      options
+    );
+
+    log.info('[MCPClient] Tool call completed on MCP server', {}, {
+      endpoint: this.endpoint,
+      toolName: params.name,
+      isError: result.isError,
+      contentLength: result.content?.length || 0,
+      result: result,
     });
 
     return result;

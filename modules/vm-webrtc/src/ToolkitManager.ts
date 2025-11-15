@@ -30,8 +30,8 @@ const buildToolkitGroups = (): ToolkitGroups => {
 const toolkitGroups = buildToolkitGroups();
 const staticToolkitDefinitions = buildStaticToolkitDefinitions();
 
-// Use Paths.cache as the base directory for toolkit caching
-const REMOTE_TOOLKIT_CACHE_DIR = new Directory(Paths.cache, 'modules', 'vm-webrtc', 'remote-toolkit-definitions');
+// Use a simple subdirectory in the app cache for toolkit caching
+const REMOTE_TOOLKIT_CACHE_DIR = new Directory(Paths.cache, 'remote-toolkit-definitions');
 const REMOTE_TOOLKIT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const REMOTE_TOOLKIT_DISCOVERY_OPTIONS: RequestOptions = { timeout: 30000 };
 

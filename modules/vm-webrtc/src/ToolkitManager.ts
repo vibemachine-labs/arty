@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { Paths, File, Directory } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 
 import toolkitGroupsData from '../toolkits/toolkitGroups.json';
@@ -30,10 +30,8 @@ const buildToolkitGroups = (): ToolkitGroups => {
 const toolkitGroups = buildToolkitGroups();
 const staticToolkitDefinitions = buildStaticToolkitDefinitions();
 
-const ensureTrailingSlash = (value: string): string => (value.endsWith('/') ? value : `${value}/`);
-const REMOTE_TOOLKIT_CACHE_DIR = `${
-  ensureTrailingSlash(FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '')
-}modules/vm-webrtc/remote-toolkit-definitions/`;
+// Use Paths.cache as the base directory for toolkit caching
+const REMOTE_TOOLKIT_CACHE_DIR = new Directory(Paths.cache, 'modules', 'vm-webrtc', 'remote-toolkit-definitions');
 const REMOTE_TOOLKIT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const REMOTE_TOOLKIT_DISCOVERY_OPTIONS: RequestOptions = { timeout: 30000 };
 
@@ -64,96 +62,119 @@ function buildStaticToolkitDefinitions(): ToolDefinition[] {
   return staticTools;
 }
 
-async function getRemoteToolkitCachePath(serverUrl: string): Promise<string> {
+async function getRemoteToolkitCacheFile(serverUrl: string): Promise<File> {
   const digest = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     serverUrl
   );
   const fileName = `${digest}.json`;
-  return `${REMOTE_TOOLKIT_CACHE_DIR}${fileName}`;
+  return new File(REMOTE_TOOLKIT_CACHE_DIR, fileName);
 }
 
 async function ensureCacheDirectoryExists(): Promise<void> {
   try {
-    await FileSystem.makeDirectoryAsync(REMOTE_TOOLKIT_CACHE_DIR, { intermediates: true });
-  } catch (error) {
-    const errorCode = (error as { code?: string })?.code;
-    if (errorCode === 'EEXIST') {
-      log.debug('[ToolkitManager] Cache directory already exists', {}, {
-        path: REMOTE_TOOLKIT_CACHE_DIR,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (await REMOTE_TOOLKIT_CACHE_DIR.exists) {
       return;
     }
 
+    await REMOTE_TOOLKIT_CACHE_DIR.create();
+    log.debug('[ToolkitManager] Cache directory created successfully', {}, {
+      uri: REMOTE_TOOLKIT_CACHE_DIR.uri,
+    });
+  } catch (error: unknown) {
     log.error('[ToolkitManager] Failed to create cache directory', {}, {
       error: error instanceof Error ? error.message : String(error),
-      path: REMOTE_TOOLKIT_CACHE_DIR,
-    }, error as Error);
+      uri: REMOTE_TOOLKIT_CACHE_DIR.uri,
+    }, error instanceof Error ? error : new Error(String(error)));
+    throw error;
   }
 }
 
 async function readRemoteToolkitCache(serverUrl: string): Promise<RemoteToolkitCacheEntry | null> {
-  const cachePath = await getRemoteToolkitCachePath(serverUrl);
+  const cacheFile = await getRemoteToolkitCacheFile(serverUrl);
   try {
-    const contents = await FileSystem.readAsStringAsync(cachePath, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
-    return JSON.parse(contents) as RemoteToolkitCacheEntry;
-  } catch (error) {
-    const errorCode = (error as { code?: string })?.code;
-    if (errorCode && errorCode !== 'ENOENT') {
-      log.debug('[ToolkitManager] Failed to read toolkit cache file', {}, {
-        serverUrl,
-        cachePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    if (!(await cacheFile.exists)) {
+      return null;
     }
+
+    const contents = await cacheFile.text();
+    const parsed = JSON.parse(contents) as RemoteToolkitCacheEntry;
+
+    // Validate cache structure
+    if (!parsed.lastFetched || !Array.isArray(parsed.tools)) {
+      log.warn('[ToolkitManager] Invalid cache structure, ignoring', {}, {
+        serverUrl,
+        uri: cacheFile.uri,
+      });
+      return null;
+    }
+
+    return parsed;
+  } catch (error: unknown) {
+    log.warn('[ToolkitManager] Failed to read toolkit cache file', {}, {
+      serverUrl,
+      uri: cacheFile.uri,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
 
 async function writeRemoteToolkitCache(serverUrl: string, entry: RemoteToolkitCacheEntry): Promise<void> {
-  await ensureCacheDirectoryExists();
-  const cachePath = await getRemoteToolkitCachePath(serverUrl);
   try {
-    await FileSystem.writeAsStringAsync(cachePath, JSON.stringify(entry, null, 2), {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+    await ensureCacheDirectoryExists();
+    const cacheFile = await getRemoteToolkitCacheFile(serverUrl);
+
+    const cacheContent = JSON.stringify(entry, null, 2);
+    await cacheFile.write(cacheContent);
+
     log.debug('[ToolkitManager] Remote toolkit cache written to disk', {}, {
       serverUrl,
-      cachePath,
+      uri: cacheFile.uri,
       toolCount: entry.tools.length,
+      sizeBytes: cacheContent.length,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     log.error('[ToolkitManager] Failed to write toolkit cache file', {}, {
       serverUrl,
-      cachePath,
       error: error instanceof Error ? error.message : String(error),
-    }, error);
+    }, error instanceof Error ? error : new Error(String(error)));
+    // Don't throw - cache write failures shouldn't break the application
   }
 }
 
 async function clearRemoteToolkitCacheFiles(): Promise<void> {
   try {
-    const entries = await FileSystem.readDirectoryAsync(REMOTE_TOOLKIT_CACHE_DIR);
-    await Promise.all(
-      entries.map((entry) =>
-        FileSystem.deleteAsync(`${REMOTE_TOOLKIT_CACHE_DIR}${entry}`, { idempotent: true })
-      )
-    );
+    if (!(await REMOTE_TOOLKIT_CACHE_DIR.exists)) {
+      log.debug('[ToolkitManager] Cache directory does not exist, nothing to clear', {}, {
+        uri: REMOTE_TOOLKIT_CACHE_DIR.uri,
+      });
+      return;
+    }
+
+    const entries = await REMOTE_TOOLKIT_CACHE_DIR.list();
+    const deletePromises = entries.map(async (entry) => {
+      try {
+        await entry.delete();
+      } catch (err: unknown) {
+        log.warn('[ToolkitManager] Failed to delete cache file', {}, {
+          uri: entry.uri,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
+    await Promise.all(deletePromises);
+
     log.debug('[ToolkitManager] Remote toolkit cache directory cleared', {}, {
-      path: REMOTE_TOOLKIT_CACHE_DIR,
+      uri: REMOTE_TOOLKIT_CACHE_DIR.uri,
       entryCount: entries.length,
     });
-  } catch (error) {
-    const errorCode = (error as { code?: string })?.code;
-    if (errorCode && errorCode !== 'ENOENT') {
-      log.error('[ToolkitManager] Failed to clear remote toolkit cache', {}, {
-        path: REMOTE_TOOLKIT_CACHE_DIR,
-        error: error instanceof Error ? error.message : String(error),
-      }, error);
-    }
+  } catch (error: unknown) {
+    log.error('[ToolkitManager] Failed to clear remote toolkit cache', {}, {
+      uri: REMOTE_TOOLKIT_CACHE_DIR.uri,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -349,7 +370,7 @@ function scheduleRemoteToolkitRefresh(toolkit: RemoteMcpToolkitDefinition, serve
     return;
   }
 
-  log.debug('[ToolkitManager] Remote toolkit cache expired, scheduling background refresh', {}, {
+  log.info('[ToolkitManager] Cache expired, scheduling background refresh', {}, {
     group: toolkit.group,
     url: serverUrl,
     ttlMs: REMOTE_TOOLKIT_CACHE_TTL_MS,
@@ -357,22 +378,33 @@ function scheduleRemoteToolkitRefresh(toolkit: RemoteMcpToolkitDefinition, serve
 
   const refreshPromise = (async () => {
     try {
-      await fetchAndCacheRemoteToolkitDefinitions(toolkit, serverUrl, REMOTE_TOOLKIT_DISCOVERY_OPTIONS);
-      log.debug('[ToolkitManager] Remote toolkit cache refresh completed', {}, {
+      const newDefinitions = await fetchAndCacheRemoteToolkitDefinitions(
+        toolkit,
+        serverUrl,
+        REMOTE_TOOLKIT_DISCOVERY_OPTIONS
+      );
+
+      log.info('[ToolkitManager] Background cache refresh completed successfully', {}, {
         group: toolkit.group,
         url: serverUrl,
+        toolCount: newDefinitions.length,
       });
-    } catch (error) {
-      log.error('[ToolkitManager] Remote toolkit cache refresh failed', {}, {
+
+      // Trigger a rebuild of the toolkit definitions cache with fresh data
+      rebuildToolkitDefinitionsCache();
+    } catch (error: unknown) {
+      log.error('[ToolkitManager] Background cache refresh failed, continuing with stale cache', {}, {
         group: toolkit.group,
         url: serverUrl,
         error: error instanceof Error ? error.message : String(error),
-      }, error);
+      }, error instanceof Error ? error : new Error(String(error)));
     }
   })();
 
   remoteCacheRefreshPromises.set(serverUrl, refreshPromise);
-  refreshPromise.finally(() => remoteCacheRefreshPromises.delete(serverUrl));
+  refreshPromise.finally(() => {
+    remoteCacheRefreshPromises.delete(serverUrl);
+  });
 }
 
 async function loadRemoteToolkitDefinitions(toolkit: RemoteMcpToolkitDefinition): Promise<ToolDefinition[]> {
@@ -390,33 +422,44 @@ async function loadRemoteToolkitDefinitions(toolkit: RemoteMcpToolkitDefinition)
 
   if (cached && cached.tools.length > 0) {
     const cacheAgeMs = Date.now() - cached.lastFetched;
+    const isCacheStale = cacheAgeMs > REMOTE_TOOLKIT_CACHE_TTL_MS;
+
     log.debug('[ToolkitManager] Loaded toolkit definitions from disk cache', {}, {
       group: toolkit.group,
       url: serverUrl,
       cacheAgeMs,
       toolCount: cached.tools.length,
+      isStale: isCacheStale,
     });
 
+    // Register tools and update cache
     registerMcpToolsForServer(toolkit.group, serverUrl, cached.tools, client, REMOTE_TOOLKIT_DISCOVERY_OPTIONS);
     const definitions = cached.tools.map((entry) => entry.definition);
     setDynamicToolkitDefinitionsForServer(serverUrl, definitions);
 
-    if (cacheAgeMs > REMOTE_TOOLKIT_CACHE_TTL_MS) {
+    // Schedule background refresh if cache is stale
+    if (isCacheStale) {
       scheduleRemoteToolkitRefresh(toolkit, serverUrl);
     }
 
     return definitions;
   }
 
+  // No valid cache - fetch directly
+  log.debug('[ToolkitManager] No valid cache found, fetching from MCP server', {}, {
+    group: toolkit.group,
+    url: serverUrl,
+  });
+
   try {
     return await fetchAndCacheRemoteToolkitDefinitions(toolkit, serverUrl, REMOTE_TOOLKIT_DISCOVERY_OPTIONS);
-  } catch (error) {
+  } catch (error: unknown) {
     log.error('[ToolkitManager] Failed to fetch tools from MCP server for toolkit definitions', {}, {
       name: toolkit.name,
       group: toolkit.group,
       url: serverUrl,
       error: error instanceof Error ? error.message : String(error),
-    }, error);
+    }, error instanceof Error ? error : new Error(String(error)));
     return [];
   }
 }
@@ -451,12 +494,29 @@ export const preloadToolkitDefinitions = async (): Promise<void> => {
 /**
  * Clears the toolkit definitions cache, forcing a fresh fetch on next call.
  * Useful for testing or when MCP servers are updated.
+ *
+ * @returns Promise that resolves when cache files have been cleared
  */
-export const clearToolkitDefinitionsCache = (): void => {
+export const clearToolkitDefinitionsCache = async (): Promise<void> => {
   log.info('[ToolkitManager] Clearing toolkit definitions cache', {}, {});
+
+  // Clear in-memory caches
   toolkitDefinitionsCache = null;
   toolkitDefinitionsPromise = null;
   dynamicToolkitDefinitionsByServer.clear();
+
+  // Wait for any in-progress refreshes to complete before clearing
+  const pendingRefreshes = Array.from(remoteCacheRefreshPromises.values());
+  if (pendingRefreshes.length > 0) {
+    log.debug('[ToolkitManager] Waiting for pending cache refreshes to complete', {}, {
+      count: pendingRefreshes.length,
+    });
+    await Promise.allSettled(pendingRefreshes);
+  }
   remoteCacheRefreshPromises.clear();
-  void clearRemoteToolkitCacheFiles();
+
+  // Clear disk cache files
+  await clearRemoteToolkitCacheFiles();
+
+  log.info('[ToolkitManager] Toolkit definitions cache cleared successfully', {}, {});
 };

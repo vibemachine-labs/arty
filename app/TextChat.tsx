@@ -274,40 +274,79 @@ async function callOpenAIResponsesStreaming(
     let buffer = '';
     let fullResponse: any = null;
     let accumulatedText = '';
+    let eventCount = 0;
+
+    log.info('[Streaming] Starting SSE stream parsing', {}, {});
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        log.info('[Streaming] Stream finished', {}, { eventCount, accumulatedTextLength: accumulatedText.length });
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (!line.trim() || line.startsWith(':')) continue;
+        if (!line.trim()) continue;
+
+        // Log raw line for debugging
+        if (line.length < 200) {
+          log.debug('[Streaming] Raw line', {}, { line });
+        }
+
+        if (line.startsWith(':')) {
+          log.debug('[Streaming] Comment line', {}, { line });
+          continue;
+        }
+
         if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') {
+            log.info('[Streaming] Received [DONE] marker', {}, {});
+            continue;
+          }
 
           try {
             const event: StreamEvent = JSON.parse(data);
+            eventCount++;
 
-            // Handle text deltas
-            if (event.type === 'response.output_text.delta' && event.delta) {
-              accumulatedText += event.delta;
-              onChunk(event.delta);
+            log.debug('[Streaming] Parsed event', {}, {
+              type: event.type,
+              eventNumber: eventCount,
+              hasDelta: !!event.delta
+            });
+
+            // Handle text deltas - try multiple possible delta field names
+            const delta = event.delta || event.text || (event as any).output_text_delta;
+            if (delta && typeof delta === 'string') {
+              accumulatedText += delta;
+              onChunk(delta);
+              log.debug('[Streaming] Sent chunk', {}, { chunkLength: delta.length, totalLength: accumulatedText.length });
             }
 
             // Store the final response object
-            if (event.type === 'response.done') {
-              fullResponse = event;
+            if (event.type === 'response.done' || event.type === 'done') {
+              fullResponse = event.response || event;
+              log.info('[Streaming] Received response.done event', {}, { hasResponse: !!fullResponse });
             }
           } catch (parseErr) {
-            log.warn('[TextChat] Failed to parse SSE event', {}, { line, error: String(parseErr) });
+            log.warn('[Streaming] Failed to parse SSE event', {}, {
+              line: line.slice(0, 100),
+              error: String(parseErr)
+            });
           }
         }
       }
     }
+
+    log.info('[Streaming] Finalizing response', {}, {
+      hasFullResponse: !!fullResponse,
+      accumulatedTextLength: accumulatedText.length,
+      eventCount
+    });
 
     // Construct final response object
     const finalResponse: ResponsesCreateResponse = fullResponse || {
@@ -803,6 +842,9 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     setDraft('');
     setIsSending(true);
 
+    // Create an empty assistant message that we'll update as chunks arrive
+    appendMessage({ role: 'assistant', content: '' });
+
     try {
       // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
       // This now includes dynamic MCP tools fetched from remote servers
@@ -827,7 +869,7 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         preview: summarizeDescription(resolvedInstructions),
       });
 
-      log.info('[TextChat] Sent input to LLM, waiting for reply', {}, {
+      log.info('[TextChat] Sent input to LLM, waiting for streaming reply', {}, {
         userMessage: userMessage,
         userMessageLength: userMessage.length,
       });
@@ -838,18 +880,48 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         instructions: resolvedInstructions,
         tools,
         previous_response_id: lastResponseId ?? undefined,
-        // tool_choice is added inside callResponsesAPI for first call
       };
 
-      const { text: responseText, responseId } = await callResponsesAPI(apiKey, requestPayload);
-      appendMessage({ role: 'assistant', content: responseText });
+      const { text: responseText, responseId } = await callResponsesAPIStreaming(
+        apiKey,
+        requestPayload,
+        (chunk) => {
+          // Update the last message with each chunk
+          updateLastMessage(chunk);
+        }
+      );
+
+      // Final update to ensure completeness
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant') {
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content: responseText,
+          };
+        }
+        return updated;
+      });
+
       setLastResponseId(responseId ?? null);
     } catch (error) {
       log.error('[TextChat] send failed', {}, error);
       Alert.alert('Error', 'Unable to reach OpenAI. Please try again.');
-      appendMessage({
-        role: 'assistant',
-        content: 'I\'m having trouble replying right now. Could you try again in a moment?',
+
+      // Update the last (empty) assistant message with error
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant') {
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content: 'I\'m having trouble replying right now. Could you try again in a moment?',
+          };
+        }
+        return updated;
       });
     } finally {
       setIsSending(false);

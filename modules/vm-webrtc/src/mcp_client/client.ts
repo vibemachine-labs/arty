@@ -252,6 +252,7 @@ export class MCPClient {
       method: req.method,
       requestId: body.id,
       sessionId: this.sessionId,
+      requestPayload: body,
     });
 
     const controller = new AbortController();

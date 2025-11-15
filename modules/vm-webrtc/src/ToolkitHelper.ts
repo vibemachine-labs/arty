@@ -84,12 +84,13 @@ export class ToolkitHelper {
       });
 
       if (this.module) {
-        this.module.sendToolkitResponse(requestId, result);
-        log.info(`[${this.toolName}] 📤 Sent response to Swift`, {}, {
-          requestId,
-          callId,
-          responseLength: String(result).length,
-        });
+      this.module.sendToolkitResponse(requestId, result);
+      log.info(`[${this.toolName}] 📤 Sent response to Swift`, {}, {
+        requestId,
+        callId,
+        responseLength: String(result).length,
+        response: result,
+      });
       } else {
         log.warn(`[${this.toolName}] ⚠️ Cannot send response; native module missing`, {}, { requestId });
       }

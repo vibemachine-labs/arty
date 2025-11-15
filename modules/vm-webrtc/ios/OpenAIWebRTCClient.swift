@@ -609,7 +609,9 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "[VmWebrtc] " + "Tool call result sent",
         attributes: logAttributes(for: .debug, metadata: [
           "callId": callId,
-          "resultLength": result.count
+          "resultLength": result.count,
+          "result_preview": String(result.prefix(500)),
+          "result": result
         ])
       )
       eventHandler.recordExternalActivity(reason: "tool_call_result")

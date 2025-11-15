@@ -17,3 +17,16 @@ const text = await FileSystem.readAsStringAsync(uri);
 
 Also for fetch, use expo fetch.
 
+Never use: 
+
+import { createHash } from 'crypto';
+
+instead use:
+
+expo install expo-crypto
+import * as Crypto from 'expo-crypto';
+
+const hash = await Crypto.digestStringAsync(
+  Crypto.CryptoDigestAlgorithm.SHA256,
+  "your-data"
+);

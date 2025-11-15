@@ -8,7 +8,7 @@ import type {
   RemoteMcpToolkitDefinition,
 } from './VmWebrtc.types';
 import { exportToolDefinition } from './VmWebrtc.types';
-import { MCPClient } from './mcp_client/client';
+import { MCPClient, type RequestOptions } from './mcp_client/client';
 import { log } from '../../../lib/logger';
 import type { Tool } from './mcp_client/types';
 import { registerMcpTool } from './toolkit_functions/index';
@@ -125,6 +125,8 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
     }
 
     const serverUrl = toolkit.remote_mcp_server.url;
+    const client = new MCPClient(serverUrl);
+    const discoveryOptions: RequestOptions = { timeout: 15_000 };
 
     try {
       log.info('[ToolkitManager] Fetching tools from remote MCP server for toolkit definitions', {}, {
@@ -133,8 +135,7 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
         url: serverUrl,
       });
 
-      const client = new MCPClient(serverUrl);
-      const result = await client.listTools();
+      const result = await client.listTools(undefined, discoveryOptions);
 
       if (result.tools && result.tools.length > 0) {
         const convertedTools = result.tools.map((tool) =>
@@ -144,7 +145,6 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
 
         // Register each MCP tool in the toolkit registry for caching
         for (const tool of result.tools) {
-          const mcpClient = new MCPClient(serverUrl);
           const toolFunction = async (args: any) => {
             log.info('[ToolkitManager] Executing cached MCP tool', {}, {
               group: toolkit.group,
@@ -152,12 +152,11 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
               serverUrl,
             });
 
-            const result = await mcpClient.callTool({
+            const result = await client.callTool({
               name: tool.name,
               arguments: args,
             });
 
-            // Return the result as JSON string
             return JSON.stringify(result, null, 2);
           };
 

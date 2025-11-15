@@ -198,6 +198,22 @@ export const getRawToolkitDefinitions = (): ToolkitDefinition[] => {
 };
 
 /**
+ * Preload toolkit definitions so that remote MCP discovery runs eagerly.
+ */
+const preloadToolkitDefinitions = async (): Promise<void> => {
+  try {
+    log.info('[ToolkitManager] Preloading toolkit definitions cache');
+    await getToolkitDefinitions();
+  } catch (error) {
+    log.error('[ToolkitManager] Preloading toolkit definitions failed', {}, {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    }, error);
+  }
+};
+
+void preloadToolkitDefinitions();
+
+/**
  * Clears the toolkit definitions cache, forcing a fresh fetch on next call.
  * Useful for testing or when MCP servers are updated.
  */

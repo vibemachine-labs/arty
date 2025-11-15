@@ -463,10 +463,14 @@ const MessageBubble: React.FC<{ role: 'user' | 'assistant'; content: string }> =
   content,
 }) => {
   const isUser = role === 'user';
+
   return (
     <View style={[styles.bubbleContainer, isUser ? styles.userAlign : styles.assistantAlign]}>
       <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <Text style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}>
+        <Text
+          style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}
+          selectable={true}
+        >
           {content}
         </Text>
       </View>
@@ -478,8 +482,8 @@ const ChatInputBar: React.FC<{
   value: string;
   onChangeText: (text: string) => void;
   onSend: () => void;
-  disabled: boolean;
-}> = ({ value, onChangeText, onSend, disabled }) => (
+  isSending: boolean;
+}> = ({ value, onChangeText, onSend, isSending }) => (
   <View style={styles.inputBar}>
     <TextInput
       value={value}
@@ -488,16 +492,16 @@ const ChatInputBar: React.FC<{
       placeholderTextColor="#8E8E93"
       style={styles.textInput}
       multiline
-      editable={!disabled}
+      editable={true}
       autoCorrect={false}
     />
     <TouchableOpacity
-      style={[styles.sendButton, disabled && styles.disabledSendButton]}
+      style={[styles.sendButton, isSending && styles.disabledSendButton]}
       onPress={onSend}
       activeOpacity={0.7}
-      disabled={disabled || !value.trim()}
+      disabled={isSending || !value.trim()}
     >
-      <Text style={styles.sendButtonLabel}>{disabled ? 'Sending…' : 'Send'}</Text>
+      <Text style={styles.sendButtonLabel}>{isSending ? 'Sending…' : 'Send'}</Text>
     </TouchableOpacity>
   </View>
 );
@@ -613,7 +617,7 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
             <MessageBubble key={message.id} role={message.role} content={message.content} />
           ))}
         </ScrollView>
-        <ChatInputBar value={draft} onChangeText={setDraft} onSend={handleSend} disabled={isSending} />
+        <ChatInputBar value={draft} onChangeText={setDraft} onSend={handleSend} isSending={isSending} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

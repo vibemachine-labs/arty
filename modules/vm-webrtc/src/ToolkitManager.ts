@@ -200,7 +200,7 @@ export const getRawToolkitDefinitions = (): ToolkitDefinition[] => {
 /**
  * Preload toolkit definitions so that remote MCP discovery runs eagerly.
  */
-const preloadToolkitDefinitions = async (): Promise<void> => {
+export const preloadToolkitDefinitions = async (): Promise<void> => {
   try {
     log.info('[ToolkitManager] Preloading toolkit definitions cache (fetching remote MCP tools)');
     await getToolkitDefinitions();
@@ -215,12 +215,6 @@ const preloadToolkitDefinitions = async (): Promise<void> => {
     }, error);
   }
 };
-
-function initializeToolkitManager(): void {
-  void preloadToolkitDefinitions();
-}
-
-initializeToolkitManager();
 
 /**
  * Clears the toolkit definitions cache, forcing a fresh fetch on next call.

@@ -23,7 +23,8 @@ export type BaseOpenAIConnectionOptions = {
   voice?: string;
 };
 
-export type ToolDefinition = {
+// Function tool definition (local/native tools)
+export type FunctionToolDefinition = {
   type: 'function';
   name: string;
   description: string;
@@ -40,29 +41,61 @@ export type ToolDefinition = {
   };
 };
 
-// This is a tool definition for the new Gen2 toolkit format
-export type ToolkitDefinition = {
-  type: 'function';
+// MCP tool definition (remote MCP server tools)
+// NOTE: This type is kept for reference but is no longer used in the codebase.
+// Remote MCP server tools are now exported as FunctionToolDefinition to maintain
+// compatibility with LLM tool calling. The actual dispatch logic checks the
+// toolkit registry to determine if a tool is a remote MCP tool.
+export type McpToolDefinition = {
+  type: 'mcp';
+  server_label: string;
+  server_description: string;
+  server_url: string;
+  headers: Record<string, string>;
+  require_approval: 'never' | 'always' | 'auto';
+};
+
+// Union type for all tool definitions
+// NOTE: Currently only FunctionToolDefinition is used since remote MCP tools
+// are also exported as 'function' type for LLM compatibility.
+export type ToolDefinition = FunctionToolDefinition;
+
+type ToolkitParameters = {
+  type: 'object';
+  properties: Record<
+    string,
+    {
+      type: string;
+      description: string;
+    }
+  >;
+  required: string[];
+};
+
+export type ToolkitDefinitionBase = {
   name: string;
-  group: string
+  group: string;
   description: string;
   supported_auth: 'no_auth_required' | 'api_key' | 'oauth2';
-  tool_source_file?: string;
-  // Arbitrary extra parameters passed along to the tool implementation.
-  extra: Record<string, string>;
-  // These are the params that the LLM should call this tool with
-  parameters: {
-    type: 'object';
-    properties: Record<
-      string,
-      {
-        type: string;
-        description: string;
-      }
-    >;
-    required: string[];
-  };
+  parameters: ToolkitParameters;
 };
+
+export type FunctionToolkitDefinition = ToolkitDefinitionBase & {
+  type: 'function';
+  tool_source_file?: string;
+  extra: Record<string, string>;
+};
+
+export type RemoteMcpToolkitDefinition = ToolkitDefinitionBase & {
+  type: 'remote_mcp_server';
+  remote_mcp_server: {
+    url: string;
+    protocol: 'sse' | 'stdio' | 'websocket';
+  };
+  extra?: Record<string, string>;
+};
+
+export type ToolkitDefinition = FunctionToolkitDefinition | RemoteMcpToolkitDefinition;
 
 export type ToolkitGroup = {
   name: string;
@@ -82,13 +115,20 @@ export type ToolkitGroups = {
  * @param toolkit - The toolkit definition to convert
  * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news__showTopStories")
  */
+const isFunctionToolkitDefinition = (toolkit: ToolkitDefinition): toolkit is FunctionToolkitDefinition =>
+  toolkit.type === 'function';
+
 export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
+  if (!isFunctionToolkitDefinition(toolkit)) {
+    throw new Error(`Cannot export remote MCP toolkit "${toolkit.name}" as a function tool definition`);
+  }
+
   const toolName = includeGroupInName && toolkit.group
     ? `${toolkit.group}__${toolkit.name}`
     : toolkit.name;
 
   return {
-    type: toolkit.type,
+    type: 'function',
     name: toolName,
     description: toolkit.description,
     parameters: toolkit.parameters,
@@ -103,7 +143,9 @@ export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInN
  * @param includeGroupInName - If true, prepends group name to tool names (default: true)
  */
 export function exportToolDefinitions(group: ToolkitGroup, includeGroupInName = true): ToolDefinition[] {
-  return group.toolkits.map(toolkit => exportToolDefinition(toolkit, includeGroupInName));
+  return group.toolkits
+    .filter(isFunctionToolkitDefinition)
+    .map(toolkit => exportToolDefinition(toolkit, includeGroupInName));
 }
 
 

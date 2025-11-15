@@ -137,7 +137,9 @@ public class ToolkitHelper: BaseTool {
           "requestId": requestId,
           "result_length": result.count,
           "usageCount": newUsageCount,
-          "isFirstUse": newUsageCount == 1
+          "isFirstUse": newUsageCount == 1,
+          "result_preview": String(result.prefix(500)),
+          "result": result
         ]
       )
     } else {

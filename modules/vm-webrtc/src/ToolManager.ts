@@ -138,9 +138,14 @@ class ToolManager {
 
   getToolNames(definitions: ToolDefinition[]): string[] {
     return definitions
-      .map((definition) => definition?.name)
+      .map((definition) => {
+        if (!definition) return undefined;
+        // All tools are now exported as 'function' type
+        return definition.name;
+      })
       .filter((name): name is string => Boolean(name));
   }
+
 
   private async executeGen2ToolCall(
     groupName: string,
@@ -192,6 +197,8 @@ class ToolManager {
     // Check if this is a gen2 tool (format: groupName__toolName)
     if (toolName.includes('__')) {
       const [groupName, toolFunctionName] = toolName.split('__');
+
+      // Execute gen2 tools (includes both local and cached MCP tools)
       if (toolkitRegistry[groupName]?.[toolFunctionName]) {
         return this.executeGen2ToolCall(groupName, toolFunctionName, args);
       }
@@ -263,6 +270,8 @@ class ToolManager {
   }
 
   private async applyPromptAddition(definition: ToolDefinition): Promise<ToolDefinition> {
+    // All tools are now exported as 'function' type, including remote MCP tools
+    // Apply prompt additions to all function tools
     const addition = await loadToolPromptAddition(definition.name);
     const trimmedAddition = addition.trim();
     const beforeLength = definition.description.length;

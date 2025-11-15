@@ -8,7 +8,11 @@ import {
   CallToolRequest,
   CallToolResult,
   ResultSchema,
+  InitializeRequest,
+  InitializeResult,
+  InitializeResultSchema,
   JSONRPC_VERSION,
+  LATEST_PROTOCOL_VERSION,
 } from './types';
 import { ZodSchema } from 'zod';
 import { log } from '../../../../lib/logger';
@@ -19,14 +23,102 @@ export interface RequestOptions {
 }
 
 /**
- * MCP Client for communicating with remote MCP servers via SSE or other protocols
+ * MCP Client for communicating with remote MCP servers via HTTP with session management
  */
 export class MCPClient {
   private endpoint: string;
   private requestId = 0;
+  private sessionId: string | null = null;
+  private initializePromise: Promise<void> | null = null;
 
   constructor(endpoint: string) {
     this.endpoint = endpoint;
+  }
+
+  /**
+   * Initialize the MCP session
+   */
+  private async initialize(): Promise<void> {
+    if (this.sessionId) {
+      return; // Already initialized
+    }
+
+    log.info('[MCPClient] Initializing MCP session', {}, {
+      endpoint: this.endpoint,
+    });
+
+    const body: JSONRPCRequest = {
+      jsonrpc: JSONRPC_VERSION,
+      id: ++this.requestId,
+      method: 'initialize',
+      params: {
+        protocolVersion: LATEST_PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: {
+          name: 'arty',
+          version: '1.0.0',
+        },
+      },
+    };
+
+    try {
+      const res = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Initialize failed: ${res.status} ${res.statusText}`);
+      }
+
+      // Extract session ID from response headers
+      const sessionId = res.headers.get('Mcp-Session-Id');
+      if (sessionId) {
+        this.sessionId = sessionId;
+        log.info('[MCPClient] Session established', {}, {
+          endpoint: this.endpoint,
+          sessionId: this.sessionId,
+        });
+      } else {
+        log.warn('[MCPClient] No session ID returned by server', {}, {
+          endpoint: this.endpoint,
+        });
+      }
+
+      const json = await res.json();
+
+      if ('error' in json) {
+        const errorResponse = json as JSONRPCError;
+        throw new Error(
+          `Initialize error ${errorResponse.error.code}: ${errorResponse.error.message}`
+        );
+      }
+
+      log.info('[MCPClient] MCP session initialized successfully', {}, {
+        endpoint: this.endpoint,
+        sessionId: this.sessionId,
+      });
+    } catch (error) {
+      log.error('[MCPClient] Failed to initialize MCP session', {}, {
+        endpoint: this.endpoint,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Ensure the client is initialized before making requests
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initializePromise) {
+      this.initializePromise = this.initialize();
+    }
+    await this.initializePromise;
   }
 
   /**
@@ -37,6 +129,9 @@ export class MCPClient {
     resultSchema: ZodSchema<TResult>,
     options?: RequestOptions
   ): Promise<TResult> {
+    // Ensure we're initialized before making any request
+    await this.ensureInitialized();
+
     const body: JSONRPCRequest = {
       jsonrpc: JSONRPC_VERSION,
       id: ++this.requestId,
@@ -48,6 +143,7 @@ export class MCPClient {
       endpoint: this.endpoint,
       method: req.method,
       requestId: body.id,
+      sessionId: this.sessionId,
     });
 
     const controller = new AbortController();
@@ -56,12 +152,20 @@ export class MCPClient {
       : undefined;
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        ...(options?.headers || {}),
+      };
+
+      // Add session ID header if we have one
+      if (this.sessionId) {
+        headers['Mcp-Session-Id'] = this.sessionId;
+      }
+
       const res = await fetch(this.endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options?.headers || {}),
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });

@@ -137,47 +137,81 @@ export class MCPClient {
    * SSE format is:
    *   event: message
    *   data: {"jsonrpc":"2.0",...}
+   *
+   *   event: ping
+   *   data: ping
    */
   private parseSSEResponse(sseText: string): any {
     const lines = sseText.trim().split('\n');
-    let eventType = '';
-    let data = '';
+    let currentEvent = '';
+    let currentData = '';
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
       if (line.startsWith('event:')) {
-        eventType = line.substring(6).trim();
+        // If we had a previous event with data, process it first
+        if (currentEvent === 'message' && currentData) {
+          try {
+            return JSON.parse(currentData);
+          } catch (error) {
+            log.error('[MCPClient] Failed to parse SSE message data as JSON', {}, {
+              data: currentData,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        // Start new event
+        currentEvent = line.substring(6).trim();
+        currentData = '';
       } else if (line.startsWith('data:')) {
-        data = line.substring(5).trim();
+        currentData = line.substring(5).trim();
+
+        // If this is a message event and we have data, try to parse it
+        if (currentEvent === 'message' && currentData) {
+          try {
+            return JSON.parse(currentData);
+          } catch (error) {
+            log.error('[MCPClient] Failed to parse SSE message data as JSON', {}, {
+              data: currentData,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      } else if (line === '') {
+        // Empty line marks end of event, process if it's a message
+        if (currentEvent === 'message' && currentData) {
+          try {
+            return JSON.parse(currentData);
+          } catch (error) {
+            log.error('[MCPClient] Failed to parse SSE message data as JSON', {}, {
+              data: currentData,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        // Reset for next event
+        currentEvent = '';
+        currentData = '';
       }
     }
 
-    // We're looking for the "message" event which contains the JSON-RPC response
-    if (eventType === 'message' && data) {
+    // Process final event if it's a message
+    if (currentEvent === 'message' && currentData) {
       try {
-        return JSON.parse(data);
+        return JSON.parse(currentData);
       } catch (error) {
-        log.error('[MCPClient] Failed to parse SSE data as JSON', {}, {
-          data,
+        log.error('[MCPClient] Failed to parse final SSE message data', {}, {
+          data: currentData,
           error: error instanceof Error ? error.message : String(error),
         });
-        throw new Error(`Failed to parse SSE data: ${error}`);
       }
     }
 
-    // If no message event found, try to parse the first data line as JSON
-    if (data) {
-      try {
-        return JSON.parse(data);
-      } catch (error) {
-        log.error('[MCPClient] Failed to parse SSE data', {}, {
-          sseText,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw new Error(`No valid JSON-RPC message in SSE response`);
-      }
-    }
-
-    throw new Error('No data found in SSE response');
+    log.error('[MCPClient] No valid message event found in SSE response', {}, {
+      sseText,
+    });
+    throw new Error('No valid JSON-RPC message in SSE response');
   }
 
   /**

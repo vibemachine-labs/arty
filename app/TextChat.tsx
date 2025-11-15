@@ -218,6 +218,127 @@ function extractFirstToolCall(resp: ResponsesCreateResponse): NormalizedToolCall
   return null;
 }
 
+// Streaming event types
+interface StreamEvent {
+  type: string;
+  delta?: string;
+  [key: string]: any;
+}
+
+async function callOpenAIResponsesStreaming(
+  apiKey: string,
+  payload: any,
+  label: string,
+  onChunk: (text: string) => void
+): Promise<ResponsesCreateResponse> {
+  const instr: Instrumentation = {
+    requestId: genRequestId(),
+    url: BASE_URL,
+    startTime: Date.now(),
+    status: "ok",
+    requestPayload: { ...payload, stream: true },
+  };
+
+  try {
+    const resp = await fetch(BASE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ ...payload, stream: true }),
+    });
+
+    instr.endTime = Date.now();
+    instr.durationMs = instr.endTime - instr.startTime;
+
+    const headerMap: Record<string, string> = {};
+    resp.headers.forEach((v, k) => { headerMap[k] = v; });
+    instr.responseHeaders = headerMap;
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      instr.status = "error";
+      instr.errorMessage = `HTTP ${resp.status} ${resp.statusText}`;
+      logInstrumentation(instr);
+      throw new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
+    }
+
+    if (!resp.body) {
+      throw new Error('Response body is null');
+    }
+
+    // Parse SSE stream
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullResponse: any = null;
+    let accumulatedText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim() || line.startsWith(':')) continue;
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const event: StreamEvent = JSON.parse(data);
+
+            // Handle text deltas
+            if (event.type === 'response.output_text.delta' && event.delta) {
+              accumulatedText += event.delta;
+              onChunk(event.delta);
+            }
+
+            // Store the final response object
+            if (event.type === 'response.done') {
+              fullResponse = event;
+            }
+          } catch (parseErr) {
+            log.warn('[TextChat] Failed to parse SSE event', {}, { line, error: String(parseErr) });
+          }
+        }
+      }
+    }
+
+    // Construct final response object
+    const finalResponse: ResponsesCreateResponse = fullResponse || {
+      id: 'unknown',
+      model: payload.model,
+      created: Date.now(),
+      output: [{
+        type: 'message',
+        content: [{ text: accumulatedText }]
+      }]
+    };
+
+    instr.responsePayload = finalResponse;
+    instr.responseId = finalResponse.id;
+    instr.model = finalResponse.model;
+    instr.responseText = accumulatedText;
+    logInstrumentation(instr);
+
+    return finalResponse;
+  } catch (err: any) {
+    if (!instr.endTime) {
+      instr.endTime = Date.now();
+      instr.durationMs = instr.endTime - instr.startTime;
+    }
+    instr.status = "error";
+    instr.errorMessage = err?.message ?? String(err);
+    logInstrumentation(instr);
+    throw err;
+  }
+}
+
 async function callOpenAIResponses(apiKey: string, payload: any, label: string): Promise<ResponsesCreateResponse> {
   const instr: Instrumentation = {
     requestId: genRequestId(),
@@ -332,6 +453,129 @@ async function executeToolCall(toolCall: ToolCall): Promise<string> {
     });
     return `Error executing ${toolCall.name}: ${errorMessage}`;
   }
+}
+
+async function callResponsesAPIStreaming(
+  apiKey: string,
+  req: ResponsesCreateRequest,
+  onChunk: (text: string) => void
+): Promise<ResponsesAPIResult> {
+  let currentPayload: any = {
+    ...req,
+    tool_choice: "auto",
+  };
+
+  log.info('[callResponsesAPIStreaming] Starting conversation loop', {}, {
+    model: req.model,
+    initialPayload: currentPayload,
+    hasTools: !!req.tools,
+    toolCount: req.tools?.length ?? 0,
+  });
+
+  let responseJson: any = null;
+  let previousResponseId: string | null = null;
+  let safetyCounter = 0;
+  const MAX_TURNS = 8;
+
+  while (safetyCounter++ < MAX_TURNS) {
+    log.info(`[callResponsesAPIStreaming] Sending request to LLM (turn ${safetyCounter})`, {}, {
+      turnNumber: safetyCounter,
+      payload: currentPayload,
+      previousResponseId: previousResponseId,
+    });
+
+    responseJson = await callOpenAIResponsesStreaming(apiKey, currentPayload, `turn_${safetyCounter}`, onChunk);
+
+    log.info(`[callResponsesAPIStreaming] Received response from LLM (turn ${safetyCounter})`, {}, {
+      turnNumber: safetyCounter,
+      responseId: responseJson.id,
+      responseJson: responseJson,
+      outputText: extractOutputText(responseJson),
+    });
+
+    const toolCall = extractFirstToolCall(responseJson);
+
+    // If model gives direct text output (no tool call), we're done
+    if (!toolCall) {
+      log.info('[callResponsesAPIStreaming] LLM returned final response (no tool call)', {}, {
+        turnNumber: safetyCounter,
+        outputText: extractOutputText(responseJson),
+        responseId: responseJson.id,
+      });
+      return {
+        text: extractOutputText(responseJson),
+        responseId: responseJson.id ?? null,
+      };
+    }
+
+    log.info('[callResponsesAPIStreaming] LLM requested tool call', {}, {
+      turnNumber: safetyCounter,
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      toolArgsJson: toolCall.argsJson,
+    });
+
+    // Parse tool args
+    let argsObj: any;
+    try {
+      argsObj = JSON.parse(toolCall.argsJson || "{}");
+      log.info('[callResponsesAPIStreaming] Parsed tool arguments', {}, {
+        toolName: toolCall.name,
+        parsedArgs: argsObj,
+      });
+    } catch (err: any) {
+      const errorText = `Error parsing tool call: ${err.message}`;
+      log.error('[callResponsesAPIStreaming] Failed to parse tool arguments', {}, {
+        toolName: toolCall.name,
+        argsJson: toolCall.argsJson,
+        error: err.message,
+      });
+      return {
+        text: errorText,
+        responseId: responseJson.id ?? null,
+      };
+    }
+
+    // Execute tool
+    const toolResult = await executeToolCall({
+      name: toolCall.name,
+      arguments: argsObj,
+    });
+
+    log.info('[callResponsesAPIStreaming] Tool execution completed', {}, {
+      toolName: toolCall.name,
+      toolResult: toolResult,
+      toolResultLength: typeof toolResult === 'string' ? toolResult.length : undefined,
+    });
+
+    // Prepare next turn with function_call_output
+    const nextInput = buildSecondTurnInput(toolCall.id, toolResult);
+    currentPayload = {
+      model: req.model,
+      previous_response_id: responseJson.id,
+      input: nextInput,
+      instructions: req.instructions
+    };
+
+    log.info('[callResponsesAPIStreaming] Prepared next turn payload', {}, {
+      turnNumber: safetyCounter + 1,
+      nextPayload: currentPayload,
+      toolCallId: toolCall.id,
+    });
+
+    previousResponseId = responseJson.id;
+  }
+
+  // If we exit due to too many turns, stop gracefully
+  log.warn('[callResponsesAPIStreaming] Reached MAX_TURNS limit — possible infinite loop', {}, {
+    maxTurns: MAX_TURNS,
+    finalResponseId: responseJson?.id,
+    finalOutputText: extractOutputText(responseJson),
+  });
+  return {
+    text: extractOutputText(responseJson) || '[Loop terminated: too many tool calls]',
+    responseId: responseJson?.id ?? null,
+  };
 }
 
 async function callResponsesAPI(
@@ -527,6 +771,24 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     });
   };
 
+  const updateLastMessage = (contentDelta: string) => {
+    setMessages((prev) => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      const lastMsg = updated[updated.length - 1];
+      if (lastMsg.role === 'assistant') {
+        updated[updated.length - 1] = {
+          ...lastMsg,
+          content: lastMsg.content + contentDelta,
+        };
+      }
+      return updated;
+    });
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    });
+  };
+
   const handleSend = async () => {
     const userMessage = draft.trim();
     if (!userMessage || isSending) return;
@@ -541,21 +803,16 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     setDraft('');
     setIsSending(true);
 
-    try {
-      // const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions();
+    // Create an empty assistant message that we'll update as chunks arrive
+    appendMessage({ role: 'assistant', content: '' });
 
+    try {
       // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
       // This now includes dynamic MCP tools fetched from remote servers
       const toolDefinitionsFromToolkits = await getToolkitDefinitions(); // gen2
       log.info('[TextChat] Toolkit definitions resolved', {}, {
         definitions: toolDefinitionsFromToolkits,
       });
-
-      // Merge Gen1 and Gen2 tool definitions
-      // const tools = [
-      //   ...(toolDefinitionsWithPrompts || []),
-      //   ...toolDefinitionsFromToolkits,
-      // ];
 
       const tools = toolDefinitionsFromToolkits;
 
@@ -573,28 +830,59 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         preview: summarizeDescription(resolvedInstructions),
       });
 
-      log.info('[TextChat] Sent input to LLM, waiting for reply', {}, {
+      log.info('[TextChat] Sent input to LLM, waiting for streaming reply', {}, {
         userMessage: userMessage,
         userMessageLength: userMessage.length,
       });
+
       const requestPayload: ResponsesCreateRequest = {
         model: 'gpt-5-mini',
         input: userMessage,
         instructions: resolvedInstructions,
         tools,
         previous_response_id: lastResponseId ?? undefined,
-        // tool_choice is added inside callResponsesAPI for first call
       };
 
-      const { text: responseText, responseId } = await callResponsesAPI(apiKey, requestPayload);
-      appendMessage({ role: 'assistant', content: responseText });
+      const { text: responseText, responseId } = await callResponsesAPIStreaming(
+        apiKey,
+        requestPayload,
+        (chunk) => {
+          // Update the last message with each chunk
+          updateLastMessage(chunk);
+        }
+      );
+
+      // Final update to ensure completeness
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant') {
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content: responseText,
+          };
+        }
+        return updated;
+      });
+
       setLastResponseId(responseId ?? null);
     } catch (error) {
       log.error('[TextChat] send failed', {}, error);
       Alert.alert('Error', 'Unable to reach OpenAI. Please try again.');
-      appendMessage({
-        role: 'assistant',
-        content: 'I\'m having trouble replying right now. Could you try again in a moment?',
+
+      // Update the last (empty) assistant message with error
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg.role === 'assistant') {
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content: 'I\'m having trouble replying right now. Could you try again in a moment?',
+          };
+        }
+        return updated;
       });
     } finally {
       setIsSending(false);

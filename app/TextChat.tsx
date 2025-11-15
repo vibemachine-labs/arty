@@ -263,10 +263,16 @@ async function callOpenAIResponsesStreaming(
 
     es.addEventListener('message', (event: any) => {
       eventCount++;
+      const raw = event.data;
 
       try {
-        if (event.data === '[DONE]') {
-          log.info('[Streaming] Received [DONE] marker', {}, { eventCount });
+        if (!raw) {
+          log.debug('[Streaming] Empty event data', {}, {});
+          return;
+        }
+
+        if (raw === '[DONE]') {
+          log.info('[Streaming] Received [DONE] marker', {}, { eventCount, accumulatedTextLength: accumulatedText.length });
           es.close();
 
           instr.endTime = Date.now();
@@ -292,30 +298,50 @@ async function callOpenAIResponsesStreaming(
           return;
         }
 
-        const parsedEvent: StreamEvent = JSON.parse(event.data);
+        const obj = JSON.parse(raw);
+        const eventType = obj.event;
+        const data = obj.data;
 
-        log.debug('[Streaming] Parsed event', {}, {
-          type: parsedEvent.type,
+        log.debug('[Streaming] Received SSE event', {}, {
+          eventType: eventType,
           eventNumber: eventCount,
-          hasDelta: !!parsedEvent.delta
+          hasData: !!data,
+          rawDataSnippet: raw.slice(0, 200)
         });
 
-        // Handle text deltas - try multiple possible delta field names
-        const delta = parsedEvent.delta || parsedEvent.text || (parsedEvent as any).output_text_delta;
-        if (delta && typeof delta === 'string') {
+        // Handle text delta events
+        if (eventType === 'response.output_text.delta' && data?.delta) {
+          const delta = data.delta as string;
           accumulatedText += delta;
           onChunk(delta);
-          log.debug('[Streaming] Sent chunk', {}, { chunkLength: delta.length, totalLength: accumulatedText.length });
-        }
-
-        // Store the final response object
-        if (parsedEvent.type === 'response.done' || parsedEvent.type === 'done') {
-          fullResponse = parsedEvent.response || parsedEvent;
-          log.info('[Streaming] Received response.done event', {}, { hasResponse: !!fullResponse });
+          log.debug('[Streaming] Sent chunk to UI', {}, {
+            chunkLength: delta.length,
+            totalLength: accumulatedText.length,
+            chunkPreview: delta.slice(0, 50)
+          });
+        } else if (eventType === 'response.completed') {
+          log.info('[Streaming] Received response.completed event', {}, {
+            hasResponseData: !!data,
+            accumulatedTextLength: accumulatedText.length
+          });
+          if (data) {
+            fullResponse = data;
+          }
+          es.close();
+        } else if (eventType === 'response.done') {
+          log.info('[Streaming] Received response.done event', {}, { hasResponseData: !!data });
+          if (data) {
+            fullResponse = data;
+          }
+        } else {
+          log.debug('[Streaming] Unhandled event type', {}, {
+            eventType: eventType,
+            dataKeys: data ? Object.keys(data) : []
+          });
         }
       } catch (parseErr) {
         log.warn('[Streaming] Failed to parse SSE event', {}, {
-          data: event.data?.slice(0, 100),
+          data: raw?.slice(0, 100),
           error: String(parseErr)
         });
       }

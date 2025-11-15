@@ -24,6 +24,9 @@ export interface RequestOptions {
 
 /**
  * MCP Client for communicating with remote MCP servers via HTTP with session management
+ * 
+ * A bit of a hack to work around missing/unclear react native compatibility in 
+ * reference typescript client: https://github.com/modelcontextprotocol/typescript-sdk/issues/1117
  */
 export class MCPClient {
   private endpoint: string;

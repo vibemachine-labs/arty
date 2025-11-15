@@ -1,3 +1,5 @@
+import type { RequestParams } from './types';
+
 import {
   JSONRPCRequest,
   JSONRPCResponse,
@@ -94,19 +96,15 @@ export class MCPClient {
 
       // Check if response is SSE format (text/event-stream)
       const contentType = res.headers.get('content-type') || '';
-      let json: any;
+      const rawResponse =
+        contentType.includes('text/event-stream')
+          ? this.parseSSEResponse(await res.text())
+          : await res.json();
 
-      if (contentType.includes('text/event-stream')) {
-        // Parse SSE format response
-        const text = await res.text();
-        json = this.parseSSEResponse(text);
-      } else {
-        // Parse regular JSON response
-        json = await res.json();
-      }
+      const parsedResponse = this.ensureJsonRpcObject(rawResponse);
 
-      if ('error' in json) {
-        const errorResponse = json as JSONRPCError;
+      if ('error' in parsedResponse) {
+        const errorResponse = parsedResponse as JSONRPCError;
         throw new Error(
           `Initialize error ${errorResponse.error.code}: ${errorResponse.error.message}`
         );
@@ -218,9 +216,23 @@ export class MCPClient {
   }
 
   /**
+   * Ensure parsed JSON payload is an object before usage.
+   */
+  private ensureJsonRpcObject(value: unknown): JSONRPCResponse | JSONRPCError {
+    if (typeof value !== 'object' || value === null) {
+      log.error('[MCPClient] Invalid MCP response payload', {}, {
+        payload: value,
+      });
+      throw new Error('Invalid JSON-RPC response: expected an object payload');
+    }
+
+    return value as JSONRPCResponse | JSONRPCError;
+  }
+
+  /**
    * Send a JSON-RPC request to the MCP server
    */
-  private async request<TParams, TResult>(
+  private async request<TParams extends RequestParams | undefined, TResult>(
     req: { method: string; params?: TParams },
     resultSchema: ZodSchema<TResult>,
     options?: RequestOptions
@@ -232,7 +244,7 @@ export class MCPClient {
       jsonrpc: JSONRPC_VERSION,
       id: ++this.requestId,
       method: req.method,
-      params: req.params as any,
+      params: req.params,
     };
 
     log.info('[MCPClient] Sending JSON-RPC request', {}, {
@@ -244,7 +256,9 @@ export class MCPClient {
 
     const controller = new AbortController();
     const timeoutId = options?.timeout
-      ? setTimeout(() => controller.abort(), options.timeout)
+      ? setTimeout(function () {
+          controller.abort();
+        }, options.timeout)
       : undefined;
 
     try {
@@ -281,20 +295,17 @@ export class MCPClient {
 
       // Check if response is SSE format (text/event-stream)
       const contentType = res.headers.get('content-type') || '';
-      let json: any;
 
-      if (contentType.includes('text/event-stream')) {
-        // Parse SSE format response
-        const text = await res.text();
-        json = this.parseSSEResponse(text);
-      } else {
-        // Parse regular JSON response
-        json = await res.json();
-      }
+      const rawResponse =
+        contentType.includes('text/event-stream')
+          ? this.parseSSEResponse(await res.text())
+          : await res.json();
+
+      const responsePayload = this.ensureJsonRpcObject(rawResponse);
 
       // Check if it's an error response
-      if ('error' in json) {
-        const errorResponse = json as JSONRPCError;
+      if ('error' in responsePayload) {
+        const errorResponse = responsePayload as JSONRPCError;
         log.error('[MCPClient] MCP server returned error', {}, {
           endpoint: this.endpoint,
           errorCode: errorResponse.error.code,
@@ -306,7 +317,7 @@ export class MCPClient {
       }
 
       // Parse as success response
-      const response = json as JSONRPCResponse;
+      const response = responsePayload as JSONRPCResponse;
       if (response.result === undefined) {
         log.error('[MCPClient] Response missing result field', {}, {
           endpoint: this.endpoint,

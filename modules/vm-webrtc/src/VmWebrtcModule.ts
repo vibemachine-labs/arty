@@ -102,7 +102,8 @@ export const openOpenAIConnectionAsync = async (
   // });
 
   // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
-  const toolDefinitionsFromToolkits = getToolkitDefinitions(); // gen2
+  // This now includes dynamic MCP tools fetched from remote servers
+  const toolDefinitionsFromToolkits = await getToolkitDefinitions(); // gen2
   log.info(`[${MODULE_NAME}] Toolkit definitions resolved`, {}, {
     definitions: toolDefinitionsFromToolkits,
   });

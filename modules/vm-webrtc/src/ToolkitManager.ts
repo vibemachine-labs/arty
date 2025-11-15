@@ -501,19 +501,32 @@ export const preloadToolkitDefinitions = async (): Promise<void> => {
 export const clearToolkitDefinitionsCache = async (): Promise<void> => {
   log.info('[ToolkitManager] Clearing toolkit definitions cache', {}, {});
 
-  // Clear in-memory caches
+  // Collect all in-flight promises before clearing anything
+  const pendingPromises: Promise<any>[] = [];
+
+  // Include the main toolkit definitions fetch if in progress
+  if (toolkitDefinitionsPromise) {
+    pendingPromises.push(toolkitDefinitionsPromise);
+  }
+
+  // Include all background refresh promises
+  const pendingRefreshes = Array.from(remoteCacheRefreshPromises.values());
+  pendingPromises.push(...pendingRefreshes);
+
+  // Wait for all in-flight promises to settle before clearing cache state
+  if (pendingPromises.length > 0) {
+    log.debug('[ToolkitManager] Waiting for in-flight promises to complete', {}, {
+      count: pendingPromises.length,
+      hasMainFetch: toolkitDefinitionsPromise !== null,
+      refreshCount: pendingRefreshes.length,
+    });
+    await Promise.allSettled(pendingPromises);
+  }
+
+  // Now it's safe to clear all cache state
   toolkitDefinitionsCache = null;
   toolkitDefinitionsPromise = null;
   dynamicToolkitDefinitionsByServer.clear();
-
-  // Wait for any in-progress refreshes to complete before clearing
-  const pendingRefreshes = Array.from(remoteCacheRefreshPromises.values());
-  if (pendingRefreshes.length > 0) {
-    log.debug('[ToolkitManager] Waiting for pending cache refreshes to complete', {}, {
-      count: pendingRefreshes.length,
-    });
-    await Promise.allSettled(pendingRefreshes);
-  }
   remoteCacheRefreshPromises.clear();
 
   // Clear disk cache files

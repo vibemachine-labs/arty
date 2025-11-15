@@ -216,7 +216,11 @@ const preloadToolkitDefinitions = async (): Promise<void> => {
   }
 };
 
-void preloadToolkitDefinitions();
+function initializeToolkitManager(): void {
+  void preloadToolkitDefinitions();
+}
+
+initializeToolkitManager();
 
 /**
  * Clears the toolkit definitions cache, forcing a fresh fetch on next call.

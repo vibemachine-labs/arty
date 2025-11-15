@@ -127,7 +127,7 @@ export async function getContentsFromUrl(
         totalBytesRead += value.length;
         rawHtml += decoder.decode(value, { stream: true });
 
-        log.debug('[web] Chunk received', {}, {
+        log.trace('[web] Chunk received', {}, {
           chunkNumber: chunkCount,
           chunkSize: value.length,
           totalBytesRead,

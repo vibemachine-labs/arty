@@ -45,6 +45,7 @@ export type FunctionToolDefinition = {
 export type McpToolDefinition = {
   type: 'mcp';
   server_label: string;
+  server_description: string;
   server_url: string;
   headers: Record<string, string>;
   require_approval: 'never' | 'always' | 'auto';
@@ -114,6 +115,7 @@ export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInN
     return {
       type: 'mcp',
       server_label: serverLabel,
+      server_description: toolkit.description,
       server_url: toolkit.remote_mcp_server.url,
       headers: {}, // Empty headers for now as requested
       require_approval: 'never',

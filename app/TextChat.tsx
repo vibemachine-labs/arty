@@ -544,7 +544,11 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       const tools = toolDefinitionsFromToolkits;
 
       const toolNames = toolManager.getToolNames(tools);
-      log.info('[TextChat] tools included:', {}, toolNames);
+      log.info('[TextChat] tools included', {}, {
+        toolCount: tools.length,
+        toolNames: toolNames,
+        toolDefinitions: tools,
+      });
 
       const resolvedInstructions = composeMainPrompt(mainPromptAddition);
       log.info('[TextChat] instructions composed', {}, {

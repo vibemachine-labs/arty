@@ -245,7 +245,14 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": ["modifiedTime desc", "modifiedTime", "createdTime desc", "createdTime", "name", "name desc"]
+                  "enum": [
+                    "modifiedTime desc",
+                    "modifiedTime",
+                    "createdTime desc",
+                    "createdTime",
+                    "name",
+                    "name desc"
+                  ]
                 },
                 "description": "Sort order for the results."
               },
@@ -324,7 +331,7 @@
           "type": "remote_mcp_server",
           "name": "deepwiki",
           "group": "deepwiki",
-          "description": "MCP server for fetching documentation from public GitHub repositories via DeepWiki",
+          "description": "The DeepWiki MCP Server is a free, no-authentication required remote implementation of the Model Context Protocol (MCP) provided by Cognition which gives AI agents programmatic access to structured documentation and search for public GitHub repositories; it provides three core tools — read_wiki_structure (to list a repository’s documentation topics), read_wiki_contents (to retrieve full documentation content for a repository or section) and ask_question (to ask a natural-language question about a repository and receive a context-grounded answer). ",
           "supported_auth": "no_auth_required",
           "extra": {},
           "remote_mcp_server": {

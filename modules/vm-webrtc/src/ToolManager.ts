@@ -267,11 +267,12 @@ class ToolManager {
   }
 
   private async applyPromptAddition(definition: ToolDefinition): Promise<ToolDefinition> {
-    // MCP tools don't have descriptions - they're just pointers to remote servers
+    // MCP tools have server_description which shouldn't be modified
     // Skip prompt additions for MCP tools
     if (definition.type === 'mcp') {
       log.info('[ToolManager] Skipping prompt addition for MCP tool', {}, {
         serverLabel: definition.server_label,
+        serverDescription: definition.server_description,
         serverUrl: definition.server_url,
       });
       return { ...definition };

@@ -202,8 +202,13 @@ export const getRawToolkitDefinitions = (): ToolkitDefinition[] => {
  */
 const preloadToolkitDefinitions = async (): Promise<void> => {
   try {
-    log.info('[ToolkitManager] Preloading toolkit definitions cache');
+    log.info('[ToolkitManager] Preloading toolkit definitions cache (fetching remote MCP tools)');
     await getToolkitDefinitions();
+    const definitionCount = toolkitDefinitionsCache ? toolkitDefinitionsCache.length : 0;
+    log.info('[ToolkitManager] Toolkit definitions preload completed', {}, {
+      definitionCount,
+      source: 'preload',
+    });
   } catch (error) {
     log.error('[ToolkitManager] Preloading toolkit definitions failed', {}, {
       errorMessage: error instanceof Error ? error.message : String(error),

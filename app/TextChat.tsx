@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
   Alert,
-  Clipboard,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -465,25 +464,16 @@ const MessageBubble: React.FC<{ role: 'user' | 'assistant'; content: string }> =
 }) => {
   const isUser = role === 'user';
 
-  const handleLongPress = () => {
-    Clipboard.setString(content);
-    Alert.alert('Copied', 'Message copied to clipboard');
-  };
-
   return (
     <View style={[styles.bubbleContainer, isUser ? styles.userAlign : styles.assistantAlign]}>
-      <TouchableOpacity
-        onLongPress={handleLongPress}
-        activeOpacity={0.7}
-        style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}
-      >
+      <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
         <Text
           style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}
           selectable={true}
         >
           {content}
         </Text>
-      </TouchableOpacity>
+      </View>
     </View>
   );
 };

@@ -17,9 +17,9 @@ export interface GetPaperDetailsParams {
  * Retrieve a list of today's daily papers from major publications.
  */
 export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
-  const { date, limit } = params;
+  const { date, limit = 5 } = params;
 
-  log.info('[daily_papers] showDailyPapers called', {}, { date, limit });
+  log.info('[daily_papers] showDailyPapers called', {}, { date, limit, allParams: params });
 
   try {
     // Build API URL
@@ -30,10 +30,8 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
       url.searchParams.set('date', date);
     }
 
-    // Add limit parameter if provided
-    if (limit) {
-      url.searchParams.set('limit', limit.toString());
-    }
+    // Add limit parameter (defaults to 5)
+    url.searchParams.set('limit', limit.toString());
 
     log.info('[daily_papers] Fetching from API', {}, { url: url.toString() });
 
@@ -67,7 +65,7 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 export async function getPaperDetails(params: GetPaperDetailsParams): Promise<string> {
   const { arxivId } = params;
 
-  log.info('[daily_papers] getPaperDetails called', {}, { arxivId });
+  log.info('[daily_papers] getPaperDetails called', {}, { arxivId, allParams: params });
 
   try {
     // Build API URL

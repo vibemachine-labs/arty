@@ -40,17 +40,6 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       setGDriveConfigVisible(true);
     } else if (connectorId === "web") {
       setWebInfoVisible(true);
-    } else if (connectorId === "gmail") {
-      Alert.alert("Coming soon", "Gmail connector support is on the way.", [
-        { text: "OK", style: "default" },
-      ]);
-    } else if (connectorId === "mcp") {
-      Alert.alert("Coming soon", "MCP connector support is on the way.", [
-        { text: "OK", style: "default" },
-      ]);
-    } else {
-      // TODO: Navigate to other connector config screens
-      console.log(`Configure ${connectorId}`);
     }
   };
 

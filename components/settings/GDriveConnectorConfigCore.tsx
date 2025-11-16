@@ -6,11 +6,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   deleteGDriveClientIdOverride,
   getGDriveClientId,
@@ -238,22 +240,26 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
   const [hasClientId, setHasClientId] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isAdvancedVisible, setIsAdvancedVisible] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(true);
 
   useEffect(() => {
     if (!isVisible) return;
 
     const load = async () => {
       try {
-        const [override, tokens, clientId] = await Promise.all([
+        const [override, tokens, clientId, enabledValue] = await Promise.all([
           getGDriveClientIdOverride(),
           hasGDriveTokens(),
           getGDriveClientId(),
+          AsyncStorage.getItem("gdrive_connector_enabled"),
         ]);
         const overrideValue = override ?? "";
         setClientIdOverride(overrideValue);
         setInitialClientIdOverride(overrideValue);
         setHasAuthTokens(Boolean(tokens));
         setHasClientId(Boolean(clientId));
+        // Default to true if not set
+        setIsEnabled(enabledValue === null ? true : enabledValue === "true");
       } catch {
         // ignore load errors; alerts will surface on interaction
       }
@@ -355,6 +361,15 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
     setIsAdvancedVisible((prev) => !prev);
   }, []);
 
+  const handleToggleEnabled = useCallback(async (value: boolean) => {
+    setIsEnabled(value);
+    try {
+      await AsyncStorage.setItem("gdrive_connector_enabled", value.toString());
+    } catch {
+      // ignore errors
+    }
+  }, []);
+
   const handleCancel = useCallback(() => {
     setClientIdOverride(initialClientIdOverride);
   }, [initialClientIdOverride]);
@@ -381,7 +396,19 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
         showsVerticalScrollIndicator={true}
         bounces={true}
       >
-        {hasAuthTokens && hasClientId ? (
+        <View style={styles.enableSection}>
+          <Text style={styles.enableLabel}>Enable Google Drive Connector</Text>
+          <Switch
+            value={isEnabled}
+            onValueChange={handleToggleEnabled}
+            trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+
+        {isEnabled && (
+          <>
+            {hasAuthTokens && hasClientId ? (
           <View style={styles.statusBannerConnected}>
             <Text style={styles.statusIcon}>✓</Text>
             <Text style={styles.statusTextConnected}>Connected to Google Drive</Text>
@@ -513,6 +540,8 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
             </View>
           ) : null}
         </View>
+          </>
+        )}
       </ScrollView>
       {renderFooter?.(actionState)}
     </View>
@@ -532,6 +561,21 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 16,
     flexGrow: 1,
+  },
+  enableSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  enableLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1C1C1E",
   },
   iconContainer: {
     width: 48,

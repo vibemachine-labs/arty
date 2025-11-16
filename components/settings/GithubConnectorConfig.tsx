@@ -8,12 +8,14 @@ import {
     Pressable,
     SafeAreaView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableWithoutFeedback,
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { log } from "../../lib/logger";
 import {
     deleteGithubToken,
@@ -35,13 +37,17 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
   const [token, setToken] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasExistingToken, setHasExistingToken] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(false);
 
   // Load existing token when modal opens
   useEffect(() => {
     if (visible) {
       const loadToken = async () => {
         try {
-          const existingToken = await getGithubToken();
+          const [existingToken, enabledValue] = await Promise.all([
+            getGithubToken(),
+            AsyncStorage.getItem("github_connector_enabled"),
+          ]);
           if (existingToken) {
             setToken(existingToken);
             setHasExistingToken(true);
@@ -49,6 +55,8 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
             setToken("");
             setHasExistingToken(false);
           }
+          // Default to false if not set
+          setIsEnabled(enabledValue === "true");
         } catch (error) {
           log.error("Failed to load GitHub token:", {}, error);
         }
@@ -133,6 +141,15 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
     );
   }, []);
 
+  const handleToggleEnabled = useCallback(async (value: boolean) => {
+    setIsEnabled(value);
+    try {
+      await AsyncStorage.setItem("github_connector_enabled", value.toString());
+    } catch {
+      // ignore errors
+    }
+  }, []);
+
   return (
     <Modal
       animationType="slide"
@@ -184,14 +201,26 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
 
             {/* Content */}
             <View style={styles.content}>
-              <View style={styles.iconContainer}>
-                <Text style={styles.icon}>🐙</Text>
+              <View style={styles.enableSection}>
+                <Text style={styles.enableLabel}>Enable GitHub Connector</Text>
+                <Switch
+                  value={isEnabled}
+                  onValueChange={handleToggleEnabled}
+                  trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
 
-              <Text style={styles.title}>GitHub Personal Access Token</Text>
-              <Text style={styles.description}>
-                Enter your GitHub personal access token to enable repository access and code analysis.
-              </Text>
+              {isEnabled && (
+                <>
+                  <View style={styles.iconContainer}>
+                    <Text style={styles.icon}>🐙</Text>
+                  </View>
+
+                  <Text style={styles.title}>GitHub Personal Access Token</Text>
+                  <Text style={styles.description}>
+                    Enter your GitHub personal access token to enable repository access and code analysis.
+                  </Text>
 
               <View style={styles.inputSection}>
                 <Text style={styles.label}>Access Token</Text>
@@ -248,6 +277,8 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
                   Your token is stored securely and never shared. SSO support coming soon.
                 </Text>
               </View>
+                </>
+              )}
             </View>
           </SafeAreaView>
         </TouchableWithoutFeedback>
@@ -304,6 +335,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 32,
+  },
+  enableSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  enableLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1C1C1E",
   },
   iconContainer: {
     width: 72,

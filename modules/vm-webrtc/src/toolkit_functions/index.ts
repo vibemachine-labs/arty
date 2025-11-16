@@ -36,6 +36,7 @@ export const toolkitRegistry: ToolkitRegistry = {
   // },
   web: {
     getContentsFromUrl: web.getContentsFromUrl,
+    web_search: web.web_search,
   },
   google_drive: {
     keyword_search: googleDrive.keyword_search,

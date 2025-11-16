@@ -1,6 +1,7 @@
+import { fetch } from 'expo/fetch';
 import { stripHtml } from 'string-strip-html';
 import { log } from '../../../../lib/logger';
-import { fetch } from 'expo/fetch';
+import { getApiKey } from '../../../../lib/secure-storage';
 
 /**
  * Fetches content from a URL, strips HTML tags, and truncates to approximately 1K characters.
@@ -252,4 +253,139 @@ export async function getContentsFromUrl(
     log.error('[web] Unknown error', {}, { url: params.url, error });
     return 'Error fetching URL: Unknown error';
   }
+}
+
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+
+type OpenAIResponse = {
+  output_text?: string;
+  output?: {
+    type?: string;
+    content?: { type?: string; text?: string }[];
+    text?: string;
+  }[];
+};
+
+const extractOutputText = (resp: OpenAIResponse): string => {
+  if (resp.output_text && resp.output_text.length > 0) {
+    return resp.output_text;
+  }
+
+  let combined = '';
+  for (const outItem of resp.output ?? []) {
+    if (Array.isArray(outItem.content)) {
+      for (const segment of outItem.content) {
+        if (segment && typeof segment.text === 'string') {
+          combined += segment.text;
+        }
+      }
+    }
+    const directText = (outItem as any)?.text;
+    if (typeof directText === 'string') {
+      combined += directText;
+    }
+  }
+  return combined;
+};
+
+const tryParseJson = <T>(value: string): T | null => {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Search the web using GPT-5 with web search enabled.
+ */
+export async function web_search(params: { query: string }): Promise<string> {
+  const query = params.query.trim();
+  log.info('[web] web_search starting', {}, { query: query });
+
+  if (!query) {
+    return JSON.stringify({ error: 'Web search requires a non-empty query.' });
+  }
+
+  // Get API key from secure-storage
+  const apiKey = await getApiKey({ forceSecureStore: true });
+  if (!apiKey) {
+    log.info('[web] OpenAI API key not configured', {});
+    return JSON.stringify({
+      query,
+      error: 'OpenAI API key not configured',
+    });
+  }
+
+  const payload = {
+    model: 'gpt-4o',
+    input: [
+      {
+        role: 'system',
+        content: [{
+          type: 'input_text',
+          text: 'You have been instructed to search web and give good results. Pretend you\'re competing with perplexity. Use live web search to answer comprehensively with citations when available.'
+        }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: query }],
+      },
+    ],
+    tools: [{ type: 'web_search' }],
+    tool_choice: 'auto' as const,
+  };
+
+  log.info('[web] Sending payload to OpenAI', {}, {
+    model: payload.model,
+    query: query,
+  });
+
+  let response: Response;
+  try {
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (networkError) {
+    log.info('[web] Network error calling OpenAI Responses API', {}, networkError);
+    return JSON.stringify({ error: 'Failed to reach OpenAI Responses API for web search.' });
+  }
+
+  const rawText = await response.text();
+  log.info('[web] OpenAI response received', {}, {
+    status: response.status,
+    ok: response.ok,
+    rawText: rawText,
+  });
+
+  if (!response.ok) {
+    return JSON.stringify({ error: `OpenAI Responses API error ${response.status}`, rawText: rawText});
+  }
+
+  const parsed = tryParseJson<OpenAIResponse>(rawText);
+  if (!parsed) {
+    return JSON.stringify({ error: 'Failed to parse OpenAI response JSON' });
+  }
+
+  const answer = extractOutputText(parsed).trim();
+  if (!answer) {
+    return JSON.stringify({ error: 'OpenAI response did not include any text output' });
+  }
+
+  const result = JSON.stringify({
+    query,
+    answer,
+  });
+
+  log.info('[web] Returning web search result', {}, {
+    resultLength: result.length,
+    answer: answer,
+  });
+
+  return result;
 }

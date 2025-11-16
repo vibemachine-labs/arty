@@ -1,7 +1,6 @@
 # 🎙️ Meet Arty, your Voice-Powered Mobile Assistant
 
-[![TestFlight](https://img.shields.io/badge/TestFlight-available-blue)](https://testflight.apple.com/join/DyK83gVd) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vibemachine-labs/arty) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/3757064ce24e4fc49e44278631fb805f)](https://app.codacy.com/gh/vibemachine-labs/arty/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade) 
-[![Snyk](https://snyk.io/test/github/vibemachine-labs/arty/badge.svg)](https://snyk.io/test/github/vibemachine-labs/arty)
+[![TestFlight](https://img.shields.io/badge/TestFlight-available-blue)](https://testflight.apple.com/join/DyK83gVd) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vibemachine-labs/arty) [![Snyk](https://snyk.io/test/github/vibemachine-labs/arty/badge.svg)](https://snyk.io/test/github/vibemachine-labs/arty)
 [![OSSF Scorecard](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml/badge.svg)](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/vibemachine-labs/arty?utm_source=oss&utm_medium=github&utm_campaign=vibemachine-labs%2Farty&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 An open-source, privacy-first voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."

@@ -179,6 +179,24 @@
             },
             "required": ["url"]
           }
+        },
+        {
+          "type": "function",
+          "name": "web_search",
+          "group": "web",
+          "description": "Search the web for information using a query string. When you present the results, it is very important that you mention you used this web search tool so the user knows the information is recent and not hallucinated.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "The search query to find information on the web."
+              }
+            },
+            "required": ["query"]
+          }
         }
       ]
     },

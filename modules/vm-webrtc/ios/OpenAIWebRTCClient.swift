@@ -117,7 +117,7 @@ final class OpenAIWebRTCClient: NSObject {
 
   // Reference to the Gen2 toolkit helper
   var toolkitHelper: ToolkitHelper?
-    
+        
   var toolDefinitions: [[String: Any]] = []
   lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {

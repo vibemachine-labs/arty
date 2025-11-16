@@ -13,12 +13,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "@/modules/vm-webrtc";
 
-type WebConnectorInfoProps = {
+type DeepwikiConnectorInfoProps = {
   visible: boolean;
   onClose: () => void;
 };
 
-export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
+export const DeepwikiConnectorInfo: React.FC<DeepwikiConnectorInfoProps> = ({
   visible,
   onClose,
 }) => {
@@ -30,7 +30,7 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("web_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem("deepwiki_connector_enabled");
           // Default to true if not set
           setIsEnabled(enabledValue === null ? true : enabledValue === "true");
         } catch {
@@ -44,7 +44,7 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("web_connector_enabled", value.toString());
+      await AsyncStorage.setItem("deepwiki_connector_enabled", value.toString());
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -61,7 +61,7 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
     >
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Web Search</Text>
+          <Text style={styles.headerTitle}>DeepWiki</Text>
           <Pressable
             onPress={onClose}
             style={({ pressed }) => [
@@ -80,7 +80,7 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
           ]}
         >
           <View style={styles.enableSection}>
-            <Text style={styles.enableLabel}>Enable Web Connector</Text>
+            <Text style={styles.enableLabel}>Enable DeepWiki Connector</Text>
             <Switch
               value={isEnabled}
               onValueChange={handleToggleEnabled}
@@ -90,8 +90,8 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
           </View>
 
           <Text style={styles.bodyText}>
-            Web search is handled using GPT-5 and needs no further configuration.
-            More options will be added later.
+            Access structured documentation and search for public GitHub repositories.
+            No authentication required.
           </Text>
         </View>
       </SafeAreaView>

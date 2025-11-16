@@ -117,7 +117,7 @@
           "type": "function",
           "name": "showDailyPapers",
           "group": "daily_papers",
-          "description": "Retrieve a list of todays daily AI/LLM papers AK and the research community at Hugging Face.",
+          "description": "Retrieve a list of daily AI/LLM papers AK and the research community at Hugging Face.  Mention explicitly that this was retrieved from the Hugging Face Daily Papers tool. ",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
@@ -125,11 +125,12 @@
             "properties": {
               "date": {
                 "type": "string",
-                "description": "Optional date to filter papers (format: YYYY-MM-DD, e.g., '2025-03-31'). If not provided, returns today's papers."
+                "description": "Optional date to filter papers (format: YYYY-MM-DD, e.g., '2025-03-31'). Do not include the date unless the user explicitly specifies the actual date (if user says today it doesn't count), because the papers are usually lagged by 2-3 days, which varies."
               },
               "limit": {
                 "type": "number",
-                "description": "The number of papers to retrieve."
+                "description": "The number of papers to retrieve.",
+                "default": 5
               }
             },
             "required": []

@@ -1,5 +1,6 @@
 import { Paths, File, Directory } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import toolkitGroupsData from '../toolkits/toolkitGroups.json';
 
@@ -16,19 +17,131 @@ import { log } from '../../../lib/logger';
 import type { Tool } from './mcp_client/types';
 import { registerMcpTool } from './toolkit_functions/index';
 
-const buildToolkitGroups = (): ToolkitGroups => {
+// Mapping from toolkit group names to AsyncStorage connector keys
+const TOOLKIT_GROUP_TO_CONNECTOR_KEY: Record<string, string> = {
+  'web': 'web_connector_enabled',
+  'google_drive': 'gdrive_connector_enabled',
+  'hacker_news': 'web_connector_enabled', // Hacker News is part of web toolkit
+};
+
+/**
+ * Check if a toolkit group is enabled based on stored settings.
+ * Returns true by default if no setting is found.
+ */
+async function isToolkitGroupEnabled(groupName: string): Promise<boolean> {
+  const storageKey = TOOLKIT_GROUP_TO_CONNECTOR_KEY[groupName];
+
+  // If no mapping exists, default to enabled
+  if (!storageKey) {
+    log.debug('[ToolkitManager] No storage key mapping for toolkit group, defaulting to enabled', {}, {
+      groupName,
+    });
+    return true;
+  }
+
+  try {
+    const enabledValue = await AsyncStorage.getItem(storageKey);
+    // Default to true if not set (backward compatibility)
+    const isEnabled = enabledValue === null ? true : enabledValue === 'true';
+
+    log.debug('[ToolkitManager] Toolkit group enabled status loaded', {}, {
+      groupName,
+      storageKey,
+      enabledValue,
+      isEnabled,
+    });
+
+    return isEnabled;
+  } catch (error) {
+    log.error('[ToolkitManager] Failed to load toolkit group enabled status, defaulting to enabled', {}, {
+      groupName,
+      storageKey,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : new Error(String(error)));
+    return true;
+  }
+}
+
+const buildToolkitGroups = async (): Promise<ToolkitGroups> => {
   const data = toolkitGroupsData as unknown as ToolkitGroups;
   const byName = data.byName ?? {};
-  const list = Array.isArray(data.list) ? data.list : Object.values(byName);
+  const allGroups = Array.isArray(data.list) ? data.list : Object.values(byName);
+
+  // Filter groups based on enabled settings
+  const enabledGroups: ToolkitGroup[] = [];
+  const filteredByName: Record<string, ToolkitGroup> = {};
+
+  for (const group of allGroups) {
+    const isEnabled = await isToolkitGroupEnabled(group.name);
+
+    if (isEnabled) {
+      log.info('[ToolkitManager] Toolkit group enabled, adding to available groups', {}, {
+        groupName: group.name,
+        toolkitCount: group.toolkits.length,
+      });
+      enabledGroups.push(group);
+      filteredByName[group.name] = group;
+    } else {
+      log.debug('[ToolkitManager] Toolkit group disabled, skipping', {}, {
+        groupName: group.name,
+      });
+    }
+  }
 
   return {
-    byName,
-    list,
+    byName: filteredByName,
+    list: enabledGroups,
   };
 };
 
-const toolkitGroups = buildToolkitGroups();
-const staticToolkitDefinitions = buildStaticToolkitDefinitions();
+// Cache for toolkit groups
+let toolkitGroupsCache: ToolkitGroups | null = null;
+let toolkitGroupsPromise: Promise<ToolkitGroups> | null = null;
+
+/**
+ * Get filtered toolkit groups based on enabled settings.
+ * This function caches the result to avoid repeated AsyncStorage reads.
+ */
+async function getFilteredToolkitGroups(): Promise<ToolkitGroups> {
+  // Return cached result if available
+  if (toolkitGroupsCache) {
+    return toolkitGroupsCache;
+  }
+
+  // If a fetch is already in progress, return that promise
+  if (toolkitGroupsPromise) {
+    return toolkitGroupsPromise;
+  }
+
+  // Start fetching and cache the promise
+  toolkitGroupsPromise = buildToolkitGroups();
+
+  try {
+    const result = await toolkitGroupsPromise;
+    toolkitGroupsCache = result;
+    return result;
+  } finally {
+    toolkitGroupsPromise = null;
+  }
+}
+
+async function buildStaticToolkitDefinitions(): Promise<ToolDefinition[]> {
+  const staticTools: ToolDefinition[] = [];
+  const groups = await getFilteredToolkitGroups();
+
+  for (const group of groups.list) {
+    for (const toolkit of group.toolkits) {
+      if (toolkit.type !== 'remote_mcp_server') {
+        staticTools.push(exportToolDefinition(toolkit, true));
+      }
+    }
+  }
+
+  return staticTools;
+}
+
+// Cache for static toolkit definitions
+let staticToolkitDefinitionsCache: ToolDefinition[] | null = null;
 
 // Use a simple subdirectory in the app cache for toolkit caching
 const REMOTE_TOOLKIT_CACHE_DIR = new Directory(Paths.cache, 'remote-toolkit-definitions');
@@ -46,21 +159,13 @@ type RemoteToolkitCacheEntry = {
 const dynamicToolkitDefinitionsByServer = new Map<string, ToolDefinition[]>();
 const remoteCacheRefreshPromises = new Map<string, Promise<void>>();
 
-export const getToolkitGroups = (): ToolkitGroups => toolkitGroups;
-
-function buildStaticToolkitDefinitions(): ToolDefinition[] {
-  const staticTools: ToolDefinition[] = [];
-
-  for (const group of toolkitGroups.list) {
-    for (const toolkit of group.toolkits) {
-      if (toolkit.type !== 'remote_mcp_server') {
-        staticTools.push(exportToolDefinition(toolkit, true));
-      }
-    }
-  }
-
-  return staticTools;
-}
+/**
+ * Get toolkit groups, filtered by enabled settings.
+ * This is an async function that loads settings from AsyncStorage.
+ */
+export const getToolkitGroups = async (): Promise<ToolkitGroups> => {
+  return getFilteredToolkitGroups();
+};
 
 async function getRemoteToolkitCacheFile(serverUrl: string): Promise<File> {
   const digest = await Crypto.digestStringAsync(
@@ -258,7 +363,14 @@ export const getToolkitDefinitions = async (): Promise<ToolDefinition[]> => {
  */
 async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
   dynamicToolkitDefinitionsByServer.clear();
-  const remoteMcpToolkits = getRawToolkitDefinitions().filter(
+
+  // Build static toolkit definitions if not cached
+  if (!staticToolkitDefinitionsCache) {
+    staticToolkitDefinitionsCache = await buildStaticToolkitDefinitions();
+  }
+
+  const rawToolkits = await getRawToolkitDefinitions();
+  const remoteMcpToolkits = rawToolkits.filter(
     (toolkit): toolkit is RemoteMcpToolkitDefinition => toolkit.type === 'remote_mcp_server'
   );
 
@@ -270,7 +382,7 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
 
   const allTools = rebuildToolkitDefinitionsCache();
   log.info('[ToolkitManager] Total toolkit definitions loaded', {}, {
-    staticCount: staticToolkitDefinitions.length,
+    staticCount: staticToolkitDefinitionsCache.length,
     dynamicCount,
     totalCount: allTools.length,
   });
@@ -279,8 +391,13 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
 }
 
 function rebuildToolkitDefinitionsCache(): ToolDefinition[] {
+  if (!staticToolkitDefinitionsCache) {
+    log.warn('[ToolkitManager] Static toolkit definitions not yet loaded, returning empty array', {}, {});
+    return [];
+  }
+
   const dynamicDefinitions = Array.from(dynamicToolkitDefinitionsByServer.values()).flat();
-  const aggregated = [...staticToolkitDefinitions, ...dynamicDefinitions];
+  const aggregated = [...staticToolkitDefinitionsCache, ...dynamicDefinitions];
   toolkitDefinitionsCache = aggregated;
   return aggregated;
 }
@@ -476,8 +593,9 @@ async function loadRemoteToolkitDefinitions(toolkit: RemoteMcpToolkitDefinition)
 /**
  * Gets raw toolkit definitions without conversion (for internal use).
  */
-export const getRawToolkitDefinitions = (): ToolkitDefinition[] => {
-  return toolkitGroups.list.flatMap((group) => group.toolkits);
+export const getRawToolkitDefinitions = async (): Promise<ToolkitDefinition[]> => {
+  const groups = await getFilteredToolkitGroups();
+  return groups.list.flatMap((group) => group.toolkits);
 };
 
 /**
@@ -533,6 +651,8 @@ export const clearToolkitDefinitionsCache = async (): Promise<void> => {
   // Now it's safe to clear all cache state
   toolkitDefinitionsCache = null;
   toolkitDefinitionsPromise = null;
+  toolkitGroupsCache = null;
+  staticToolkitDefinitionsCache = null;
   dynamicToolkitDefinitionsByServer.clear();
   remoteCacheRefreshPromises.clear();
 

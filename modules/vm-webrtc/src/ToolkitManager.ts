@@ -1,8 +1,12 @@
 import { Paths, File, Directory } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
 
 import toolkitGroupsData from '../toolkits/toolkitGroups.json';
+
+// Event emitted when connector settings change
+export const CONNECTOR_SETTINGS_CHANGED_EVENT = 'connector_settings_changed';
 
 import type {
   ToolDefinition,
@@ -96,10 +100,38 @@ const buildToolkitGroups = async (): Promise<ToolkitGroups> => {
 let toolkitGroupsCache: ToolkitGroups | null = null;
 let toolkitGroupsPromise: Promise<ToolkitGroups> | null = null;
 
+/**
+ * Reload toolkit groups by clearing all caches and rebuilding from scratch.
+ * This should be called when connector settings change.
+ */
 async function reloadToolkitGroups(): Promise<void> {
-  // throw away existing caches
-  // reload toolkit groups - call getFilteredToolkitGroups to rebuild cache and store in cache
+  log.info('[ToolkitManager] Reloading toolkit groups due to connector settings change', {}, {});
+
+  // Clear all caches
+  toolkitGroupsCache = null;
+  toolkitGroupsPromise = null;
+  staticToolkitDefinitionsCache = null;
+  toolkitDefinitionsCache = null;
+  toolkitDefinitionsPromise = null;
+
+  // Rebuild toolkit groups cache
+  await getFilteredToolkitGroups();
+
+  // Rebuild toolkit definitions cache (this includes static tools based on new groups)
+  await getToolkitDefinitions();
+
+  log.info('[ToolkitManager] Toolkit groups reloaded successfully', {}, {});
 }
+
+// Set up event listener for connector settings changes
+DeviceEventEmitter.addListener(CONNECTOR_SETTINGS_CHANGED_EVENT, () => {
+  log.info('[ToolkitManager] Received connector settings changed event', {}, {});
+  reloadToolkitGroups().catch((error) => {
+    log.error('[ToolkitManager] Failed to reload toolkit groups after settings change', {}, {
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : new Error(String(error)));
+  });
+});
 
 /**
  * Get filtered toolkit groups based on enabled settings.

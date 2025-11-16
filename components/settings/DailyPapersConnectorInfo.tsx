@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  DeviceEventEmitter,
   Modal,
   Pressable,
   SafeAreaView,
@@ -10,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "@/modules/vm-webrtc";
 
 type DailyPapersConnectorInfoProps = {
   visible: boolean;
@@ -43,6 +45,8 @@ export const DailyPapersConnectorInfo: React.FC<DailyPapersConnectorInfoProps> =
     setIsEnabled(value);
     try {
       await AsyncStorage.setItem("daily_papers_connector_enabled", value.toString());
+      // Emit event to trigger cache reload
+      DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
       // ignore errors
     }

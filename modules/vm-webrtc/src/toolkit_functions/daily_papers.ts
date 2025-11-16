@@ -20,48 +20,44 @@ export interface ShowCommentsForPaperParams {
 export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
   const { region, limit } = params;
 
-  log.info('[daily_papers] showDailyPapers called (STUBBED)', {}, { region, limit });
+  log.info('[daily_papers] showDailyPapers called', {}, { region, limit });
 
-  // STUB: Return mock data
-  const stubData = {
-    success: true,
-    region,
-    papers: [
-      {
-        id: "paper-001",
-        title: "Advances in Quantum Computing for Machine Learning",
-        authors: ["Dr. Jane Smith", "Prof. John Doe"],
-        abstract: "This paper explores the intersection of quantum computing and machine learning...",
-        publishedDate: "2025-11-09",
-        venue: "NeurIPS 2025",
-        citations: 42,
-        url: "https://arxiv.org/abs/2025.12345"
-      },
-      {
-        id: "paper-002",
-        title: "Efficient Training of Large Language Models on Edge Devices",
-        authors: ["Alice Johnson", "Bob Chen"],
-        abstract: "We present a novel approach to training LLMs with reduced memory footprint...",
-        publishedDate: "2025-11-09",
-        venue: "ICML 2025",
-        citations: 18,
-        url: "https://arxiv.org/abs/2025.67890"
-      },
-      {
-        id: "paper-003",
-        title: "Neural Architecture Search with Evolutionary Algorithms",
-        authors: ["Carlos Martinez"],
-        abstract: "An evolutionary approach to discovering optimal neural network architectures...",
-        publishedDate: "2025-11-09",
-        venue: "ICLR 2025",
-        citations: 7,
-        url: "https://arxiv.org/abs/2025.11111"
-      }
-    ].slice(0, limit || 10),
-    timestamp: new Date().toISOString()
-  };
+  try {
+    // Build API URL
+    const url = new URL('https://huggingface.co/api/daily_papers');
 
-  return JSON.stringify(stubData);
+    // Add optional date parameter if provided via region (can be wired up later)
+    // For now, we'll use today's date by default (API behavior)
+
+    // Add limit parameter if provided
+    if (limit) {
+      url.searchParams.set('limit', limit.toString());
+    }
+
+    log.info('[daily_papers] Fetching from API', {}, { url: url.toString() });
+
+    const response = await fetch(url.toString());
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    return JSON.stringify({
+      success: true,
+      region,
+      papers: data,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    log.error('[daily_papers] Error fetching daily papers', {}, { error });
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
 }
 
 /**

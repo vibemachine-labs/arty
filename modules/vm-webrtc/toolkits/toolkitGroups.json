@@ -117,7 +117,7 @@
           "type": "function",
           "name": "showDailyPapers",
           "group": "daily_papers",
-          "description": "This tool doesn't work yet.  Ignore it.  Retrieve a list of today\u2019s daily papers from major publications.",
+          "description": "Retrieve a list of todays daily papers from major publications.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {

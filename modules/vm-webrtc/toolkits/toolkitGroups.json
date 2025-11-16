@@ -361,6 +361,24 @@
             "properties": {},
             "required": []
           }
+        },
+        {
+          "type": "function",
+          "name": "web_search",
+          "group": "web",
+          "description": "If the user wants to lookup a repo on deepwiki, but does not provide the full or correct github org/repo name format, do a quick web search to look it up.  Only return the, github org/repo name, nothing else..",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "The search query to find github org/repo name on the web."
+              }
+            },
+            "required": ["query"]
+          }
         }
       ]
     }

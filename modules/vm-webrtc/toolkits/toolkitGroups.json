@@ -137,24 +137,20 @@
         },
         {
           "type": "function",
-          "name": "showCommentsForPaper",
+          "name": "getPaperDetails",
           "group": "daily_papers",
-          "description": "This tool doesn't work yet.  Ignore it. Retrieve comments or reader feedback for a specified daily paper.",
+          "description": "Get the metadata and discussion for a paper, including authors, summary, and comments. Requires the arXiv ID of the paper (e.g., '2501.12345').",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
             "type": "object",
             "properties": {
-              "paperId": {
+              "arxivId": {
                 "type": "string",
-                "description": "The unique identifier of the daily paper."
-              },
-              "maxComments": {
-                "type": "number",
-                "description": "The maximum number of comments to fetch."
+                "description": "The arXiv identifier of the paper (e.g., '2501.12345')."
               }
             },
-            "required": ["paperId"]
+            "required": ["arxivId"]
           }
         }
       ]

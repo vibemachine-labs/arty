@@ -32,7 +32,7 @@ export const toolkitRegistry: ToolkitRegistry = {
   // disable until working again
   // daily_papers: {
   //   showDailyPapers: dailyPapers.showDailyPapers,
-  //   showCommentsForPaper: dailyPapers.showCommentsForPaper,
+  //   getPaperDetails: dailyPapers.getPaperDetails,
   // },
   web: {
     getContentsFromUrl: web.getContentsFromUrl,

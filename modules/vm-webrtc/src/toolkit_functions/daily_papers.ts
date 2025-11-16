@@ -7,9 +7,8 @@ export interface ShowDailyPapersParams {
   limit?: number;
 }
 
-export interface ShowCommentsForPaperParams {
-  paperId: string;
-  maxComments?: number;
+export interface GetPaperDetailsParams {
+  arxivId: string;
 }
 
 // MARK: - Functions
@@ -61,52 +60,39 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 }
 
 /**
- * Retrieve comments or reader feedback for a specified daily paper.
+ * Get paper details including metadata like authors, summary, and discussion comments.
  */
-export async function showCommentsForPaper(params: ShowCommentsForPaperParams): Promise<string> {
-  const { paperId, maxComments } = params;
+export async function getPaperDetails(params: GetPaperDetailsParams): Promise<string> {
+  const { arxivId } = params;
 
-  log.info('[daily_papers] showCommentsForPaper called (STUBBED)', {}, { paperId, maxComments });
+  log.info('[daily_papers] getPaperDetails called', {}, { arxivId });
 
-  // STUB: Return mock data
-  const stubData = {
-    success: true,
-    paperId,
-    comments: [
-      {
-        id: "comment-001",
-        author: "researcher_alice",
-        text: "Fascinating approach! The experimental results are very promising.",
-        upvotes: 23,
-        timestamp: "2025-11-09T10:30:00Z"
-      },
-      {
-        id: "comment-002",
-        author: "ml_expert_bob",
-        text: "I wonder how this would scale to even larger models?",
-        upvotes: 15,
-        timestamp: "2025-11-09T11:15:00Z",
-        replies: [
-          {
-            id: "comment-003",
-            author: "paper_author",
-            text: "Great question! We're currently working on scaling experiments...",
-            upvotes: 8,
-            timestamp: "2025-11-09T12:00:00Z"
-          }
-        ]
-      },
-      {
-        id: "comment-004",
-        author: "phd_student",
-        text: "The ablation studies in Section 4.2 are particularly insightful.",
-        upvotes: 12,
-        timestamp: "2025-11-09T13:45:00Z"
-      }
-    ].slice(0, maxComments || 10),
-    totalComments: 3,
-    timestamp: new Date().toISOString()
-  };
+  try {
+    // Build API URL
+    const url = `https://huggingface.co/api/papers/${arxivId}`;
 
-  return JSON.stringify(stubData);
+    log.info('[daily_papers] Fetching paper details from API', {}, { url });
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    return JSON.stringify({
+      success: true,
+      paper: data,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    log.error('[daily_papers] Error fetching paper details', {}, { error, arxivId });
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      arxivId,
+      timestamp: new Date().toISOString()
+    });
+  }
 }

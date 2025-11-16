@@ -17,29 +17,25 @@ import { log } from '../../../lib/logger';
 import type { Tool } from './mcp_client/types';
 import { registerMcpTool } from './toolkit_functions/index';
 
-// Mapping from toolkit group names to AsyncStorage connector keys
-const TOOLKIT_GROUP_TO_CONNECTOR_KEY: Record<string, string> = {
-  'web': 'web_connector_enabled',
-  'google_drive': 'gdrive_connector_enabled',
-  'hacker_news': 'hacker_news_connector_enabled',
-  'deepwiki': 'deepwiki_connector_enabled',
-  'daily_papers': 'daily_papers_connector_enabled',
-};
+/**
+ * Get the AsyncStorage key for a toolkit group using convention:
+ * {toolkit_group_name}_connector_enabled
+ * Special case: 'google_drive' -> 'gdrive_connector_enabled' for backwards compatibility
+ */
+function getConnectorStorageKey(groupName: string): string {
+  // Special case for backwards compatibility with existing storage key
+  if (groupName === 'google_drive') {
+    return 'gdrive_connector_enabled';
+  }
+  return `${groupName}_connector_enabled`;
+}
 
 /**
  * Check if a toolkit group is enabled based on stored settings.
  * Returns true by default if no setting is found.
  */
 async function isToolkitGroupEnabled(groupName: string): Promise<boolean> {
-  const storageKey = TOOLKIT_GROUP_TO_CONNECTOR_KEY[groupName];
-
-  // If no mapping exists, default to enabled
-  if (!storageKey) {
-    log.debug('[ToolkitManager] No storage key mapping for toolkit group, defaulting to enabled', {}, {
-      groupName,
-    });
-    return true;
-  }
+  const storageKey = getConnectorStorageKey(groupName);
 
   try {
     const enabledValue = await AsyncStorage.getItem(storageKey);
@@ -99,6 +95,11 @@ const buildToolkitGroups = async (): Promise<ToolkitGroups> => {
 // Cache for toolkit groups
 let toolkitGroupsCache: ToolkitGroups | null = null;
 let toolkitGroupsPromise: Promise<ToolkitGroups> | null = null;
+
+async function reloadToolkitGroups(): Promise<void> {
+  // throw away existing caches
+  // reload toolkit groups - call getFilteredToolkitGroups to rebuild cache and store in cache
+}
 
 /**
  * Get filtered toolkit groups based on enabled settings.

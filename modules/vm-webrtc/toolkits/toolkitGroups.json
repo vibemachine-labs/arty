@@ -184,7 +184,7 @@
           "type": "function",
           "name": "web_search",
           "group": "web",
-          "description": "Search the web for information using a query string. When you present the results, it is very important that you mention you used this web search tool so the user knows the information is recent and not hallucinated.",
+          "description": "Search the web for information using a query string. When you present the results, it is very important that you mention you used this web search tool so the user knows the information is recent and not hallucinated.  This tool is perfect when dealing with incomplete information, for example a git repo name without the org name that might be required for downstream tools, and is faster than asking for the user to clarify.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {

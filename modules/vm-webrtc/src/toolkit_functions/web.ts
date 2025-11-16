@@ -1,6 +1,6 @@
+import { fetch } from 'expo/fetch';
 import { stripHtml } from 'string-strip-html';
 import { log } from '../../../../lib/logger';
-import { fetch } from 'expo/fetch';
 import { getApiKey } from '../../../../lib/secure-storage';
 
 /**
@@ -301,7 +301,7 @@ const tryParseJson = <T>(value: string): T | null => {
  */
 export async function web_search(params: { query: string }): Promise<string> {
   const query = params.query.trim();
-  log.info('[web] web_search starting', {}, { queryPreview: query.slice(0, 80) });
+  log.info('[web] web_search starting', {}, { query: query });
 
   if (!query) {
     return JSON.stringify({ error: 'Web search requires a non-empty query.' });
@@ -338,7 +338,7 @@ export async function web_search(params: { query: string }): Promise<string> {
 
   log.info('[web] Sending payload to OpenAI', {}, {
     model: payload.model,
-    queryLength: query.length,
+    query: query,
   });
 
   let response: Response;
@@ -360,11 +360,11 @@ export async function web_search(params: { query: string }): Promise<string> {
   log.info('[web] OpenAI response received', {}, {
     status: response.status,
     ok: response.ok,
-    textPreview: rawText.slice(0, 200),
+    rawText: rawText,
   });
 
   if (!response.ok) {
-    return JSON.stringify({ error: `OpenAI Responses API error ${response.status}: ${rawText.slice(0, 400)}` });
+    return JSON.stringify({ error: `OpenAI Responses API error ${response.status}`, rawText: rawText});
   }
 
   const parsed = tryParseJson<OpenAIResponse>(rawText);
@@ -384,7 +384,7 @@ export async function web_search(params: { query: string }): Promise<string> {
 
   log.info('[web] Returning web search result', {}, {
     resultLength: result.length,
-    answerPreview: answer.slice(0, 200),
+    answer: answer,
   });
 
   return result;

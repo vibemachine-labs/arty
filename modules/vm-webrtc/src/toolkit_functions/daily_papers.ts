@@ -3,7 +3,7 @@ import { log } from '../../../../lib/logger';
 // MARK: - Types
 
 export interface ShowDailyPapersParams {
-  region: string;
+  date?: string;
   limit?: number;
 }
 
@@ -17,16 +17,18 @@ export interface GetPaperDetailsParams {
  * Retrieve a list of today's daily papers from major publications.
  */
 export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
-  const { region, limit } = params;
+  const { date, limit } = params;
 
-  log.info('[daily_papers] showDailyPapers called', {}, { region, limit });
+  log.info('[daily_papers] showDailyPapers called', {}, { date, limit });
 
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/daily_papers');
 
-    // Add optional date parameter if provided via region (can be wired up later)
-    // For now, we'll use today's date by default (API behavior)
+    // Add optional date parameter if provided
+    if (date) {
+      url.searchParams.set('date', date);
+    }
 
     // Add limit parameter if provided
     if (limit) {
@@ -45,7 +47,7 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 
     return JSON.stringify({
       success: true,
-      region,
+      date: date || 'today',
       papers: data,
       timestamp: new Date().toISOString()
     });

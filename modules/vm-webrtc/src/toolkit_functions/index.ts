@@ -44,6 +44,9 @@ export const toolkitRegistry: ToolkitRegistry = {
     list_drive_folder_children: googleDrive.list_drive_folder_children,
     get_gdrive_file_content: googleDrive.get_gdrive_file_content,
   },
+  deepwiki: {
+    web_search: web.web_search,
+  },
 };
 
 /**

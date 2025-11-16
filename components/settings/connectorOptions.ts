@@ -1,4 +1,4 @@
-export type ConnectorId = "github" | "gdrive" | "web";
+export type ConnectorId = "github" | "gdrive" | "web" | "hacker_news" | "deepwiki" | "daily_papers";
 
 export type ConnectorOption = {
   id: ConnectorId;
@@ -30,5 +30,26 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     icon: "🌐",
     backgroundColor: "#F4FCF8",
     iconBackgroundColor: "#EAFBF1",
+  },
+  {
+    id: "hacker_news",
+    name: "Hacker News",
+    icon: "🗞️",
+    backgroundColor: "#FFF4E6",
+    iconBackgroundColor: "#FFE8CC",
+  },
+  {
+    id: "deepwiki",
+    name: "DeepWiki",
+    icon: "📚",
+    backgroundColor: "#F0F4FF",
+    iconBackgroundColor: "#E0EAFF",
+  },
+  {
+    id: "daily_papers",
+    name: "Daily Papers",
+    icon: "📰",
+    backgroundColor: "#FFF0F5",
+    iconBackgroundColor: "#FFE4EC",
   },
 ];

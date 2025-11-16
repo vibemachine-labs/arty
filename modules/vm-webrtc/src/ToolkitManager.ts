@@ -21,7 +21,9 @@ import { registerMcpTool } from './toolkit_functions/index';
 const TOOLKIT_GROUP_TO_CONNECTOR_KEY: Record<string, string> = {
   'web': 'web_connector_enabled',
   'google_drive': 'gdrive_connector_enabled',
-  // hacker_news omitted - will default to enabled until separate connector UI is added
+  'hacker_news': 'hacker_news_connector_enabled',
+  'deepwiki': 'deepwiki_connector_enabled',
+  'daily_papers': 'daily_papers_connector_enabled',
 };
 
 /**

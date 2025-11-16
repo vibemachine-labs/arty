@@ -18,6 +18,9 @@ import {
   type ConnectorOption,
 } from "./connectorOptions";
 import { WebConnectorInfo } from "./WebConnectorInfo";
+import { HackerNewsConnectorInfo } from "./HackerNewsConnectorInfo";
+import { DeepwikiConnectorInfo } from "./DeepwikiConnectorInfo";
+import { DailyPapersConnectorInfo } from "./DailyPapersConnectorInfo";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -32,6 +35,9 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const [githubConfigVisible, setGithubConfigVisible] = useState(false);
   const [gdriveConfigVisible, setGDriveConfigVisible] = useState(false);
   const [webInfoVisible, setWebInfoVisible] = useState(false);
+  const [hackerNewsInfoVisible, setHackerNewsInfoVisible] = useState(false);
+  const [deepwikiInfoVisible, setDeepwikiInfoVisible] = useState(false);
+  const [dailyPapersInfoVisible, setDailyPapersInfoVisible] = useState(false);
 
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
@@ -40,6 +46,12 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       setGDriveConfigVisible(true);
     } else if (connectorId === "web") {
       setWebInfoVisible(true);
+    } else if (connectorId === "hacker_news") {
+      setHackerNewsInfoVisible(true);
+    } else if (connectorId === "deepwiki") {
+      setDeepwikiInfoVisible(true);
+    } else if (connectorId === "daily_papers") {
+      setDailyPapersInfoVisible(true);
     }
   };
 
@@ -129,6 +141,21 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       <WebConnectorInfo
         visible={webInfoVisible}
         onClose={() => setWebInfoVisible(false)}
+      />
+
+      <HackerNewsConnectorInfo
+        visible={hackerNewsInfoVisible}
+        onClose={() => setHackerNewsInfoVisible(false)}
+      />
+
+      <DeepwikiConnectorInfo
+        visible={deepwikiInfoVisible}
+        onClose={() => setDeepwikiInfoVisible(false)}
+      />
+
+      <DailyPapersConnectorInfo
+        visible={dailyPapersInfoVisible}
+        onClose={() => setDailyPapersInfoVisible(false)}
       />
     </Modal>
   );

@@ -1,25 +1,25 @@
-import { Paths, File, Directory } from 'expo-file-system';
-import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
+import { Directory, File, Paths } from 'expo-file-system';
 import { DeviceEventEmitter } from 'react-native';
 
 import toolkitGroupsData from '../toolkits/toolkitGroups.json';
 
-// Event emitted when connector settings change
-export const CONNECTOR_SETTINGS_CHANGED_EVENT = 'connector_settings_changed';
-
+import { log } from '../../../lib/logger';
 import type {
+  RemoteMcpToolkitDefinition,
   ToolDefinition,
   ToolkitDefinition,
   ToolkitGroup,
   ToolkitGroups,
-  RemoteMcpToolkitDefinition,
 } from './VmWebrtc.types';
 import { exportToolDefinition } from './VmWebrtc.types';
 import { MCPClient, type RequestOptions } from './mcp_client/client';
-import { log } from '../../../lib/logger';
 import type { Tool } from './mcp_client/types';
 import { registerMcpTool } from './toolkit_functions/index';
+
+// Event emitted when connector settings change
+export const CONNECTOR_SETTINGS_CHANGED_EVENT = 'connector_settings_changed';
 
 /**
  * Get the AsyncStorage key for a toolkit group using convention:
@@ -201,14 +201,14 @@ let staticToolkitDefinitionsCache: ToolDefinition[] | null = null;
 // Use a simple subdirectory in the app cache for toolkit caching
 const REMOTE_TOOLKIT_CACHE_DIR = new Directory(Paths.cache, 'remote-toolkit-definitions');
 const REMOTE_TOOLKIT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const REMOTE_TOOLKIT_DISCOVERY_OPTIONS: RequestOptions = { timeout: 30000 };
+const REMOTE_TOOLKIT_DISCOVERY_OPTIONS: RequestOptions = { timeout: 45000 };
 
 type RemoteToolkitCacheEntry = {
   lastFetched: number;
-  tools: Array<{
+  tools: {
     name: string;
     definition: ToolDefinition;
-  }>;
+  }[];
 };
 
 const dynamicToolkitDefinitionsByServer = new Map<string, ToolDefinition[]>();
@@ -463,7 +463,7 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
   );
 
   let dynamicCount = 0;
-  const mcpServerDetails: Array<{ group: string; url: string; toolCount: number }> = [];
+  const mcpServerDetails: { group: string; url: string; toolCount: number }[] = [];
 
   for (const toolkit of remoteMcpToolkits) {
     const definitions = await loadRemoteToolkitDefinitions(toolkit);
@@ -533,7 +533,7 @@ function registerMcpToolsForServer(
       const result = await client.callTool({
         name: tool.name,
         arguments: args,
-      }, discoveryOptions);
+      }, discoveryOptions, toolkitGroup);
 
       return JSON.stringify(result, null, 2);
     });
@@ -781,7 +781,7 @@ export const clearToolkitDefinitionsCache = async (): Promise<void> => {
  * @param groupName - The toolkit group name (e.g., "deepwiki")
  * @returns Array of tools for the group, or empty array if not found or not MCP
  */
-export const getMcpToolsForGroup = async (groupName: string): Promise<Array<{ name: string; description: string }>> => {
+export const getMcpToolsForGroup = async (groupName: string): Promise<{ name: string; description: string }[]> => {
   log.debug('[ToolkitManager] Getting MCP tools for group', {}, { groupName });
 
   // First, ensure toolkit definitions are loaded

@@ -105,6 +105,7 @@ let toolkitGroupsPromise: Promise<ToolkitGroups> | null = null;
  * This should be called when connector settings change.
  */
 async function reloadToolkitGroups(): Promise<void> {
+  const startTime = Date.now();
   log.info('[ToolkitManager] Reloading toolkit groups due to connector settings change', {}, {});
 
   // Clear all caches
@@ -115,12 +116,30 @@ async function reloadToolkitGroups(): Promise<void> {
   toolkitDefinitionsPromise = null;
 
   // Rebuild toolkit groups cache
-  await getFilteredToolkitGroups();
+  const groups = await getFilteredToolkitGroups();
 
   // Rebuild toolkit definitions cache (this includes static tools based on new groups)
-  await getToolkitDefinitions();
+  const definitions = await getToolkitDefinitions();
 
-  log.info('[ToolkitManager] Toolkit groups reloaded successfully', {}, {});
+  const reloadDurationMs = Date.now() - startTime;
+
+  // Count tools by type
+  const staticCount = (staticToolkitDefinitionsCache || []).length;
+  const dynamicDefinitionArrays: ToolDefinition[][] = Array.from(dynamicToolkitDefinitionsByServer.values());
+  const dynamicCount = dynamicDefinitionArrays.reduce((sum, arr) => sum + arr.length, 0);
+
+  // Get enabled group names
+  const enabledGroupNames = groups.list.map((g) => g.name);
+
+  log.info('[ToolkitManager] Toolkit groups reloaded successfully', {}, {
+    reloadDurationMs,
+    totalGroups: groups.list.length,
+    enabledGroups: enabledGroupNames,
+    totalToolsLoaded: definitions.length,
+    staticToolCount: staticCount,
+    dynamicToolCount: dynamicCount,
+    toolNames: definitions.map((t) => t.name),
+  });
 }
 
 // Set up event listener for connector settings changes
@@ -427,16 +446,36 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
   );
 
   let dynamicCount = 0;
+  const mcpServerDetails: Array<{ group: string; url: string; toolCount: number }> = [];
+
   for (const toolkit of remoteMcpToolkits) {
     const definitions = await loadRemoteToolkitDefinitions(toolkit);
     dynamicCount += definitions.length;
+    mcpServerDetails.push({
+      group: toolkit.group,
+      url: toolkit.remote_mcp_server?.url || 'unknown',
+      toolCount: definitions.length,
+    });
   }
 
   const allTools = rebuildToolkitDefinitionsCache();
+
+  // Get list of static tool groups
+  const groups = await getFilteredToolkitGroups();
+  const staticGroups = groups.list
+    .filter((g) => g.toolkits.some((t) => t.type === 'function'))
+    .map((g) => ({
+      name: g.name,
+      toolCount: g.toolkits.filter((t) => t.type === 'function').length,
+    }));
+
   log.info('[ToolkitManager] Total toolkit definitions loaded', {}, {
     staticCount: staticToolkitDefinitionsCache.length,
+    staticGroups,
     dynamicCount,
+    mcpServers: mcpServerDetails,
     totalCount: allTools.length,
+    toolNames: allTools.map((t) => t.name),
   });
 
   return allTools;

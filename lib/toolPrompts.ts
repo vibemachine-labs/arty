@@ -1,7 +1,8 @@
 import { DeviceEventEmitter } from "react-native";
 
 import { loadPromptAddition, savePromptAddition } from "./promptStorage";
-import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "../modules/vm-webrtc/src/ToolkitManager";
+import { clearToolkitDefinitionsCache } from "../modules/vm-webrtc/src/ToolkitManager";
+import { log } from "./logger";
 
 const TOOL_PROMPT_STORAGE_PREFIX = "@vibemachine/toolPrompt/";
 
@@ -17,6 +18,16 @@ export const saveToolPromptAddition = async (
 ): Promise<void> => {
   await savePromptAddition(getToolPromptStorageKey(toolName), addition);
 
-  // Emit event to reload toolkit definitions cache
-  DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
+  log.info('[ToolPrompts] Prompt addition saved, clearing toolkit definitions cache', {}, {
+    toolName,
+    additionLength: addition.trim().length,
+  });
+
+  // Clear toolkit definitions cache to force reload with updated prompts
+  // This clears both in-memory cache and disk cache for MCP tools
+  await clearToolkitDefinitionsCache();
+
+  log.info('[ToolPrompts] Toolkit definitions cache cleared, prompts will be applied on next load', {}, {
+    toolName,
+  });
 };

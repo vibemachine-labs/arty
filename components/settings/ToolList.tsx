@@ -12,6 +12,7 @@ export interface ToolListProps {
   groupName: string;
   onToolPress: (tool: Tool) => void;
   onBack: () => void;
+  loading?: boolean;
 }
 
 export const ToolList: React.FC<ToolListProps> = ({
@@ -19,6 +20,7 @@ export const ToolList: React.FC<ToolListProps> = ({
   groupName,
   onToolPress,
   onBack,
+  loading = false,
 }) => {
   const handleToolPress = (tool: Tool) => {
     onToolPress(tool);
@@ -44,28 +46,38 @@ export const ToolList: React.FC<ToolListProps> = ({
         customize its prompt.
       </Text>
 
-      <View style={styles.toolList}>
-        {tools.map((tool, index) => (
-          <Pressable
-            key={`${tool.group}-${tool.name}-${index}`}
-            accessibilityRole="button"
-            accessibilityLabel={`Configure ${tool.name}`}
-            onPress={() => handleToolPress(tool)}
-            style={({ pressed }) => [
-              styles.toolButton,
-              pressed ? styles.toolButtonPressed : null,
-            ]}
-          >
-            <View style={styles.toolInfo}>
-              <Text style={styles.toolName}>{tool.name}</Text>
-              <Text style={styles.toolDescription} numberOfLines={2}>
-                {tool.description}
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </Pressable>
-        ))}
-      </View>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading tools...</Text>
+        </View>
+      ) : tools.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No tools available</Text>
+        </View>
+      ) : (
+        <View style={styles.toolList}>
+          {tools.map((tool, index) => (
+            <Pressable
+              key={`${tool.group}-${tool.name}-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Configure ${tool.name}`}
+              onPress={() => handleToolPress(tool)}
+              style={({ pressed }) => [
+                styles.toolButton,
+                pressed ? styles.toolButtonPressed : null,
+              ]}
+            >
+              <View style={styles.toolInfo}>
+                <Text style={styles.toolName}>{tool.name}</Text>
+                <Text style={styles.toolDescription} numberOfLines={2}>
+                  {tool.description}
+                </Text>
+              </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
@@ -100,6 +112,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     color: "#3A3A3C",
+  },
+  loadingContainer: {
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 15,
+    color: "#8E8E93",
+  },
+  emptyContainer: {
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#8E8E93",
   },
   toolList: {
     gap: 12,

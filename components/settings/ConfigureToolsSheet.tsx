@@ -15,6 +15,7 @@ import {
   saveToolPromptAddition,
 } from "../../lib/toolPrompts";
 import toolkitGroupsData from "../../modules/vm-webrtc/toolkits/toolkitGroups.json";
+import { getMcpToolsForGroup } from "../../modules/vm-webrtc/src/ToolkitManager";
 
 export interface ConfigureToolsSheetProps {
   visible: boolean;
@@ -63,8 +64,8 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
     return groups;
   }, []);
 
-  // Get tools for selected group
-  const toolsForSelectedGroup = useMemo(() => {
+  // Get tools for selected group (static tools from JSON)
+  const staticToolsForSelectedGroup = useMemo(() => {
     if (!selectedGroupId) {
       return [];
     }
@@ -90,24 +91,58 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
     return tools;
   }, [selectedGroupId]);
 
+  // State for MCP tools (loaded dynamically)
+  const [mcpTools, setMcpTools] = useState<Tool[]>([]);
+  const [loadingMcpTools, setLoadingMcpTools] = useState(false);
+
+  // Load MCP tools when group is selected
+  React.useEffect(() => {
+    if (!selectedGroupId) {
+      setMcpTools([]);
+      return;
+    }
+
+    const group = toolGroups.find((g) => g.id === selectedGroupId);
+    if (!group?.isRemoteMcp) {
+      setMcpTools([]);
+      return;
+    }
+
+    // Load MCP tools
+    setLoadingMcpTools(true);
+    getMcpToolsForGroup(selectedGroupId)
+      .then((tools) => {
+        setMcpTools(
+          tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            group: selectedGroupId,
+          }))
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to load MCP tools:", error);
+        setMcpTools([]);
+      })
+      .finally(() => {
+        setLoadingMcpTools(false);
+      });
+  }, [selectedGroupId, toolGroups]);
+
+  // Combine static and MCP tools
+  const toolsForSelectedGroup = useMemo(() => {
+    return [...staticToolsForSelectedGroup, ...mcpTools];
+  }, [staticToolsForSelectedGroup, mcpTools]);
+
   const selectedGroupName = useMemo(() => {
     const group = toolGroups.find((g) => g.id === selectedGroupId);
     return group?.name || "";
   }, [selectedGroupId, toolGroups]);
 
-  const handleToolGroupPress = (groupId: string) => {
+  const handleToolGroupPress = async (groupId: string) => {
     const group = toolGroups.find((g) => g.id === groupId);
 
     if (!group) {
-      return;
-    }
-
-    if (group.isRemoteMcp) {
-      Alert.alert(
-        "Coming Soon",
-        "Configuration for remote MCP servers is not yet available.",
-        [{ text: "OK" }]
-      );
       return;
     }
 
@@ -182,6 +217,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
               groupName={selectedGroupName}
               onToolPress={handleToolPress}
               onBack={handleBackToGroups}
+              loading={loadingMcpTools}
             />
           )}
         </View>

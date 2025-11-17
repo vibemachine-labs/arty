@@ -334,7 +334,7 @@ let toolkitDefinitionsPromise: Promise<ToolDefinition[]> | null = null;
 /**
  * Convert MCP Tool to ToolDefinition format
  */
-function mcpToolToToolDefinition(tool: Tool, groupName: string): ToolDefinition {
+async function mcpToolToToolDefinition(tool: Tool, groupName: string): Promise<ToolDefinition> {
   // Convert MCP input schema properties to our format
   const properties: Record<string, { type: string; description: string }> = {};
   const mcpProperties = tool.inputSchema?.properties || {};
@@ -346,10 +346,26 @@ function mcpToolToToolDefinition(tool: Tool, groupName: string): ToolDefinition 
     };
   }
 
+  // Load user-configured prompt addition
+  const { loadToolPromptAddition } = await import('../../../lib/toolPrompts');
+  const promptAdditionKey = `${groupName}.${tool.name}`;
+  let description = tool.description || '';
+
+  try {
+    const promptAddition = await loadToolPromptAddition(promptAdditionKey);
+    if (promptAddition && promptAddition.trim().length > 0) {
+      // Append the prompt addition at the end so users can "correct" the base prompt
+      description = `${tool.description || ''}\n\n${promptAddition.trim()}`;
+    }
+  } catch (error) {
+    // If loading fails, just use the base description
+    console.warn(`Failed to load prompt addition for MCP tool ${promptAdditionKey}:`, error);
+  }
+
   return {
     type: 'function',
     name: `${groupName}__${tool.name}`,
-    description: tool.description || '',
+    description,
     parameters: {
       type: 'object',
       properties,
@@ -468,11 +484,14 @@ function registerMcpToolsForServer(
   }
 }
 
-function convertToolsForCache(tools: Tool[], groupName: string): RemoteToolkitCacheEntry['tools'] {
-  return tools.map((tool) => ({
-    name: tool.name,
-    definition: mcpToolToToolDefinition(tool, groupName),
-  }));
+async function convertToolsForCache(tools: Tool[], groupName: string): Promise<RemoteToolkitCacheEntry['tools']> {
+  const converted = await Promise.all(
+    tools.map(async (tool) => ({
+      name: tool.name,
+      definition: await mcpToolToToolDefinition(tool, groupName),
+    }))
+  );
+  return converted;
 }
 
 async function fetchAndCacheRemoteToolkitDefinitions(
@@ -499,7 +518,7 @@ async function fetchAndCacheRemoteToolkitDefinitions(
     return [];
   }
 
-  const cachedTools = convertToolsForCache(result.tools, toolkit.group);
+  const cachedTools = await convertToolsForCache(result.tools, toolkit.group);
   registerMcpToolsForServer(toolkit.group, serverUrl, cachedTools, client, discoveryOptions);
   setDynamicToolkitDefinitionsForServer(
     serverUrl,
@@ -696,4 +715,63 @@ export const clearToolkitDefinitionsCache = async (): Promise<void> => {
   await clearRemoteToolkitCacheFiles();
 
   log.info('[ToolkitManager] Toolkit definitions cache cleared successfully', {}, {});
+};
+
+/**
+ * Get MCP tools for a specific toolkit group from the dynamic cache.
+ * Returns an array of tools with their names and definitions.
+ *
+ * @param groupName - The toolkit group name (e.g., "deepwiki")
+ * @returns Array of tools for the group, or empty array if not found or not MCP
+ */
+export const getMcpToolsForGroup = async (groupName: string): Promise<Array<{ name: string; description: string }>> => {
+  log.debug('[ToolkitManager] Getting MCP tools for group', {}, { groupName });
+
+  // First, ensure toolkit definitions are loaded
+  await getToolkitDefinitions();
+
+  // Find the toolkit group
+  const groups = await getFilteredToolkitGroups();
+  const group = groups.list.find((g) => g.name === groupName);
+
+  if (!group) {
+    log.warn('[ToolkitManager] Toolkit group not found', {}, { groupName });
+    return [];
+  }
+
+  // Check if this group has remote MCP toolkits
+  const remoteMcpToolkit = group.toolkits.find(
+    (toolkit): toolkit is RemoteMcpToolkitDefinition => toolkit.type === 'remote_mcp_server'
+  );
+
+  if (!remoteMcpToolkit) {
+    log.debug('[ToolkitManager] Group is not a remote MCP toolkit', {}, { groupName });
+    return [];
+  }
+
+  const serverUrl = remoteMcpToolkit.remote_mcp_server?.url;
+  if (!serverUrl) {
+    log.warn('[ToolkitManager] Remote MCP toolkit has no URL', {}, { groupName });
+    return [];
+  }
+
+  // Get tools from the dynamic cache
+  const definitions = dynamicToolkitDefinitionsByServer.get(serverUrl) || [];
+
+  // Convert definitions back to simple tool info
+  const tools = definitions.map((def) => {
+    // Extract the tool name from the fully qualified name (e.g., "deepwiki__read_wiki_structure" -> "read_wiki_structure")
+    const toolName = def.name.replace(`${groupName}__`, '');
+    return {
+      name: toolName,
+      description: def.description,
+    };
+  });
+
+  log.info('[ToolkitManager] Retrieved MCP tools for group', {}, {
+    groupName,
+    toolCount: tools.length,
+  });
+
+  return tools;
 };

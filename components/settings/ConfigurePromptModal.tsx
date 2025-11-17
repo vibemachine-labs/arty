@@ -212,6 +212,9 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
                   ]}
                   accessibilityLabel="Additional prompt text"
                   editable={!isLoading && !isSaving}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  spellCheck={false}
                 />
                 <View style={styles.promptActions}>
                   <Pressable

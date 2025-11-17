@@ -213,6 +213,23 @@ type RemoteToolkitCacheEntry = {
 
 const dynamicToolkitDefinitionsByServer = new Map<string, ToolDefinition[]>();
 const remoteCacheRefreshPromises = new Map<string, Promise<void>>();
+const mcpClientsByServerUrl = new Map<string, MCPClient>();
+
+/**
+ * Get or create a cached MCP client for the given server URL.
+ * Clients are reused across all operations to maintain session state.
+ */
+function getOrCreateMcpClient(serverUrl: string): MCPClient {
+  let client = mcpClientsByServerUrl.get(serverUrl);
+  if (!client) {
+    log.debug('[ToolkitManager] Creating new MCP client for server', {}, {
+      serverUrl,
+    });
+    client = new MCPClient(serverUrl);
+    mcpClientsByServerUrl.set(serverUrl, client);
+  }
+  return client;
+}
 
 /**
  * Get toolkit groups, filtered by enabled settings.
@@ -538,7 +555,7 @@ async function fetchAndCacheRemoteToolkitDefinitions(
   serverUrl: string,
   discoveryOptions: RequestOptions
 ): Promise<ToolDefinition[]> {
-  const client = new MCPClient(serverUrl);
+  const client = getOrCreateMcpClient(serverUrl);
 
   log.info('[ToolkitManager] Fetching tools from remote MCP server for toolkit definitions', {}, {
     name: toolkit.name,
@@ -637,7 +654,7 @@ async function loadRemoteToolkitDefinitions(toolkit: RemoteMcpToolkitDefinition)
   }
 
   const cached = await readRemoteToolkitCache(serverUrl);
-  const client = new MCPClient(serverUrl);
+  const client = getOrCreateMcpClient(serverUrl);
 
   if (cached && cached.tools.length > 0) {
     const cacheAgeMs = Date.now() - cached.lastFetched;
@@ -749,6 +766,7 @@ export const clearToolkitDefinitionsCache = async (): Promise<void> => {
   staticToolkitDefinitionsCache = null;
   dynamicToolkitDefinitionsByServer.clear();
   remoteCacheRefreshPromises.clear();
+  mcpClientsByServerUrl.clear();
 
   // Clear disk cache files
   await clearRemoteToolkitCacheFiles();

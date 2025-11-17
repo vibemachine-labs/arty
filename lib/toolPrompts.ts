@@ -27,17 +27,27 @@ export const saveToolPromptAddition = async (
   // This clears both in-memory cache and disk cache for MCP tools
   await clearToolkitDefinitionsCache();
 
-  log.info('[ToolPrompts] Toolkit definitions cache cleared, rebuilding cache', {}, {
+  log.info('[ToolPrompts] Toolkit definitions cache cleared, rebuilding in background', {}, {
     toolName,
   });
 
-  // Rebuild the cache immediately so the user doesn't wait later when using the LLM
-  const startTime = Date.now();
-  await getToolkitDefinitions();
-  const rebuildDurationMs = Date.now() - startTime;
+  // Rebuild the cache in the background so the UI doesn't block
+  // This runs asynchronously - the user doesn't wait, but the cache will be warm when they use the LLM
+  (async () => {
+    try {
+      const startTime = Date.now();
+      await getToolkitDefinitions();
+      const rebuildDurationMs = Date.now() - startTime;
 
-  log.info('[ToolPrompts] Toolkit definitions cache rebuilt with updated prompts', {}, {
-    toolName,
-    rebuildDurationMs,
-  });
+      log.info('[ToolPrompts] Toolkit definitions cache rebuilt with updated prompts', {}, {
+        toolName,
+        rebuildDurationMs,
+      });
+    } catch (error) {
+      log.error('[ToolPrompts] Failed to rebuild toolkit definitions cache', {}, {
+        toolName,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      }, error);
+    }
+  })();
 };

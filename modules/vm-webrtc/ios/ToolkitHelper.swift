@@ -239,17 +239,32 @@ public class ToolkitHelper: BaseTool {
 
     // Register callback for this request
     registerStringCallback(requestId: requestId) { result, error in
+      let completionTimestamp = ISO8601DateFormatter().string(from: Date())
+
       if let error = error {
         self.logger.log(
-          "[ToolkitHelper] Toolkit operation failed",
+          "❌ [TOOLKIT_EXECUTION_ERROR] Toolkit operation failed",
           attributes: [
             "callId": callId,
             "requestId": requestId,
             "groupName": groupName,
             "toolName": toolName,
-            "error": error.localizedDescription
+            "error": error.localizedDescription,
+            "completionTimestamp": completionTimestamp
           ]
         )
+
+        // About to send error response
+        self.logger.log(
+          "🔧 [TOOLKIT_SENDING_ERROR] About to call sendToolCallError",
+          attributes: [
+            "callId": callId,
+            "requestId": requestId,
+            "errorMessage": error.localizedDescription,
+            "timestamp": completionTimestamp
+          ]
+        )
+
         self.responder?.sendToolCallError(callId: callId, error: error.localizedDescription)
         return
       }
@@ -269,13 +284,27 @@ public class ToolkitHelper: BaseTool {
       }
 
       self.logger.log(
-        "[ToolkitHelper] Toolkit operation result received",
+        "✅ [TOOLKIT_EXECUTION_SUCCESS] Toolkit operation result received",
         attributes: [
           "callId": callId,
           "requestId": requestId,
           "groupName": groupName,
           "toolName": toolName,
-          "result_preview": String(result.prefix(1000))
+          "result_length": result.count,
+          "result_preview": String(result.prefix(1000)),
+          "result": result,
+          "completionTimestamp": completionTimestamp
+        ]
+      )
+
+      // About to send successful result
+      self.logger.log(
+        "🔧 [TOOLKIT_SENDING_RESULT] About to call sendToolCallResult",
+        attributes: [
+          "callId": callId,
+          "requestId": requestId,
+          "resultLength": result.count,
+          "timestamp": completionTimestamp
         ]
       )
 

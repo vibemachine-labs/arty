@@ -390,10 +390,16 @@ export class MCPClient {
    */
   async callTool(
     params: CallToolRequest['params'],
-    options?: RequestOptions
+    options?: RequestOptions,
+    toolGroup?: string
   ): Promise<CallToolResult> {
-    log.info('[MCPClient] Calling tool on MCP server', {}, {
+    const logMessage = toolGroup
+      ? `[MCPClient] Calling tool on MCP server (${toolGroup})`
+      : '[MCPClient] Calling tool on MCP server';
+
+    log.info(logMessage, {}, {
       endpoint: this.endpoint,
+      toolGroup: toolGroup || 'unknown',
       toolName: params.name,
       arguments: params.arguments,
     });
@@ -404,8 +410,13 @@ export class MCPClient {
       options
     );
 
-    log.info('[MCPClient] Tool call completed on MCP server', {}, {
+    const completionMessage = toolGroup
+      ? `[MCPClient] Tool call completed on MCP server (${toolGroup})`
+      : '[MCPClient] Tool call completed on MCP server';
+
+    log.info(completionMessage, {}, {
       endpoint: this.endpoint,
+      toolGroup: toolGroup || 'unknown',
       toolName: params.name,
       isError: result.isError,
       contentLength: result.content?.length || 0,

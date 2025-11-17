@@ -593,6 +593,20 @@ final class OpenAIWebRTCClient: NSObject {
 
 extension OpenAIWebRTCClient: ToolCallResponder {
   func sendToolCallResult(callId: String, result: String) {
+    // PRE-SEND DIAGNOSTICS
+    self.logger.log(
+      "🔧 [TOOL_OUTPUT_START] Preparing to send tool call result",
+      attributes: logAttributes(for: .info, metadata: [
+        "callId": callId,
+        "resultLength": result.count,
+        "result_preview": String(result.prefix(500)),
+        "result": result,
+        "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
+        "peerConnectionState": peerConnection?.connectionState.rawValue ?? -1,
+        "timestamp": ISO8601DateFormatter().string(from: Date())
+      ])
+    )
+
     let outputDict: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
@@ -606,29 +620,68 @@ extension OpenAIWebRTCClient: ToolCallResponder {
 
     if didSend {
       self.logger.log(
-        "[VmWebrtc] " + "Tool call result sent",
-        attributes: logAttributes(for: .debug, metadata: [
+        "✅ [TOOL_OUTPUT_SENT] Tool call result successfully sent via data channel",
+        attributes: logAttributes(for: .info, metadata: [
           "callId": callId,
           "resultLength": result.count,
           "result_preview": String(result.prefix(500)),
-          "result": result
+          "result": result,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
       )
       eventHandler.recordExternalActivity(reason: "tool_call_result")
 
       // Continue conversation
-      sendEvent(["type": "response.create"])
-    } else {
       self.logger.log(
-        "[VmWebrtc] " + "Failed to send tool call result",
-        attributes: logAttributes(for: .error, metadata: [
-          "callId": callId
+        "📤 [RESPONSE_CREATE] Triggering response.create to continue conversation",
+        attributes: logAttributes(for: .info, metadata: [
+          "trigger": "tool_call_result",
+          "callId": callId,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
       )
+
+      let responseCreateSent = sendEvent(["type": "response.create"])
+
+      if !responseCreateSent {
+        self.logger.log(
+          "❌ [RESPONSE_CREATE_FAILED] Failed to send response.create",
+          attributes: logAttributes(for: .error, metadata: [
+            "callId": callId,
+            "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+      }
+    } else {
+      self.logger.log(
+        "❌ [TOOL_OUTPUT_FAILED] Failed to send conversation.item.create for tool result",
+        attributes: logAttributes(for: .error, metadata: [
+          "callId": callId,
+          "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
+          "peerConnectionState": peerConnection?.connectionState.rawValue ?? -1,
+          "likelyReason": "call_id may not exist in conversation (could have been pruned)",
+          "recommendation": "Check if conversation pruning deleted this call_id",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+
+      // CRITICAL: Do NOT send response.create if output failed
+      // This prevents cascading "conversation_already_has_active_response" errors
     }
   }
 
   func sendToolCallError(callId: String, error: String) {
+    self.logger.log(
+      "⚠️ [TOOL_ERROR] Sending tool call error response",
+      attributes: logAttributes(for: .warn, metadata: [
+        "callId": callId,
+        "error": error,
+        "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
+        "timestamp": ISO8601DateFormatter().string(from: Date())
+      ])
+    )
+
     let outputDict: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
@@ -638,7 +691,30 @@ extension OpenAIWebRTCClient: ToolCallResponder {
       ]
     ]
 
-    sendEvent(outputDict)
+    let didSend = sendEvent(outputDict)
+
+    if !didSend {
+      self.logger.log(
+        "❌ [TOOL_ERROR_SEND_FAILED] Failed to send tool error response",
+        attributes: logAttributes(for: .error, metadata: [
+          "callId": callId,
+          "error": error,
+          "likelyReason": "call_id may not exist in conversation (could have been pruned)",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+      return  // Don't send response.create if error output failed
+    }
+
+    self.logger.log(
+      "📤 [RESPONSE_CREATE] Triggering response.create after tool error",
+      attributes: logAttributes(for: .info, metadata: [
+        "trigger": "tool_call_error",
+        "callId": callId,
+        "timestamp": ISO8601DateFormatter().string(from: Date())
+      ])
+    )
+
     sendEvent(["type": "response.create"])
     eventHandler.recordExternalActivity(reason: "tool_call_error")
   }

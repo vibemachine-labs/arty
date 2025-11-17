@@ -315,6 +315,23 @@ final class WebRTCEventHandler {
       return
     }
 
+    // Enhanced logging at tool call start with conversation state
+    conversationQueue.async {
+      self.logger.log(
+        "🔨 [TOOL_DISPATCH_START] Tool call received and dispatching",
+        attributes: logAttributes(for: .info, metadata: [
+          "callId": callId,
+          "toolName": toolName,
+          "arguments_length": argumentsJSON.count,
+          "arguments_preview": String(argumentsJSON.prefix(1000)),
+          "currentConversationItems": self.conversationItems.count,
+          "currentTurnCount": self.conversationTurnCount,
+          "maxTurns": self.maxConversationTurns as Any,
+          "dispatchTimestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+
     logger.log(
       "[WebRTCEventHandler] Tool call received",
       attributes: logAttributes(for: .info, metadata: [
@@ -651,6 +668,23 @@ final class WebRTCEventHandler {
       let type = item["type"] as? String
       let isTurn = (role == "user" || role == "assistant")
 
+      // Detect if this is a function_call item (tool invocation)
+      let isFunctionCall = (type == "function_call")
+      if isFunctionCall {
+        self.logger.log(
+          "🔧 [FUNCTION_CALL_CREATED] Function call item added to conversation",
+          attributes: logAttributes(for: .info, metadata: [
+            "itemId": itemId,
+            "callId": itemId,  // For function_call items, itemId IS the call_id
+            "role": role as Any,
+            "currentTurnCount": self.conversationTurnCount,
+            "totalItems": self.conversationItems.count + 1,
+            "maxTurns": self.maxConversationTurns as Any,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+      }
+
       // Extract content snippet for logging
       var contentSnippet: String?
       if let content = item["content"] as? [[String: Any]] {
@@ -872,16 +906,36 @@ final class WebRTCEventHandler {
         "item_id": item.id
       ]
 
-      self.logger.log(
-        "[TurnLimit] Sending prune delete event for item: \(item.id)",
-        attributes: logAttributes(for: .debug, metadata: [
-          "itemId": item.id,
-          "position": position,
-          "isTurn": item.isTurn,
-          "turnNumber": item.turnNumber as Any,
-          "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
-        ])
-      )
+      let ageInSeconds = now.timeIntervalSince(item.createdAt)
+
+      var metadata: [String: Any] = [
+        "itemId": item.id,
+        "position": position,
+        "itemType": item.type as Any,
+        "itemRole": item.role as Any,
+        "isTurn": item.isTurn,
+        "turnNumber": item.turnNumber as Any,
+        "ageSeconds": String(format: "%.2f", ageInSeconds),
+        "createdAt": formatter.string(from: item.createdAt),
+        "contentLength": item.contentSnippet?.count as Any,
+        "contentSnippet": item.contentSnippet as Any
+      ]
+
+      // CRITICAL: Flag if this is a function call (contains call_id)
+      if item.type == "function_call" {
+        metadata["WARNING"] = "DELETING FUNCTION CALL - call_id will become invalid"
+        metadata["potentiallyOrphanedCallId"] = item.id
+
+        self.logger.log(
+          "🚨 [PRUNE_DELETE_FUNCTION_CALL] Deleting function_call item - call_id will be orphaned",
+          attributes: logAttributes(for: .warn, metadata: metadata)
+        )
+      } else {
+        self.logger.log(
+          "[TurnLimit] Sending prune delete event for item: \(item.id)",
+          attributes: logAttributes(for: .debug, metadata: metadata)
+        )
+      }
 
       DispatchQueue.main.async {
         context.sendDataChannelMessage(deleteEvent)

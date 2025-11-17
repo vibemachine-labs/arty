@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 
 import { BottomSheet } from "../ui/BottomSheet";
 import { ConfigurePromptModal } from "./ConfigurePromptModal";
+import { ToolGroupList, type ToolGroup } from "./ToolGroupList";
+import { ToolList, type Tool } from "./ToolList";
 import {
   CONNECTOR_OPTIONS,
   type ConnectorId,
@@ -12,73 +14,127 @@ import {
   loadToolPromptAddition,
   saveToolPromptAddition,
 } from "../../lib/toolPrompts";
-import {
-  githubConnectorDefinition,
-  gdriveConnectorDefinition,
-  type ToolDefinition,
-} from "../../modules/vm-webrtc";
+import toolkitGroupsData from "../../modules/vm-webrtc/toolkits/toolkitGroups.json";
 
 export interface ConfigureToolsSheetProps {
   visible: boolean;
   onClose: () => void;
 }
 
-const SUPPORTED_TOOL_IDS: ConnectorId[] = ["github", "gdrive"];
-
-type SupportedTool = ConnectorOption & {
-  definition: ToolDefinition;
-};
+type ViewMode = "groups" | "tools";
 
 export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   visible,
   onClose,
 }) => {
+  const [viewMode, setViewMode] = useState<ViewMode>("groups");
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [promptModalVisible, setPromptModalVisible] = useState(false);
-  const [activeToolId, setActiveToolId] = useState<ConnectorId | null>(null);
+  const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
 
-  const tools = useMemo(
-    () =>
-      CONNECTOR_OPTIONS.filter((option: ConnectorOption) =>
-        SUPPORTED_TOOL_IDS.includes(option.id),
-      ).map((option) => {
-        let definition: ToolDefinition | null = null;
-        if (option.id === "github") {
-          definition = githubConnectorDefinition;
-        } else if (option.id === "gdrive") {
-          definition = gdriveConnectorDefinition;
-        }
-        if (!definition) {
-          return null;
-        }
-        return {
-          ...option,
-          definition,
-        } as SupportedTool;
-      }).filter((tool): tool is SupportedTool => tool !== null),
-    [],
-  );
+  // Build tool groups from toolkitGroups.json
+  const toolGroups = useMemo(() => {
+    const groups: ToolGroup[] = [];
+    const toolkitGroups = toolkitGroupsData.byName;
 
-  const handleToolPress = (toolId: ConnectorId) => {
+    Object.keys(toolkitGroups).forEach((groupKey) => {
+      const group = toolkitGroups[groupKey as keyof typeof toolkitGroups];
+      const connectorOption = CONNECTOR_OPTIONS.find((opt) => opt.id === groupKey as ConnectorId);
+
+      if (!connectorOption) {
+        return;
+      }
+
+      const toolkits = group.toolkits || [];
+      const isRemoteMcp = toolkits.some((t: any) => t.type === "remote_mcp_server");
+
+      groups.push({
+        id: groupKey,
+        name: connectorOption.name,
+        icon: connectorOption.icon,
+        backgroundColor: connectorOption.backgroundColor,
+        iconBackgroundColor: connectorOption.iconBackgroundColor,
+        toolCount: isRemoteMcp ? 0 : toolkits.length,
+        isRemoteMcp,
+      });
+    });
+
+    return groups;
+  }, []);
+
+  // Get tools for selected group
+  const toolsForSelectedGroup = useMemo(() => {
+    if (!selectedGroupId) {
+      return [];
+    }
+
+    const toolkitGroups = toolkitGroupsData.byName;
+    const group = toolkitGroups[selectedGroupId as keyof typeof toolkitGroups];
+
+    if (!group || !group.toolkits) {
+      return [];
+    }
+
+    const tools: Tool[] = [];
+    group.toolkits.forEach((toolkit: any) => {
+      if (toolkit.type === "function") {
+        tools.push({
+          name: toolkit.name,
+          description: toolkit.description || "",
+          group: toolkit.group || selectedGroupId,
+        });
+      }
+    });
+
+    return tools;
+  }, [selectedGroupId]);
+
+  const selectedGroupName = useMemo(() => {
+    const group = toolGroups.find((g) => g.id === selectedGroupId);
+    return group?.name || "";
+  }, [selectedGroupId, toolGroups]);
+
+  const handleToolGroupPress = (groupId: string) => {
+    const group = toolGroups.find((g) => g.id === groupId);
+
+    if (!group) {
+      return;
+    }
+
+    if (group.isRemoteMcp) {
+      Alert.alert(
+        "Coming Soon",
+        "Configuration for remote MCP servers is not yet available.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    setSelectedGroupId(groupId);
+    setViewMode("tools");
+  };
+
+  const handleBackToGroups = () => {
+    setViewMode("groups");
+    setSelectedGroupId(null);
+  };
+
+  const handleToolPress = (tool: Tool) => {
     onClose();
     requestAnimationFrame(() => {
-      setActiveToolId(toolId);
+      setActiveTool(tool);
       setPromptModalVisible(true);
     });
   };
 
   const closePromptModal = useCallback(() => {
     setPromptModalVisible(false);
-    setActiveToolId(null);
+    setActiveTool(null);
   }, []);
 
-  const activeTool = useMemo(
-    () => tools.find((tool) => tool.id === activeToolId) ?? null,
-    [activeToolId, tools]
-  );
-
   const activeToolValue = activeTool
-    ? promptDrafts[activeTool.id] ?? ""
+    ? promptDrafts[`${activeTool.group}.${activeTool.name}`] ?? ""
     : "";
 
   const handleActivePromptChange = useCallback(
@@ -88,65 +144,46 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
       }
       setPromptDrafts((prev) => ({
         ...prev,
-        [activeTool.id]: text,
+        [`${activeTool.group}.${activeTool.name}`]: text,
       }));
     },
     [activeTool]
   );
 
-  const activeToolDefinitionName = activeTool?.definition.name ?? null;
-
   const loadActiveToolPrompt = useCallback(() => {
-    if (!activeToolDefinitionName) {
+    if (!activeTool) {
       return Promise.resolve("");
     }
-    return loadToolPromptAddition(activeToolDefinitionName);
-  }, [activeToolDefinitionName]);
+    return loadToolPromptAddition(`${activeTool.group}.${activeTool.name}`);
+  }, [activeTool]);
 
   const saveActiveToolPrompt = useCallback(
     (text: string) => {
-      if (!activeToolDefinitionName) {
+      if (!activeTool) {
         return Promise.resolve();
       }
-      return saveToolPromptAddition(activeToolDefinitionName, text);
+      return saveToolPromptAddition(`${activeTool.group}.${activeTool.name}`, text);
     },
-    [activeToolDefinitionName]
+    [activeTool]
   );
 
   return (
     <>
       <BottomSheet visible={visible} onClose={onClose} title="Configure Tools">
         <View style={styles.body}>
-          <Text style={styles.lead}>
-            Choose a tool to adjust its configuration. Each tool refines how the
-            assistant collaborates with your iOS workflow.
-          </Text>
-          <View style={styles.toolList}>
-            {tools.map((tool) => (
-              <Pressable
-                key={tool.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Configure ${tool.name}`}
-                onPress={() => handleToolPress(tool.id)}
-                style={({ pressed }) => [
-                  styles.toolButton,
-                  { backgroundColor: tool.backgroundColor },
-                  pressed ? styles.toolButtonPressed : null,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: tool.iconBackgroundColor },
-                  ]}
-                >
-                  <Text style={styles.icon}>{tool.icon}</Text>
-                </View>
-                <Text style={styles.toolName}>{tool.name}</Text>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
-          </View>
+          {viewMode === "groups" ? (
+            <ToolGroupList
+              toolGroups={toolGroups}
+              onToolGroupPress={handleToolGroupPress}
+            />
+          ) : (
+            <ToolList
+              tools={toolsForSelectedGroup}
+              groupName={selectedGroupName}
+              onToolPress={handleToolPress}
+              onBack={handleBackToGroups}
+            />
+          )}
         </View>
       </BottomSheet>
 
@@ -159,14 +196,14 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
           onSaveSuccess={() => {
             setPromptDrafts((prev) => ({
               ...prev,
-              [activeTool.id]: activeToolValue.trim(),
+              [`${activeTool.group}.${activeTool.name}`]: activeToolValue.trim(),
             }));
             closePromptModal();
           }}
           loadPromptAddition={loadActiveToolPrompt}
           savePromptAddition={saveActiveToolPrompt}
-          basePrompt={activeTool.definition.description.trim()}
-          title={`Configure ${activeTool.name} Prompt`}
+          basePrompt={activeTool.description.trim()}
+          title={`Configure ${activeTool.name}`}
         />
       ) : null}
     </>
@@ -177,48 +214,5 @@ const styles = StyleSheet.create({
   body: {
     gap: 16,
     paddingBottom: 16,
-  },
-  lead: {
-    fontSize: 15,
-    lineHeight: 20,
-    color: "#3A3A3C",
-  },
-  toolList: {
-    gap: 12,
-  },
-  toolButton: {
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#D1D1D6",
-  },
-  toolButtonPressed: {
-    backgroundColor: "#E5F1FF",
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  icon: {
-    fontSize: 22,
-  },
-  toolName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1C1C1E",
-  },
-  chevron: {
-    fontSize: 18,
-    color: "#8E8E93",
-    marginLeft: 12,
   },
 });

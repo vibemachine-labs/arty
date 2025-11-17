@@ -1,7 +1,7 @@
 import { DeviceEventEmitter } from "react-native";
 
 import { loadPromptAddition, savePromptAddition } from "./promptStorage";
-import { clearToolkitDefinitionsCache } from "../modules/vm-webrtc/src/ToolkitManager";
+import { clearToolkitDefinitionsCache, getToolkitDefinitions } from "../modules/vm-webrtc/src/ToolkitManager";
 import { log } from "./logger";
 
 const TOOL_PROMPT_STORAGE_PREFIX = "@vibemachine/toolPrompt/";
@@ -27,7 +27,17 @@ export const saveToolPromptAddition = async (
   // This clears both in-memory cache and disk cache for MCP tools
   await clearToolkitDefinitionsCache();
 
-  log.info('[ToolPrompts] Toolkit definitions cache cleared, prompts will be applied on next load', {}, {
+  log.info('[ToolPrompts] Toolkit definitions cache cleared, rebuilding cache', {}, {
     toolName,
+  });
+
+  // Rebuild the cache immediately so the user doesn't wait later when using the LLM
+  const startTime = Date.now();
+  await getToolkitDefinitions();
+  const rebuildDurationMs = Date.now() - startTime;
+
+  log.info('[ToolPrompts] Toolkit definitions cache rebuilt with updated prompts', {}, {
+    toolName,
+    rebuildDurationMs,
   });
 };

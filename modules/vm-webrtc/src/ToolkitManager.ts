@@ -167,7 +167,8 @@ async function buildStaticToolkitDefinitions(): Promise<ToolDefinition[]> {
   for (const group of groups.list) {
     for (const toolkit of group.toolkits) {
       if (toolkit.type !== 'remote_mcp_server') {
-        staticTools.push(exportToolDefinition(toolkit, true));
+        const toolDefinition = await exportToolDefinition(toolkit, true);
+        staticTools.push(toolDefinition);
       }
     }
   }

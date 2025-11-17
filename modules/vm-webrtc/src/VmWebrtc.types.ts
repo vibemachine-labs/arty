@@ -1,5 +1,6 @@
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { VadMode } from '../../../lib/vadPreference';
+import { loadToolPromptAddition } from '../../../lib/toolPrompts';
 
 export type OnLoadEventPayload = {
   url: string;
@@ -112,13 +113,15 @@ export type ToolkitGroups = {
  * extra fields (group, supported_auth, tool_source_file, extra).
  * This creates the format needed for LLM tool calls.
  *
+ * Also appends any user-configured prompt additions to the description.
+ *
  * @param toolkit - The toolkit definition to convert
  * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news__showTopStories")
  */
 const isFunctionToolkitDefinition = (toolkit: ToolkitDefinition): toolkit is FunctionToolkitDefinition =>
   toolkit.type === 'function';
 
-export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): ToolDefinition {
+export async function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): Promise<ToolDefinition> {
   if (!isFunctionToolkitDefinition(toolkit)) {
     throw new Error(`Cannot export remote MCP toolkit "${toolkit.name}" as a function tool definition`);
   }
@@ -127,10 +130,25 @@ export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInN
     ? `${toolkit.group}__${toolkit.name}`
     : toolkit.name;
 
+  // Load user-configured prompt addition
+  const promptAdditionKey = `${toolkit.group}.${toolkit.name}`;
+  let description = toolkit.description;
+
+  try {
+    const promptAddition = await loadToolPromptAddition(promptAdditionKey);
+    if (promptAddition && promptAddition.trim().length > 0) {
+      // Append the prompt addition at the end so users can "correct" the base prompt
+      description = `${toolkit.description}\n\n${promptAddition.trim()}`;
+    }
+  } catch (error) {
+    // If loading fails, just use the base description
+    console.warn(`Failed to load prompt addition for ${promptAdditionKey}:`, error);
+  }
+
   return {
     type: 'function',
     name: toolName,
-    description: toolkit.description,
+    description,
     parameters: toolkit.parameters,
   };
 }
@@ -142,10 +160,12 @@ export function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInN
  * @param group - The toolkit group to convert
  * @param includeGroupInName - If true, prepends group name to tool names (default: true)
  */
-export function exportToolDefinitions(group: ToolkitGroup, includeGroupInName = true): ToolDefinition[] {
-  return group.toolkits
-    .filter(isFunctionToolkitDefinition)
-    .map(toolkit => exportToolDefinition(toolkit, includeGroupInName));
+export async function exportToolDefinitions(group: ToolkitGroup, includeGroupInName = true): Promise<ToolDefinition[]> {
+  const functionToolkits = group.toolkits.filter(isFunctionToolkitDefinition);
+  const toolDefinitions = await Promise.all(
+    functionToolkits.map(toolkit => exportToolDefinition(toolkit, includeGroupInName))
+  );
+  return toolDefinitions;
 }
 
 

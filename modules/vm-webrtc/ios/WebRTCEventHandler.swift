@@ -903,11 +903,6 @@ final class WebRTCEventHandler {
 
   // MARK: - Conversation Summarization
 
-  /// Inject this from outside, or read from your config
-  private var openAIAPIKey: String {
-    ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
-  }
-
   /// Summarize a subset of the conversation into a compact system note.
   private func summarizeConversationItems(
     _ items: [ConversationItem]

@@ -44,8 +44,8 @@ final class WebRTCEventHandler {
     let createdAt: Date
     let role: String?
     let type: String?
-    let fullContent: String?  // Complete content for summarization
-    let contentSnippet: String?  // First 100 chars of content for logging
+    var fullContent: String?  // Complete content for summarization (mutable to update with transcript)
+    var contentSnippet: String?  // First 100 chars of content for logging (mutable to update with transcript)
     let turnNumber: Int?  // Turn number if this is a turn item
 
     /// Fallback text used in the summarization prompt
@@ -544,18 +544,38 @@ final class WebRTCEventHandler {
     if let itemId = event["item_id"] as? String {
       payload["itemId"] = itemId
 
-      // Store the full transcript in our map
+      // Store the full transcript in our map and update the conversation item
       if let transcript = event["transcript"] as? String {
         conversationQueue.async {
+          // Store in transcript map
           self.itemTranscripts[itemId] = transcript
-          self.logger.log(
-            "[WebRTCEventHandler] Stored assistant transcript for item",
-            attributes: logAttributes(for: .debug, metadata: [
-              "itemId": itemId,
-              "transcriptLength": transcript.count,
-              "totalStoredTranscripts": self.itemTranscripts.count
-            ])
-          )
+
+          // Find and update the corresponding conversation item
+          if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
+            self.conversationItems[index].fullContent = transcript
+            self.conversationItems[index].contentSnippet = String(transcript.prefix(100))
+
+            self.logger.log(
+              "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
+              attributes: logAttributes(for: .debug, metadata: [
+                "itemId": itemId,
+                "transcriptLength": transcript.count,
+                "totalStoredTranscripts": self.itemTranscripts.count,
+                "conversationItemUpdated": true,
+                "isTurn": self.conversationItems[index].isTurn
+              ])
+            )
+          } else {
+            self.logger.log(
+              "[WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
+              attributes: logAttributes(for: .debug, metadata: [
+                "itemId": itemId,
+                "transcriptLength": transcript.count,
+                "totalStoredTranscripts": self.itemTranscripts.count,
+                "conversationItemUpdated": false
+              ])
+            )
+          }
         }
       }
     }
@@ -597,18 +617,38 @@ final class WebRTCEventHandler {
     if let itemId = event["item_id"] as? String {
       payload["itemId"] = itemId
 
-      // Store the full transcript in our map
+      // Store the full transcript in our map and update the conversation item
       if let transcript = event["transcript"] as? String {
         conversationQueue.async {
+          // Store in transcript map
           self.itemTranscripts[itemId] = transcript
-          self.logger.log(
-            "[WebRTCEventHandler] Stored user transcript for item",
-            attributes: logAttributes(for: .debug, metadata: [
-              "itemId": itemId,
-              "transcriptLength": transcript.count,
-              "totalStoredTranscripts": self.itemTranscripts.count
-            ])
-          )
+
+          // Find and update the corresponding conversation item
+          if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
+            self.conversationItems[index].fullContent = transcript
+            self.conversationItems[index].contentSnippet = String(transcript.prefix(100))
+
+            self.logger.log(
+              "[WebRTCEventHandler] Stored user transcript for item and updated conversation item",
+              attributes: logAttributes(for: .debug, metadata: [
+                "itemId": itemId,
+                "transcriptLength": transcript.count,
+                "totalStoredTranscripts": self.itemTranscripts.count,
+                "conversationItemUpdated": true,
+                "isTurn": self.conversationItems[index].isTurn
+              ])
+            )
+          } else {
+            self.logger.log(
+              "[WebRTCEventHandler] Stored user transcript for item (conversation item not found yet)",
+              attributes: logAttributes(for: .debug, metadata: [
+                "itemId": itemId,
+                "transcriptLength": transcript.count,
+                "totalStoredTranscripts": self.itemTranscripts.count,
+                "conversationItemUpdated": false
+              ])
+            )
+          }
         }
       }
     }

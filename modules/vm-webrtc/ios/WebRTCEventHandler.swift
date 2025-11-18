@@ -1194,6 +1194,9 @@ final class WebRTCEventHandler {
 
         self.conversationItems.remove(at: index)
         self.conversationItemUniqueIds.remove(itemId)
+        
+        // Remove transcript from itemTranscripts to prevent unbounded growth
+        self.itemTranscripts.removeValue(forKey: itemId)
 
         // Decrement turn count if this was a turn item
         if item.isTurn {
@@ -1210,7 +1213,8 @@ final class WebRTCEventHandler {
           "createdAt": formatter.string(from: item.createdAt),
           "remainingItems": self.conversationItems.count,
           "remainingTurns": self.conversationTurnCount,
-          "remainingUniqueIds": self.conversationItemUniqueIds.count
+          "remainingUniqueIds": self.conversationItemUniqueIds.count,
+          "totalStoredTranscripts": self.itemTranscripts.count
         ]
         if let content = item.fullContent {
           metadata["contentLength"] = content.count
@@ -1221,15 +1225,17 @@ final class WebRTCEventHandler {
           attributes: logAttributes(for: .info, metadata: metadata)
         )
       } else {
-        // Item not found in tracking, but still remove from unique IDs set if present
+        // Item not found in tracking, but still remove from unique IDs set and transcripts if present
         let wasInUniqueIds = self.conversationItemUniqueIds.remove(itemId) != nil
+        self.itemTranscripts.removeValue(forKey: itemId)
         
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Item deleted: \(itemId)",
           attributes: logAttributes(for: .warn, metadata: [
             "itemId": itemId,
             "wasInUniqueIds": wasInUniqueIds,
-            "remainingUniqueIds": self.conversationItemUniqueIds.count
+            "remainingUniqueIds": self.conversationItemUniqueIds.count,
+            "totalStoredTranscripts": self.itemTranscripts.count
           ])
         )
       }
@@ -1257,7 +1263,7 @@ final class WebRTCEventHandler {
     - URLs can be helpful, but be judicious about including them since they take up space
 
     Avoid fluff. Use neutral third-person.
-    
+
     Target length: compress it to approximately 20% of the original length, while trying
     to keep important details, especially user goals and preferences, and specific items
     that were returned by the tool (like a list of retrieved files, documents, or other 
@@ -1712,6 +1718,11 @@ final class WebRTCEventHandler {
       // Remove compacted IDs from unique ID tracking
       self.conversationItemUniqueIds.subtract(compactedIds)
       
+      // Remove transcripts for compacted items to prevent unbounded growth
+      for itemId in compactedIds {
+        self.itemTranscripts.removeValue(forKey: itemId)
+      }
+      
       // Recalculate turn count from remaining items
       self.conversationTurnCount = self.conversationItems.filter { $0.isTurn }.count
       
@@ -1725,6 +1736,7 @@ final class WebRTCEventHandler {
           "remainingTurns": self.conversationTurnCount,
           "remainingUniqueIds": self.conversationItemUniqueIds.count,
           "deletedItems": compactedIds.count,
+          "totalStoredTranscripts": self.itemTranscripts.count,
           "compactionInProgress": self.compactionInProgress
         ])
       )

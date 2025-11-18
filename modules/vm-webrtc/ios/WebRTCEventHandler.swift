@@ -506,7 +506,7 @@ final class WebRTCEventHandler {
         "type": type,
         "speaker": "assistant",
         "transcriptLength": (payload["transcript"] as? String)?.count as Any,
-        "transcriptPreview": (payload["transcript"] as? String).map { String($0.prefix(100)) } as Any,
+        "transcript": payload["transcript"] as Any,
         "responseId": payload["responseId"] as Any
       ])
     )
@@ -546,7 +546,7 @@ final class WebRTCEventHandler {
           "type": "input_audio_transcription",
           "speaker": "user",
           "transcriptLength": transcriptText.count,
-          "transcriptPreview": String(transcriptText.prefix(100)),
+          "transcript": String(transcriptText),
           "itemId": payload["itemId"] as Any
         ])
       )

@@ -551,6 +551,12 @@ extension OpenAIWebRTCClient {
       ]
     }
 
+    if transcriptionEnabled {
+      session["input_audio_transcription"] = [
+        "model": "whisper-1"
+      ]
+    }
+
     if let prettyData = try? JSONSerialization.data(withJSONObject: session, options: [.prettyPrinted]),
        let prettyString = String(data: prettyData, encoding: .utf8) {
       self.logger.log("[VmWebrtc] " + "📑 Sending session.update payload", attributes: logAttributes(for: .debug, metadata: ["session": prettyString]))

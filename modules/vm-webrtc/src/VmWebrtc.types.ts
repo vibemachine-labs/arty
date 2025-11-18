@@ -178,6 +178,7 @@ export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {
   enableRecording?: boolean;
   maxConversationTurns?: number;  // Drop entire older messages (turn-cap)
   retentionRatio?: number;         // 0.0-1.0, e.g. 0.8 = keep 80% most recent
+  transcriptionEnabled?: boolean;  // Enable input audio transcription with Whisper
 };
 
 export type OpenAIConnectionState =

@@ -46,6 +46,7 @@ type VoiceChatProps = {
   mainPromptAddition: string;
   retentionRatio: number;
   maxConversationTurns: number;
+  transcriptionEnabled: boolean;
 };
 
 export function VoiceChat({
@@ -57,6 +58,7 @@ export function VoiceChat({
   mainPromptAddition,
   retentionRatio,
   maxConversationTurns,
+  transcriptionEnabled,
 }: VoiceChatProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -323,6 +325,7 @@ export function VoiceChat({
         enableRecording: isRecordingEnabled,
         maxConversationTurns,
         retentionRatio,
+        transcriptionEnabled,
         toolDefinitions: canonicalToolDefinitions,
       };
 

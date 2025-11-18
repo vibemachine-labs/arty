@@ -18,7 +18,26 @@ final class WebRTCEventHandler {
 
   private let logger = VmWebrtcLogging.logger
 
-  // Conversation turn tracking
+  // MARK: - Responses API Types
+
+  private struct ResponsesRequest: Codable {
+    let model: String
+    let input: String
+  }
+
+  private struct ResponsesOutputContent: Codable {
+    let text: String
+  }
+
+  private struct ResponsesOutputMessage: Codable {
+    let content: [ResponsesOutputContent]
+  }
+
+  private struct ResponsesResponse: Codable {
+    let output: [ResponsesOutputMessage]
+  }
+
+  // MARK: - Conversation turn tracking
   private struct ConversationItem {
     let id: String
     let isTurn: Bool  // true for user/assistant messages that count as turns
@@ -27,11 +46,19 @@ final class WebRTCEventHandler {
     let type: String?
     let contentSnippet: String?  // First 100 chars of content for logging
     let turnNumber: Int?  // Turn number if this is a turn item
+
+    /// Fallback text used in the summarization prompt
+    var transcriptLine: String {
+      let roleLabel = (role ?? "unknown").capitalized
+      let text = contentSnippet ?? ""
+      return "\(roleLabel): \(text)"
+    }
   }
 
   private var conversationItems: [ConversationItem] = []
   private var conversationTurnCount: Int = 0
   private var maxConversationTurns: Int?
+  private var useCompactionStrategy: Bool = true  // Default to compaction strategy
   private let conversationQueue = DispatchQueue(label: "com.vibemachine.webrtc.conversation-tracker")
   private let idleQueue = DispatchQueue(label: "com.vibemachine.webrtc.idle-monitor")
   private var idleTimer: DispatchSourceTimer?
@@ -790,18 +817,26 @@ final class WebRTCEventHandler {
 
         // Check if we've exceeded the turn limit
         if let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
+          let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
           self.logger.log(
-            "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, pruning oldest items",
+            "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, using \(strategyName) strategy",
             attributes: logAttributes(for: .info, metadata: [
               "turnCount": self.conversationTurnCount,
               "maxTurns": maxTurns,
               "totalItems": self.conversationItems.count,
-              "turnsToRemove": self.conversationTurnCount - maxTurns
+              "turnsToRemove": self.conversationTurnCount - maxTurns,
+              "strategy": strategyName
             ])
           )
 
-          // Prune oldest items to get back to maxTurns
-          self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
+          // Use compaction or pruning strategy
+          if self.useCompactionStrategy {
+            Task { @MainActor in
+              await self.compactConversationItems(context: context, targetTurnCount: maxTurns)
+            }
+          } else {
+            self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
+          }
         }
       } else {
         self.logger.log(
@@ -865,6 +900,78 @@ final class WebRTCEventHandler {
       }
     }
   }
+
+  // MARK: - Conversation Summarization
+
+  /// Inject this from outside, or read from your config
+  private var openAIAPIKey: String {
+    ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+  }
+
+  /// Summarize a subset of the conversation into a compact system note.
+  private func summarizeConversationItems(
+    _ items: [ConversationItem]
+  ) async throws -> String {
+    let transcript = items
+      .map { $0.transcriptLine }
+      .joined(separator: "\n")
+
+    let prompt = """
+    You are a conversation memory compressor.
+
+    Summarize the following conversation history into a concise, **factual** memory
+    that preserves:
+    - user goals and preferences
+    - open tasks / TODOs
+    - any important decisions or constraints
+
+    Avoid fluff. Use neutral third-person.
+    Target length: 1–3 short paragraphs.
+
+    Conversation:
+    \(transcript)
+    """
+
+    let request = ResponsesRequest(
+      model: "gpt-4o",
+      input: prompt
+    )
+
+    guard let url = URL(string: "https://api.openai.com/v1/responses") else {
+      throw NSError(domain: "OpenAI", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+    }
+
+    var urlRequest = URLRequest(url: url)
+    urlRequest.httpMethod = "POST"
+    urlRequest.addValue("Bearer \(openAIAPIKey)", forHTTPHeaderField: "Authorization")
+    urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    urlRequest.httpBody = try JSONEncoder().encode(request)
+
+    let (data, response) = try await URLSession.shared.data(for: urlRequest)
+
+    if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+      let body = String(data: data, encoding: .utf8) ?? "<no body>"
+      throw NSError(
+        domain: "OpenAI",
+        code: http.statusCode,
+        userInfo: [NSLocalizedDescriptionKey: "OpenAI error \(http.statusCode): \(body)"]
+      )
+    }
+
+    let decoded = try JSONDecoder().decode(ResponsesResponse.self, from: data)
+
+    // responses.output[0].content[0].text
+    guard
+      let firstMessage = decoded.output.first,
+      let firstContent = firstMessage.content.first
+    else {
+      throw NSError(domain: "OpenAI", code: -2, userInfo: [NSLocalizedDescriptionKey: "No output from model"])
+    }
+
+    return firstContent.text
+  }
+
+  // MARK: - Conversation Pruning Strategies
 
   private func pruneOldestConversationItems(context: ToolContext, targetTurnCount: Int) {
     let turnsToRemove = self.conversationTurnCount - targetTurnCount
@@ -1001,6 +1108,181 @@ final class WebRTCEventHandler {
         "itemsSent": itemsToDelete.count
       ])
     )
+  }
+
+  /// Compact older parts of the conversation into a summarized system item.
+  ///
+  /// Strategy:
+  /// - Keep the most recent `targetTurnCount` turns as-is.
+  /// - Take *all earlier turns* and replace them with a single summary system message.
+  ///
+  /// Assumptions:
+  /// - `conversationItems` is ordered oldest → newest.
+  /// - `conversationTurnCount` counts only items where `isTurn == true`.
+  @MainActor
+  func compactConversationItems(
+    context: ToolContext,
+    targetTurnCount: Int
+  ) async {
+    guard conversationTurnCount > targetTurnCount else {
+      self.logger.log(
+        "[WebRTCEventHandler] [Compact] No compaction needed",
+        attributes: logAttributes(for: .debug, metadata: [
+          "currentTurns": self.conversationTurnCount,
+          "targetTurns": targetTurnCount
+        ])
+      )
+      return
+    }
+
+    let now = Date()
+    let formatter = ISO8601DateFormatter()
+
+    // 1) Figure out which items belong to the "older" part of the convo we want to compact.
+    var itemsToCompact: [(item: ConversationItem, index: Int)] = []
+    var recentItems: [ConversationItem] = []
+    var turnsSeenFromEnd = 0
+
+    // Work backwards from newest to oldest, keeping `targetTurnCount` turns
+    for (index, item) in self.conversationItems.enumerated().reversed() {
+      if item.isTurn {
+        if turnsSeenFromEnd < targetTurnCount {
+          turnsSeenFromEnd += 1
+          recentItems.append(item)
+          continue
+        }
+      }
+      itemsToCompact.append((item, index))
+    }
+
+    // Nothing to compact (shouldn't happen because of guard above, but be safe)
+    guard !itemsToCompact.isEmpty else {
+      self.logger.log(
+        "[WebRTCEventHandler] [Compact] No items identified for compaction",
+        attributes: logAttributes(for: .debug)
+      )
+      return
+    }
+
+    // Sort oldest → newest again
+    itemsToCompact.sort { $0.index < $1.index }
+    let compactOnlyItems = itemsToCompact.map { $0.item }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [Compact] Identified items to compact",
+      attributes: logAttributes(for: .info, metadata: [
+        "itemsToCompact": compactOnlyItems.count,
+        "oldestItemCreatedAt": formatter.string(from: compactOnlyItems.first?.createdAt ?? now),
+        "newestItemCreatedAt": formatter.string(from: compactOnlyItems.last?.createdAt ?? now),
+        "currentTurns": self.conversationTurnCount,
+        "targetTurns": targetTurnCount
+      ])
+    )
+
+    // 2) Ask gpt-4o to summarize that older slice.
+    let summaryText: String
+    do {
+      summaryText = try await summarizeConversationItems(compactOnlyItems)
+    } catch {
+      self.logger.log(
+        "[WebRTCEventHandler] [Compact] Summarization failed, falling back to raw prune",
+        attributes: logAttributes(for: .error, metadata: [
+          "error": String(describing: error)
+        ])
+      )
+
+      // If summarization fails, fall back to your existing pruning strategy
+      pruneOldestConversationItems(context: context, targetTurnCount: targetTurnCount)
+      return
+    }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [Compact] Summarization succeeded",
+      attributes: logAttributes(for: .info, metadata: [
+        "summaryLength": summaryText.count,
+        "compactedItemCount": compactOnlyItems.count
+      ])
+    )
+
+    // 3) Delete the compacted items from the Realtime conversation.
+    for (item, index) in itemsToCompact {
+      let deleteEvent: [String: Any] = [
+        "type": "conversation.item.delete",
+        "item_id": item.id
+      ]
+
+      let ageInSeconds = now.timeIntervalSince(item.createdAt)
+
+      var metadata: [String: Any] = [
+        "itemId": item.id,
+        "position": index,
+        "itemType": item.type as Any,
+        "itemRole": item.role as Any,
+        "isTurn": item.isTurn,
+        "turnNumber": item.turnNumber as Any,
+        "ageSeconds": String(format: "%.2f", ageInSeconds),
+        "createdAt": formatter.string(from: item.createdAt),
+        "contentLength": item.contentSnippet?.count as Any,
+        "contentSnippet": item.contentSnippet as Any
+      ]
+
+      if item.type == "function_call" {
+        metadata["WARNING"] = "DELETING FUNCTION CALL - call_id will become invalid"
+        metadata["potentiallyOrphanedCallId"] = item.id
+
+        self.logger.log(
+          "🚨 [COMPACT_DELETE_FUNCTION_CALL] Deleting function_call item during compaction",
+          attributes: logAttributes(for: .warn, metadata: metadata)
+        )
+      } else {
+        self.logger.log(
+          "[Compact] Sending delete event for item: \(item.id)",
+          attributes: logAttributes(for: .debug, metadata: metadata)
+        )
+      }
+
+      context.sendDataChannelMessage(deleteEvent)
+    }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [Compact] Delete events sent for compacted items",
+      attributes: logAttributes(for: .info, metadata: [
+        "deletedItemCount": itemsToCompact.count
+      ])
+    )
+
+    // 4) Insert a single system "summary" item that stands in for all the deleted turns.
+    let summaryEvent: [String: Any] = [
+      "type": "conversation.item.create",
+      "item": [
+        "type": "message",
+        "role": "system",
+        "metadata": [
+          "kind": "summary",
+          "compacted_item_count": compactOnlyItems.count,
+          "compacted_until_item_id": compactOnlyItems.last?.id as Any
+        ],
+        "content": [
+          [
+            "type": "input_text",
+            "text": summaryText
+          ]
+        ]
+      ]
+    ]
+
+    self.logger.log(
+      "[WebRTCEventHandler] [Compact] Sending summary system item",
+      attributes: logAttributes(for: .info, metadata: [
+        "summaryPreview": String(summaryText.prefix(120))
+      ])
+    )
+
+    context.sendDataChannelMessage(summaryEvent)
+
+    // Note: you can adjust `conversationTurnCount` locally here if you
+    // treat this summary as a single turn, or keep relying on server
+    // `conversation.item.created` events to update the count.
   }
 
   private func deleteAllConversationItems(context: ToolContext) {

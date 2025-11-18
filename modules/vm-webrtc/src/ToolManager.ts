@@ -200,7 +200,7 @@ class ToolManager {
 
       // Execute gen2 tools (includes both local and cached MCP tools)
       if (toolkitRegistry[groupName]?.[toolFunctionName]) {
-        return this.executeGen2ToolCall(groupName, toolFunctionName, args);
+        return await this.executeGen2ToolCall(groupName, toolFunctionName, args);
       }
     }
 

@@ -1447,7 +1447,9 @@ final class WebRTCEventHandler {
   // MARK: - Conversation Pruning Strategies
 
   private func pruneOldestConversationItems(context: ToolContext, targetContentLength: Int) {
-    let currentContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+    let currentContentLength = conversationQueue.sync {
+      self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+    }
     let overage = currentContentLength - targetContentLength
 
     guard overage > 0 else {
@@ -1461,13 +1463,17 @@ final class WebRTCEventHandler {
       return
     }
 
+    let conversationItemsCount = conversationQueue.sync {
+      self.conversationItems.count
+    }
+
     self.logger.log(
       "[WebRTCEventHandler] [ContentLimit] Starting to prune oldest conversation items",
       attributes: logAttributes(for: .info, metadata: [
         "currentContentLength": currentContentLength,
         "targetContentLength": targetContentLength,
         "overage": overage,
-        "totalConversationItems": self.conversationItems.count
+        "totalConversationItems": conversationItemsCount
       ])
     )
 
@@ -1477,7 +1483,11 @@ final class WebRTCEventHandler {
     let formatter = ISO8601DateFormatter()
 
     // Iterate from oldest (front of array) and collect items to delete until we're under limit
-    for (index, item) in self.conversationItems.enumerated() {
+    let conversationItemsSnapshot = conversationQueue.sync {
+      self.conversationItems
+    }
+
+    for (index, item) in conversationItemsSnapshot.enumerated() {
       let itemContentLength = item.fullContent?.count ?? 0
       itemsToDelete.append((item, index))
       contentRemoved += itemContentLength
@@ -1611,30 +1621,36 @@ final class WebRTCEventHandler {
     let formatter = ISO8601DateFormatter()
 
     // Log conversation items metadata before processing (safe preview only)
-    let allItemsForLogging = self.conversationItems.enumerated().map { (index, item) -> [String: Any] in
-      var detail: [String: Any] = [
-        "index": index,
-        "id": item.id,
-        "isTurn": item.isTurn,
-        "role": item.role as Any,
-        "type": item.type as Any,
-        "turnNumber": item.turnNumber as Any,
-        "createdAt": formatter.string(from: item.createdAt),
-        "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
-      ]
-      if let content = item.fullContent {
-        // Only log length and safe preview (first 100 chars)
-        detail["contentLength"] = content.count
-        detail["contentPreview"] = String(content.prefix(100))
+    let allItemsForLogging = conversationQueue.sync {
+      self.conversationItems.enumerated().map { (index, item) -> [String: Any] in
+        var detail: [String: Any] = [
+          "index": index,
+          "id": item.id,
+          "isTurn": item.isTurn,
+          "role": item.role as Any,
+          "type": item.type as Any,
+          "turnNumber": item.turnNumber as Any,
+          "createdAt": formatter.string(from: item.createdAt),
+          "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
+        ]
+        if let content = item.fullContent {
+          // Only log length and safe preview (first 100 chars)
+          detail["contentLength"] = content.count
+          detail["contentPreview"] = String(content.prefix(100))
+        }
+        return detail
       }
-      return detail
+    }
+
+    let (itemCount, turnCount) = conversationQueue.sync {
+      (self.conversationItems.count, self.conversationTurnCount)
     }
 
     self.logger.log(
       "[WebRTCEventHandler] [Compact] All conversation items before compaction",
       attributes: logAttributes(for: .info, metadata: [
-        "totalItems": self.conversationItems.count,
-        "totalTurns": self.conversationTurnCount,
+        "totalItems": itemCount,
+        "totalTurns": turnCount,
         "totalContentLength": totalContentLength,
         "maxContentLength": self.maxContentLength,
         "allItems": allItemsForLogging
@@ -1643,7 +1659,9 @@ final class WebRTCEventHandler {
 
     // 1) Compact ALL conversation items (entire history)
     // Strategy: Replace all existing conversation items with a single summary
-    let itemsToCompact: [(item: ConversationItem, index: Int)] = self.conversationItems.enumerated().map { ($0.element, $0.offset) }
+    let itemsToCompact: [(item: ConversationItem, index: Int)] = conversationQueue.sync {
+      self.conversationItems.enumerated().map { ($0.element, $0.offset) }
+    }
     let compactOnlyItems = itemsToCompact.map { $0.item }
 
     // Nothing to compact (shouldn't happen because of guard above, but be safe)
@@ -1844,7 +1862,9 @@ final class WebRTCEventHandler {
   }
 
   private func deleteAllConversationItems(context: ToolContext) {
-    let itemsToDelete = self.conversationItems.map { $0.id }
+    let itemsToDelete = conversationQueue.sync {
+      self.conversationItems.map { $0.id }
+    }
 
     guard !itemsToDelete.isEmpty else {
       self.logger.log(

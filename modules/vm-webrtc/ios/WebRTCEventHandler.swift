@@ -60,6 +60,7 @@ final class WebRTCEventHandler {
   private var conversationTurnCount: Int = 0
   private var maxConversationTurns: Int?
   private var useCompactionStrategy: Bool = true  // Default to compaction strategy
+  private var compactionInProgress: Bool = false  // Prevent duplicate compaction runs
   private let conversationQueue = DispatchQueue(label: "com.vibemachine.webrtc.conversation-tracker")
   private let idleQueue = DispatchQueue(label: "com.vibemachine.webrtc.idle-monitor")
   private var idleTimer: DispatchSourceTimer?
@@ -744,6 +745,7 @@ final class WebRTCEventHandler {
     conversationQueue.async {
       self.conversationItems.removeAll()
       self.conversationTurnCount = 0
+      self.compactionInProgress = false
       self.logger.log(
         "[WebRTCEventHandler] [TurnLimit] Conversation tracking reset",
         attributes: logAttributes(for: .info)
@@ -841,6 +843,22 @@ final class WebRTCEventHandler {
 
         // Check if we've exceeded the turn limit
         if let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
+          // Check if compaction/pruning is already in progress
+          if self.compactionInProgress {
+            self.logger.log(
+              "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded but compaction already in progress, skipping",
+              attributes: logAttributes(for: .info, metadata: [
+                "turnCount": self.conversationTurnCount,
+                "maxTurns": maxTurns,
+                "totalItems": self.conversationItems.count
+              ])
+            )
+            return
+          }
+          
+          // Set flag to prevent duplicate compaction runs
+          self.compactionInProgress = true
+          
           let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
           self.logger.log(
             "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, using \(strategyName) strategy",
@@ -1155,11 +1173,15 @@ final class WebRTCEventHandler {
       }
     }
 
+    // Clear the compaction flag after pruning is complete
+    self.compactionInProgress = false
+    
     // Note: Turn count and items will be decremented as delete confirmations come in
     self.logger.log(
       "[WebRTCEventHandler] [TurnLimit] Prune delete events sent, awaiting confirmations",
       attributes: logAttributes(for: .info, metadata: [
-        "itemsSent": itemsToDelete.count
+        "itemsSent": itemsToDelete.count,
+        "compactionInProgress": self.compactionInProgress
       ])
     )
   }
@@ -1351,12 +1373,16 @@ final class WebRTCEventHandler {
       // Recalculate turn count from remaining items
       self.conversationTurnCount = self.conversationItems.filter { $0.isTurn }.count
       
+      // Clear the compaction flag now that we're done
+      self.compactionInProgress = false
+      
       self.logger.log(
         "[WebRTCEventHandler] [Compact] Local tracking reset after compaction",
         attributes: logAttributes(for: .info, metadata: [
           "remainingItems": self.conversationItems.count,
           "remainingTurns": self.conversationTurnCount,
-          "deletedItems": compactedIds.count
+          "deletedItems": compactedIds.count,
+          "compactionInProgress": self.compactionInProgress
         ])
       )
     }

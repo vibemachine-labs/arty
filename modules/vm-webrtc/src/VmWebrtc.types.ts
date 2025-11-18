@@ -247,6 +247,10 @@ export type OutboundAudioStatsEventPayload = {
   timestampUs: string;
 };
 
+export type VoiceSessionStatusEventPayload = {
+  status_update: string;
+};
+
 export type VmWebrtcModuleEvents = {
   onChange: (params: ChangeEventPayload) => void;
   onIdleTimeout: (params: IdleTimeoutEventPayload) => void;
@@ -255,4 +259,5 @@ export type VmWebrtcModuleEvents = {
   onAudioMetrics: (params: AudioMetricsEventPayload) => void;
   onTranscript: (params: TranscriptEventPayload) => void;
   onOutboundAudioStats: (params: OutboundAudioStatsEventPayload) => void;
+  onVoiceSessionStatus: (params: VoiceSessionStatusEventPayload) => void;
 };

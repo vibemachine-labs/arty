@@ -1483,6 +1483,11 @@ final class WebRTCEventHandler {
       ])
     )
 
+    // Emit status update: starting compaction
+    context.emitModuleEvent("onVoiceSessionStatus", [
+      "status_update": "Compacting \(compactOnlyItems.count) items"
+    ])
+
     // 2) Ask gpt-4o to summarize that older slice.
     let summaryText: String
     do {
@@ -1587,6 +1592,11 @@ final class WebRTCEventHandler {
     )
 
     context.sendDataChannelMessage(summaryEvent)
+
+    // Emit status update: compaction complete
+    context.emitModuleEvent("onVoiceSessionStatus", [
+      "status_update": "Compacted \(itemsToCompact.count) items"
+    ])
 
     // 5) Reset our local tracking immediately after compaction
     // Remove all the items we just deleted from our local tracking

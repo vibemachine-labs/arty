@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import VmWebrtcModule from '../modules/vm-webrtc';
-
-export type VoiceSessionStatusEvent = {
-  status_update: string;
-};
+import VmWebrtcModule, { type VoiceSessionStatusEventPayload } from '../modules/vm-webrtc';
 
 export default function VoiceSessionStatus() {
   const [statusUpdate, setStatusUpdate] = useState<string>('');
@@ -16,7 +12,7 @@ export default function VoiceSessionStatus() {
 
     const subscription = VmWebrtcModule.addListener(
       'onVoiceSessionStatus',
-      (payload: VoiceSessionStatusEvent) => {
+      (payload: VoiceSessionStatusEventPayload) => {
         setStatusUpdate(payload.status_update);
       }
     );

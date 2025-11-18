@@ -7,7 +7,7 @@
           "type": "function",
           "name": "showTopStories",
           "group": "hacker_news",
-          "description": "Fetches and formats Hacker News stories for a specific category (top/new/ask_hn/show_hn). Returns story dictionaries with id, title, url, author, and points so you can cite exact posts. When you present the results, it is very important that you mention you used this tool so the user knows the information is recent and not hallucinated.  Don't read out every detail, especially not full urls.  Let the user hierarchically explore the stories, so start with high level like story titles.",
+          "description": "Fetches and formats Hacker News stories for a specific category (top/new/ask_hn/show_hn). Returns story dictionaries with id, title, url, author, and points so you can cite exact posts. When you present the results, it is very important that you mention you used this tool so the user knows the information is recent and not hallucinated.  Don't read out every detail, especially not full urls.  Let the user hierarchically explore the stories, so start with high level like story titles.  Try to avoid repeating any story that you've already recently mentioned to the user, unless they explicitly ask for it again.",
           "supported_auth": "no_auth_required",
           "extra": {
             "api_url": "https://hn.algolia.com/api/v1"

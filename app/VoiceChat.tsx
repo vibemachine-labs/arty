@@ -653,7 +653,7 @@ export function VoiceChat({
 
       {shouldShowSessionCost ? (
         <View pointerEvents="none" style={styles.sessionCostContainer}>
-          <Text style={styles.sessionCostText}>{`💸 $${formattedSessionCost}`}</Text>
+          <Text style={styles.sessionCostText}>{`💵 $${formattedSessionCost}`}</Text>
         </View>
       ) : null}
 

@@ -1257,14 +1257,18 @@ final class WebRTCEventHandler {
     - URLs can be helpful, but be judicious about including them since they take up space
 
     Avoid fluff. Use neutral third-person.
-    Target length: 1-3 very short paragraphs.
+    
+    Target length: compress it to approximately 20% of the original length, while trying
+    to keep important details, especially user goals and preferences, and specific items
+    that were returned by the tool (like a list of retrieved files, documents, or other 
+    resources).
 
     Conversation:
     \(transcript)
     """
 
     let request = ResponsesRequest(
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       input: prompt
     )
 
@@ -1617,6 +1621,7 @@ final class WebRTCEventHandler {
     
     let summaryEvent: [String: Any] = [
       "type": "conversation.item.create",
+      "previous_item_id": "root",  // Insert at conversation root as foundational context
       "item": [
         "type": "message",
         "role": "system",

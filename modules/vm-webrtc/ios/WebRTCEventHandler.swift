@@ -553,6 +553,7 @@ final class WebRTCEventHandler {
           // Find and update the corresponding conversation item
           if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
             self.conversationItems[index].fullContent = transcript
+            let isTurn = self.conversationItems[index].isTurn
 
             self.logger.log(
               "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
@@ -562,9 +563,53 @@ final class WebRTCEventHandler {
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": true,
-                "isTurn": self.conversationItems[index].isTurn
+                "isTurn": isTurn
               ])
             )
+
+            // Check if we need to trigger compaction now that transcript is stored
+            if isTurn, let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
+              // Check if compaction/pruning is already in progress
+              if self.compactionInProgress {
+                self.logger.log(
+                  "[WebRTCEventHandler] [TurnLimit] Compaction needed but already in progress, skipping",
+                  attributes: logAttributes(for: .info, metadata: [
+                    "turnCount": self.conversationTurnCount,
+                    "maxTurns": maxTurns,
+                    "totalConversationItems": self.conversationItems.count
+                  ])
+                )
+              } else {
+                // Set flag to prevent duplicate compaction runs
+                self.compactionInProgress = true
+
+                // Build detailed turn list for debugging
+                let turnDetails = self.getTurnDetails()
+
+                let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
+                self.logger.log(
+                  "[WebRTCEventHandler] [TurnLimit] Triggering \(strategyName) after assistant transcript stored",
+                  attributes: logAttributes(for: .info, metadata: [
+                    "turnCount": self.conversationTurnCount,
+                    "maxTurns": maxTurns,
+                    "totalConversationItems": self.conversationItems.count,
+                    "turnsToRemove": self.conversationTurnCount - maxTurns,
+                    "strategy": strategyName,
+                    "allTurns": turnDetails,
+                    "turnItemCount": turnDetails.count
+                  ])
+                )
+
+                // Use compaction or pruning strategy
+                if self.useCompactionStrategy {
+                  Task { @MainActor in
+                    await self.compactConversationItems(context: context, targetTurnCount: maxTurns)
+                  }
+                } else {
+                  self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
+                }
+              }
+            }
           } else {
             self.logger.log(
               "[WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
@@ -627,6 +672,7 @@ final class WebRTCEventHandler {
           // Find and update the corresponding conversation item
           if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
             self.conversationItems[index].fullContent = transcript
+            let isTurn = self.conversationItems[index].isTurn
 
             self.logger.log(
               "[WebRTCEventHandler] Stored user transcript for item and updated conversation item",
@@ -636,9 +682,53 @@ final class WebRTCEventHandler {
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": true,
-                "isTurn": self.conversationItems[index].isTurn
+                "isTurn": isTurn
               ])
             )
+
+            // Check if we need to trigger compaction now that transcript is stored
+            if isTurn, let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
+              // Check if compaction/pruning is already in progress
+              if self.compactionInProgress {
+                self.logger.log(
+                  "[WebRTCEventHandler] [TurnLimit] Compaction needed but already in progress, skipping",
+                  attributes: logAttributes(for: .info, metadata: [
+                    "turnCount": self.conversationTurnCount,
+                    "maxTurns": maxTurns,
+                    "totalConversationItems": self.conversationItems.count
+                  ])
+                )
+              } else {
+                // Set flag to prevent duplicate compaction runs
+                self.compactionInProgress = true
+
+                // Build detailed turn list for debugging
+                let turnDetails = self.getTurnDetails()
+
+                let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
+                self.logger.log(
+                  "[WebRTCEventHandler] [TurnLimit] Triggering \(strategyName) after user transcript stored",
+                  attributes: logAttributes(for: .info, metadata: [
+                    "turnCount": self.conversationTurnCount,
+                    "maxTurns": maxTurns,
+                    "totalConversationItems": self.conversationItems.count,
+                    "turnsToRemove": self.conversationTurnCount - maxTurns,
+                    "strategy": strategyName,
+                    "allTurns": turnDetails,
+                    "turnItemCount": turnDetails.count
+                  ])
+                )
+
+                // Use compaction or pruning strategy
+                if self.useCompactionStrategy {
+                  Task { @MainActor in
+                    await self.compactConversationItems(context: context, targetTurnCount: maxTurns)
+                  }
+                } else {
+                  self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
+                }
+              }
+            }
           } else {
             self.logger.log(
               "[WebRTCEventHandler] Stored user transcript for item (conversation item not found yet)",
@@ -694,15 +784,21 @@ final class WebRTCEventHandler {
     let errorMessage = errorDetails?["message"] as? String
     let errorParam = errorDetails?["param"] as? String
 
+    // item_truncate_invalid_item_id errors are non-breaking - log as warning
+    let isItemTruncateError = errorCode == "item_truncate_invalid_item_id"
+    let logLevel: VmWebrtcLogLevel = isItemTruncateError ? .warn : .error
+    let logPrefix = isItemTruncateError ? "⚠️" : "❌"
+
     logger.log(
-      "[WebRTCEventHandler] ❌ WebRTC event error",
-      attributes: logAttributes(for: .error, metadata: [
+      "[WebRTCEventHandler] \(logPrefix) WebRTC event \(isItemTruncateError ? "warning" : "error")",
+      attributes: logAttributes(for: logLevel, metadata: [
         "eventId": eventId as Any,
         "errorType": errorType as Any,
         "errorCode": errorCode as Any,
         "errorParam": errorParam as Any,
         "message": errorMessage as Any,
-        "rawPayload": String(describing: event)
+        "rawPayload": String(describing: event),
+        "isItemTruncateError": isItemTruncateError
       ])
     )
 
@@ -952,47 +1048,19 @@ final class WebRTCEventHandler {
 
         // Check if we've exceeded the turn limit
         if let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
-          // Check if compaction/pruning is already in progress
-          if self.compactionInProgress {
-            self.logger.log(
-              "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded but compaction already in progress, skipping",
-              attributes: logAttributes(for: .info, metadata: [
-                "turnCount": self.conversationTurnCount,
-                "maxTurns": maxTurns,
-                "totalConversationItems": self.conversationItems.count
-              ])
-            )
-            return
-          }
-          
-          // Set flag to prevent duplicate compaction runs
-          self.compactionInProgress = true
-          
-          // Build detailed turn list for debugging
-          let turnDetails = self.getTurnDetails()
-          
           let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
           self.logger.log(
-            "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, using \(strategyName) strategy",
+            "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, deferring \(strategyName) until transcript arrives",
             attributes: logAttributes(for: .info, metadata: [
               "turnCount": self.conversationTurnCount,
               "maxTurns": maxTurns,
               "totalConversationItems": self.conversationItems.count,
               "turnsToRemove": self.conversationTurnCount - maxTurns,
               "strategy": strategyName,
-              "allTurns": turnDetails,
-              "turnItemCount": turnDetails.count
+              "deferredReason": "Waiting for transcript to be stored"
             ])
           )
-
-          // Use compaction or pruning strategy
-          if self.useCompactionStrategy {
-            Task { @MainActor in
-              await self.compactConversationItems(context: context, targetTurnCount: maxTurns)
-            }
-          } else {
-            self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
-          }
+          // Note: Compaction will be triggered after the transcript is stored
         }
       } else {
         self.logger.log(
@@ -1513,7 +1581,8 @@ final class WebRTCEventHandler {
     self.logger.log(
       "[WebRTCEventHandler] [Compact] Sending summary system item",
       attributes: logAttributes(for: .info, metadata: [
-        "summaryPreview": String(summaryText.prefix(120))
+        "summaryText": summaryText,
+        "summaryLength": summaryText.count
       ])
     )
 

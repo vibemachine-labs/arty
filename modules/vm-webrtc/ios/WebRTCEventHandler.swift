@@ -1191,10 +1191,16 @@ final class WebRTCEventHandler {
     itemsToCompact.sort { $0.index < $1.index }
     let compactOnlyItems = itemsToCompact.map { $0.item }
 
+    // Build detailed item info for logging
+    let itemDetails = compactOnlyItems.map { item in
+      "\(item.id) (\(item.role ?? "none")/\(item.type ?? "none"))"
+    }.joined(separator: ", ")
+
     self.logger.log(
       "[WebRTCEventHandler] [Compact] Identified items to compact",
       attributes: logAttributes(for: .info, metadata: [
         "itemsToCompact": compactOnlyItems.count,
+        "itemIds": itemDetails,
         "oldestItemCreatedAt": formatter.string(from: compactOnlyItems.first?.createdAt ?? now),
         "newestItemCreatedAt": formatter.string(from: compactOnlyItems.last?.createdAt ?? now),
         "currentTurns": self.conversationTurnCount,
@@ -1223,7 +1229,8 @@ final class WebRTCEventHandler {
       "[WebRTCEventHandler] [Compact] Summarization succeeded",
       attributes: logAttributes(for: .info, metadata: [
         "summaryLength": summaryText.count,
-        "compactedItemCount": compactOnlyItems.count
+        "compactedItemCount": compactOnlyItems.count,
+        "summaryText": summaryText,
       ])
     )
 
@@ -1267,10 +1274,14 @@ final class WebRTCEventHandler {
       context.sendDataChannelMessage(deleteEvent)
     }
 
+    // Build list of deleted item IDs for logging
+    let deletedItemIds = itemsToCompact.map { $0.item.id }.joined(separator: ", ")
+
     self.logger.log(
       "[WebRTCEventHandler] [Compact] Delete events sent for compacted items",
       attributes: logAttributes(for: .info, metadata: [
-        "deletedItemCount": itemsToCompact.count
+        "deletedItemCount": itemsToCompact.count,
+        "deletedItemIds": deletedItemIds
       ])
     )
 

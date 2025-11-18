@@ -57,6 +57,7 @@ final class WebRTCEventHandler {
   }
 
   private var conversationItems: [ConversationItem] = []
+  private var conversationItemUniqueIds: Set<String> = []  // Track unique item IDs to prevent duplicates
   private var conversationTurnCount: Int = 0
   private var maxConversationTurns: Int?
   private var maxContentLength: Int = 10000  // Default max total content length before compaction
@@ -200,6 +201,19 @@ final class WebRTCEventHandler {
   /// Manually save a conversation item to tracking (for items we create client-side)
   func saveConversationItem(itemId: String, role: String, type: String, fullContent: String) {
     conversationQueue.async {
+      // Check if item already exists to prevent duplicates
+      guard !self.conversationItemUniqueIds.contains(itemId) else {
+        self.logger.log(
+          "[WebRTCEventHandler] [ManualSave] Item already exists, skipping duplicate",
+          attributes: logAttributes(for: .warn, metadata: [
+            "itemId": itemId,
+            "role": role,
+            "type": type
+          ])
+        )
+        return
+      }
+      
       let isTurn = (role == "user" || role == "assistant")
       let turnNumber = isTurn ? self.conversationTurnCount + 1 : nil
       
@@ -218,6 +232,7 @@ final class WebRTCEventHandler {
         turnNumber: turnNumber
       )
       self.conversationItems.append(conversationItem)
+      self.conversationItemUniqueIds.insert(itemId)
       
       self.logger.log(
         "[WebRTCEventHandler] [ManualSave] Conversation item saved manually",
@@ -230,6 +245,7 @@ final class WebRTCEventHandler {
           "fullContentLength": fullContent.count,
           "fullContent": fullContent,
           "totalConversationItems": self.conversationItems.count,
+          "totalUniqueIds": self.conversationItemUniqueIds.count,
           "turnCount": self.conversationTurnCount,
           "createdAt": ISO8601DateFormatter().string(from: Date())
         ])
@@ -1020,13 +1036,15 @@ final class WebRTCEventHandler {
   func resetConversationTracking() {
     conversationQueue.async {
       self.conversationItems.removeAll()
+      self.conversationItemUniqueIds.removeAll()
       self.conversationTurnCount = 0
       self.compactionInProgress = false
       self.itemTranscripts.removeAll()
       self.logger.log(
         "[WebRTCEventHandler] [TurnLimit] Conversation tracking reset",
         attributes: logAttributes(for: .info, metadata: [
-          "clearedTranscripts": true
+          "clearedTranscripts": true,
+          "clearedUniqueIds": true
         ])
       )
     }
@@ -1043,6 +1061,19 @@ final class WebRTCEventHandler {
     }
 
     conversationQueue.async {
+      // Check if item already exists to prevent duplicates
+      guard !self.conversationItemUniqueIds.contains(itemId) else {
+        self.logger.log(
+          "[WebRTCEventHandler] [ItemCreated] Item already exists, skipping duplicate",
+          attributes: logAttributes(for: .warn, metadata: [
+            "itemId": itemId,
+            "totalConversationItems": self.conversationItems.count,
+            "totalUniqueIds": self.conversationItemUniqueIds.count
+          ])
+        )
+        return
+      }
+      
       // Extract metadata
       let role = item["role"] as? String
       let type = item["type"] as? String
@@ -1101,6 +1132,7 @@ final class WebRTCEventHandler {
         turnNumber: turnNumber
       )
       self.conversationItems.append(conversationItem)
+      self.conversationItemUniqueIds.insert(itemId)
 
       if isTurn {
         let ageInSeconds = Date().timeIntervalSince(conversationItem.createdAt)
@@ -1161,6 +1193,7 @@ final class WebRTCEventHandler {
         let formatter = ISO8601DateFormatter()
 
         self.conversationItems.remove(at: index)
+        self.conversationItemUniqueIds.remove(itemId)
 
         // Decrement turn count if this was a turn item
         if item.isTurn {
@@ -1176,7 +1209,8 @@ final class WebRTCEventHandler {
           "ageSeconds": String(format: "%.2f", ageInSeconds),
           "createdAt": formatter.string(from: item.createdAt),
           "remainingItems": self.conversationItems.count,
-          "remainingTurns": self.conversationTurnCount
+          "remainingTurns": self.conversationTurnCount,
+          "remainingUniqueIds": self.conversationItemUniqueIds.count
         ]
         if let content = item.fullContent {
           metadata["contentLength"] = content.count
@@ -1187,10 +1221,15 @@ final class WebRTCEventHandler {
           attributes: logAttributes(for: .info, metadata: metadata)
         )
       } else {
+        // Item not found in tracking, but still remove from unique IDs set if present
+        let wasInUniqueIds = self.conversationItemUniqueIds.remove(itemId) != nil
+        
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Item deleted: \(itemId)",
           attributes: logAttributes(for: .warn, metadata: [
-            "itemId": itemId
+            "itemId": itemId,
+            "wasInUniqueIds": wasInUniqueIds,
+            "remainingUniqueIds": self.conversationItemUniqueIds.count
           ])
         )
       }
@@ -1665,6 +1704,9 @@ final class WebRTCEventHandler {
       let compactedIds = Set(itemsToCompact.map { $0.item.id })
       self.conversationItems.removeAll { compactedIds.contains($0.id) }
       
+      // Remove compacted IDs from unique ID tracking
+      self.conversationItemUniqueIds.subtract(compactedIds)
+      
       // Recalculate turn count from remaining items
       self.conversationTurnCount = self.conversationItems.filter { $0.isTurn }.count
       
@@ -1676,6 +1718,7 @@ final class WebRTCEventHandler {
         attributes: logAttributes(for: .info, metadata: [
           "remainingItems": self.conversationItems.count,
           "remainingTurns": self.conversationTurnCount,
+          "remainingUniqueIds": self.conversationItemUniqueIds.count,
           "deletedItems": compactedIds.count,
           "compactionInProgress": self.compactionInProgress
         ])

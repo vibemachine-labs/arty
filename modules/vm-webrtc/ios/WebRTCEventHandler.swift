@@ -1529,7 +1529,35 @@ final class WebRTCEventHandler {
       ])
     )
 
-    // 3) Delete the compacted items from the Realtime conversation.
+    // 3) Insert a single system "summary" item FIRST before deleting old context
+    // This prevents "rug-pulling" the context from the AI
+    let summaryWithPreamble = "We are still in the same conversation, but here is a summary since we will be deleting old context. Ignore this for now, it's just for providing context for later messages:\n\n\(summaryText)"
+    
+    let summaryEvent: [String: Any] = [
+      "type": "conversation.item.create",
+      "item": [
+        "type": "message",
+        "role": "system",
+        "content": [
+          [
+            "type": "input_text",
+            "text": summaryWithPreamble
+          ]
+        ]
+      ]
+    ]
+
+    self.logger.log(
+      "[WebRTCEventHandler] [Compact] Sending summary system item (before deletion)",
+      attributes: logAttributes(for: .info, metadata: [
+        "summaryText": summaryWithPreamble,
+        "summaryLength": summaryWithPreamble.count
+      ])
+    )
+
+    context.sendDataChannelMessage(summaryEvent)
+
+    // 4) Now delete the compacted items from the Realtime conversation.
     for (item, index) in itemsToCompact {
       let deleteEvent: [String: Any] = [
         "type": "conversation.item.delete",
@@ -1581,32 +1609,6 @@ final class WebRTCEventHandler {
         "deletedItemIds": deletedItemIds
       ])
     )
-
-    // 4) Insert a single system "summary" item that stands in for all the deleted turns.
-    // Note: metadata is not supported in conversation.item.create, so we can't mark this as a summary
-    let summaryEvent: [String: Any] = [
-      "type": "conversation.item.create",
-      "item": [
-        "type": "message",
-        "role": "system",
-        "content": [
-          [
-            "type": "input_text",
-            "text": summaryText
-          ]
-        ]
-      ]
-    ]
-
-    self.logger.log(
-      "[WebRTCEventHandler] [Compact] Sending summary system item",
-      attributes: logAttributes(for: .info, metadata: [
-        "summaryText": summaryText,
-        "summaryLength": summaryText.count
-      ])
-    )
-
-    context.sendDataChannelMessage(summaryEvent)
 
     // Emit status update: compaction complete
     context.emitModuleEvent("onVoiceSessionStatus", [

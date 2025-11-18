@@ -72,6 +72,9 @@ final class WebRTCEventHandler {
   private let idleDebugInterval: TimeInterval = 2
   private var apiKey: String?
 
+  // Map of item IDs to their complete transcripts
+  private var itemTranscripts: [String: String] = [:]
+
   func setApiKey(_ apiKey: String) {
     let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedKey.isEmpty else {
@@ -540,6 +543,21 @@ final class WebRTCEventHandler {
     }
     if let itemId = event["item_id"] as? String {
       payload["itemId"] = itemId
+
+      // Store the full transcript in our map
+      if let transcript = event["transcript"] as? String {
+        conversationQueue.async {
+          self.itemTranscripts[itemId] = transcript
+          self.logger.log(
+            "[WebRTCEventHandler] Stored assistant transcript for item",
+            attributes: logAttributes(for: .debug, metadata: [
+              "itemId": itemId,
+              "transcriptLength": transcript.count,
+              "totalStoredTranscripts": self.itemTranscripts.count
+            ])
+          )
+        }
+      }
     }
     if let outputIndex = event["output_index"] as? Int {
       payload["outputIndex"] = outputIndex
@@ -555,7 +573,8 @@ final class WebRTCEventHandler {
         "speaker": "assistant",
         "transcriptLength": (payload["transcript"] as? String)?.count as Any,
         "transcript": payload["transcript"] as Any,
-        "responseId": payload["responseId"] as Any
+        "responseId": payload["responseId"] as Any,
+        "itemId": payload["itemId"] as Any
       ])
     )
 
@@ -577,6 +596,21 @@ final class WebRTCEventHandler {
     // Extract item ID
     if let itemId = event["item_id"] as? String {
       payload["itemId"] = itemId
+
+      // Store the full transcript in our map
+      if let transcript = event["transcript"] as? String {
+        conversationQueue.async {
+          self.itemTranscripts[itemId] = transcript
+          self.logger.log(
+            "[WebRTCEventHandler] Stored user transcript for item",
+            attributes: logAttributes(for: .debug, metadata: [
+              "itemId": itemId,
+              "transcriptLength": transcript.count,
+              "totalStoredTranscripts": self.itemTranscripts.count
+            ])
+          )
+        }
+      }
     }
 
     // Extract content index
@@ -743,6 +777,11 @@ final class WebRTCEventHandler {
       if let snippet = item.contentSnippet {
         detail["contentSnippet"] = snippet
       }
+      // Add full transcript from the itemTranscripts map if available
+      if let fullTranscript = self.itemTranscripts[item.id] {
+        detail["transcript"] = fullTranscript
+        detail["transcriptLength"] = fullTranscript.count
+      }
       return detail
     }
   }
@@ -765,9 +804,12 @@ final class WebRTCEventHandler {
       self.conversationItems.removeAll()
       self.conversationTurnCount = 0
       self.compactionInProgress = false
+      self.itemTranscripts.removeAll()
       self.logger.log(
         "[WebRTCEventHandler] [TurnLimit] Conversation tracking reset",
-        attributes: logAttributes(for: .info)
+        attributes: logAttributes(for: .info, metadata: [
+          "clearedTranscripts": true
+        ])
       )
     }
   }

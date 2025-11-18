@@ -395,6 +395,21 @@ final class WebRTCEventHandler {
       ])
     )
 
+    // Parse tool name and emit status update
+    let parts = toolName.components(separatedBy: "__")
+    if parts.count == 2 {
+      let group = parts[0]
+      let name = parts[1]
+      context.emitModuleEvent("onVoiceSessionStatus", [
+        "status_update": "Tool called: \(group)/\(name)"
+      ])
+    } else {
+      // Legacy tool format without group prefix
+      context.emitModuleEvent("onVoiceSessionStatus", [
+        "status_update": "Tool called: \(toolName)"
+      ])
+    }
+
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }
 

@@ -1,6 +1,6 @@
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { VadMode } from '../../../lib/vadPreference';
 import { loadToolPromptAddition } from '../../../lib/toolPrompts';
+import type { VadMode } from '../../../lib/vadPreference';
 
 export type OnLoadEventPayload = {
   url: string;

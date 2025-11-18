@@ -374,7 +374,7 @@ final class WebRTCEventHandler {
           "toolName": toolName,
           "arguments_length": argumentsJSON.count,
           "arguments_preview": String(argumentsJSON.prefix(1000)),
-          "currentConversationItems": self.conversationItems.count,
+          "totalConversationItems": self.conversationItems.count,  // All conversation items (turns + non-turns like system messages, function calls, etc.)
           "currentTurnCount": self.conversationTurnCount,
           "maxTurns": self.maxConversationTurns as Any,
           "dispatchTimestamp": ISO8601DateFormatter().string(from: Date())
@@ -798,7 +798,7 @@ final class WebRTCEventHandler {
             "callId": itemId,  // For function_call items, itemId IS the call_id
             "role": role as Any,
             "currentTurnCount": self.conversationTurnCount,
-            "totalItems": self.conversationItems.count + 1,
+            "totalConversationItems": self.conversationItems.count + 1,
             "maxTurns": self.maxConversationTurns as Any,
             "timestamp": ISO8601DateFormatter().string(from: Date())
           ])
@@ -852,7 +852,7 @@ final class WebRTCEventHandler {
             "role": role as Any,
             "turnNumber": turnNumber as Any,
             "turnCount": self.conversationTurnCount,
-            "totalItems": self.conversationItems.count,
+            "totalConversationItems": self.conversationItems.count,
             "position": self.conversationItems.count - 1,
             "contentLength": contentSnippet?.count as Any,
             "contentSnippet": contentSnippet as Any,
@@ -872,7 +872,7 @@ final class WebRTCEventHandler {
               attributes: logAttributes(for: .info, metadata: [
                 "turnCount": self.conversationTurnCount,
                 "maxTurns": maxTurns,
-                "totalItems": self.conversationItems.count
+                "totalConversationItems": self.conversationItems.count
               ])
             )
             return
@@ -890,7 +890,7 @@ final class WebRTCEventHandler {
             attributes: logAttributes(for: .info, metadata: [
               "turnCount": self.conversationTurnCount,
               "maxTurns": maxTurns,
-              "totalItems": self.conversationItems.count,
+              "totalConversationItems": self.conversationItems.count,
               "turnsToRemove": self.conversationTurnCount - maxTurns,
               "strategy": strategyName,
               "allTurns": turnDetails,
@@ -914,7 +914,7 @@ final class WebRTCEventHandler {
             "itemId": itemId,
             "role": item["role"] as Any,
             "type": item["type"] as Any,
-            "totalItems": self.conversationItems.count
+            "totalConversationItems": self.conversationItems.count
           ])
         )
       }
@@ -1092,7 +1092,7 @@ final class WebRTCEventHandler {
         "currentTurns": self.conversationTurnCount,
         "targetTurns": targetTurnCount,
         "turnsToRemove": turnsToRemove,
-        "totalItems": self.conversationItems.count
+        "totalConversationItems": self.conversationItems.count
       ])
     )
 

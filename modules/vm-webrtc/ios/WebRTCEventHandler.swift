@@ -59,6 +59,7 @@ final class WebRTCEventHandler {
   private var conversationItems: [ConversationItem] = []
   private var conversationTurnCount: Int = 0
   private var maxConversationTurns: Int?
+  private var maxContentLength: Int = 10000  // Default max total content length before compaction
   private var useCompactionStrategy: Bool = true  // Default to compaction strategy
   private var compactionInProgress: Bool = false  // Prevent duplicate compaction runs
   private let conversationQueue = DispatchQueue(label: "com.vibemachine.webrtc.conversation-tracker")
@@ -610,6 +611,9 @@ final class WebRTCEventHandler {
             self.conversationItems[index].fullContent = transcript
             let isTurn = self.conversationItems[index].isTurn
 
+            // Calculate total content length across all conversation items
+            let totalContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+            
             self.logger.log(
               "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
               attributes: logAttributes(for: .debug, metadata: [
@@ -618,20 +622,23 @@ final class WebRTCEventHandler {
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": true,
-                "isTurn": isTurn
+                "isTurn": isTurn,
+                "totalContentLength": totalContentLength,
+                "maxContentLength": self.maxContentLength
               ])
             )
 
-            // Check if we need to trigger compaction now that transcript is stored
-            if isTurn, let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
+            // Check if we need to trigger compaction based on total content length
+            if totalContentLength > self.maxContentLength {
               // Check if compaction/pruning is already in progress
               if self.compactionInProgress {
                 self.logger.log(
-                  "[WebRTCEventHandler] [TurnLimit] Compaction needed but already in progress, skipping",
+                  "[WebRTCEventHandler] [ContentLimit] Compaction needed but already in progress, skipping",
                   attributes: logAttributes(for: .info, metadata: [
-                    "turnCount": self.conversationTurnCount,
-                    "maxTurns": maxTurns,
-                    "totalConversationItems": self.conversationItems.count
+                    "totalContentLength": totalContentLength,
+                    "maxContentLength": self.maxContentLength,
+                    "totalConversationItems": self.conversationItems.count,
+                    "overage": totalContentLength - self.maxContentLength
                   ])
                 )
               } else {
@@ -643,25 +650,26 @@ final class WebRTCEventHandler {
 
                 let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
                 self.logger.log(
-                  "[WebRTCEventHandler] [TurnLimit] Triggering \(strategyName) after assistant transcript stored",
+                  "[WebRTCEventHandler] [ContentLimit] Triggering \(strategyName) after assistant transcript stored",
                   attributes: logAttributes(for: .info, metadata: [
-                    "turnCount": self.conversationTurnCount,
-                    "maxTurns": maxTurns,
+                    "totalContentLength": totalContentLength,
+                    "maxContentLength": self.maxContentLength,
                     "totalConversationItems": self.conversationItems.count,
-                    "turnsToRemove": self.conversationTurnCount - maxTurns,
+                    "overage": totalContentLength - self.maxContentLength,
                     "strategy": strategyName,
                     "allTurns": turnDetails,
                     "turnItemCount": turnDetails.count
                   ])
                 )
 
-                // Use compaction or pruning strategy
+                // Use compaction strategy (always compact entire history when limit exceeded)
                 if self.useCompactionStrategy {
                   Task { @MainActor in
-                    await self.compactConversationItems(context: context, targetTurnCount: maxTurns)
+                    await self.compactConversationItems(context: context)
                   }
                 } else {
-                  self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
+                  // Fallback to pruning if compaction disabled
+                  self.pruneOldestConversationItems(context: context, targetContentLength: self.maxContentLength)
                 }
               }
             }
@@ -729,6 +737,9 @@ final class WebRTCEventHandler {
             self.conversationItems[index].fullContent = transcript
             let isTurn = self.conversationItems[index].isTurn
 
+            // Calculate total content length across all conversation items
+            let totalContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+            
             self.logger.log(
               "[WebRTCEventHandler] Stored user transcript for item and updated conversation item",
               attributes: logAttributes(for: .debug, metadata: [
@@ -737,20 +748,23 @@ final class WebRTCEventHandler {
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": true,
-                "isTurn": isTurn
+                "isTurn": isTurn,
+                "totalContentLength": totalContentLength,
+                "maxContentLength": self.maxContentLength
               ])
             )
 
-            // Check if we need to trigger compaction now that transcript is stored
-            if isTurn, let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
+            // Check if we need to trigger compaction based on total content length
+            if totalContentLength > self.maxContentLength {
               // Check if compaction/pruning is already in progress
               if self.compactionInProgress {
                 self.logger.log(
-                  "[WebRTCEventHandler] [TurnLimit] Compaction needed but already in progress, skipping",
+                  "[WebRTCEventHandler] [ContentLimit] Compaction needed but already in progress, skipping",
                   attributes: logAttributes(for: .info, metadata: [
-                    "turnCount": self.conversationTurnCount,
-                    "maxTurns": maxTurns,
-                    "totalConversationItems": self.conversationItems.count
+                    "totalContentLength": totalContentLength,
+                    "maxContentLength": self.maxContentLength,
+                    "totalConversationItems": self.conversationItems.count,
+                    "overage": totalContentLength - self.maxContentLength
                   ])
                 )
               } else {
@@ -762,25 +776,26 @@ final class WebRTCEventHandler {
 
                 let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
                 self.logger.log(
-                  "[WebRTCEventHandler] [TurnLimit] Triggering \(strategyName) after user transcript stored",
+                  "[WebRTCEventHandler] [ContentLimit] Triggering \(strategyName) after user transcript stored",
                   attributes: logAttributes(for: .info, metadata: [
-                    "turnCount": self.conversationTurnCount,
-                    "maxTurns": maxTurns,
+                    "totalContentLength": totalContentLength,
+                    "maxContentLength": self.maxContentLength,
                     "totalConversationItems": self.conversationItems.count,
-                    "turnsToRemove": self.conversationTurnCount - maxTurns,
+                    "overage": totalContentLength - self.maxContentLength,
                     "strategy": strategyName,
                     "allTurns": turnDetails,
                     "turnItemCount": turnDetails.count
                   ])
                 )
 
-                // Use compaction or pruning strategy
+                // Use compaction strategy (always compact entire history when limit exceeded)
                 if self.useCompactionStrategy {
                   Task { @MainActor in
-                    await self.compactConversationItems(context: context, targetTurnCount: maxTurns)
+                    await self.compactConversationItems(context: context)
                   }
                 } else {
-                  self.pruneOldestConversationItems(context: context, targetTurnCount: maxTurns)
+                  // Fallback to pruning if compaction disabled
+                  self.pruneOldestConversationItems(context: context, targetContentLength: self.maxContentLength)
                 }
               }
             }
@@ -982,10 +997,20 @@ final class WebRTCEventHandler {
   func configureConversationTurnLimit(maxTurns: Int?) {
     conversationQueue.async {
       self.maxConversationTurns = maxTurns
+      
+      // Convert turn-based limit to content length (1428 chars per "turn")
+      // This allows the UI slider to show "turns" while we actually limit by content length
+      if let maxTurns = maxTurns {
+        self.maxContentLength = maxTurns * 1428
+      } else {
+        self.maxContentLength = 10000  // Default
+      }
+      
       self.logger.log(
         "[WebRTCEventHandler] [TurnLimit] Configuration updated",
         attributes: logAttributes(for: .info, metadata: [
           "maxTurns": maxTurns as Any,
+          "maxContentLength": self.maxContentLength,
           "enabled": maxTurns != nil
         ])
       )
@@ -1079,6 +1104,7 @@ final class WebRTCEventHandler {
 
       if isTurn {
         let ageInSeconds = Date().timeIntervalSince(conversationItem.createdAt)
+        let totalContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
         let turnDetails = self.getTurnDetails()
         var metadata: [String: Any] = [
           "itemId": itemId,
@@ -1086,6 +1112,8 @@ final class WebRTCEventHandler {
           "turnNumber": turnNumber as Any,
           "turnCount": self.conversationTurnCount,
           "totalConversationItems": self.conversationItems.count,
+          "totalContentLength": totalContentLength,
+          "maxContentLength": self.maxContentLength,
           "position": self.conversationItems.count - 1,
           "createdAt": ISO8601DateFormatter().string(from: conversationItem.createdAt),
           "maxTurns": self.maxConversationTurns as Any,
@@ -1097,29 +1125,15 @@ final class WebRTCEventHandler {
           metadata["fullContent"] = content
         }
         self.logger.log(
-          "[TurnLimit] Turn item created: \(itemId)",
+          "[ContentLimit] Turn item created: \(itemId)",
           attributes: logAttributes(for: .debug, metadata: metadata)
         )
 
-        // Check if we've exceeded the turn limit
-        if let maxTurns = self.maxConversationTurns, self.conversationTurnCount > maxTurns {
-          let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
-          self.logger.log(
-            "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, deferring \(strategyName) until transcript arrives",
-            attributes: logAttributes(for: .info, metadata: [
-              "turnCount": self.conversationTurnCount,
-              "maxTurns": maxTurns,
-              "totalConversationItems": self.conversationItems.count,
-              "turnsToRemove": self.conversationTurnCount - maxTurns,
-              "strategy": strategyName,
-              "deferredReason": "Waiting for transcript to be stored"
-            ])
-          )
-          // Note: Compaction will be triggered after the transcript is stored
-        }
+        // Note: Compaction will be triggered after the transcript is stored
+        // We defer checking content limit until transcript arrives with full content
       } else {
         self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Non-turn item created",
+          "[WebRTCEventHandler] [ContentLimit] Non-turn item created",
           attributes: logAttributes(for: .trace, metadata: [
             "itemId": itemId,
             "role": item["role"] as Any,
@@ -1288,89 +1302,76 @@ final class WebRTCEventHandler {
 
   // MARK: - Conversation Pruning Strategies
 
-  private func pruneOldestConversationItems(context: ToolContext, targetTurnCount: Int) {
-    let turnsToRemove = self.conversationTurnCount - targetTurnCount
+  private func pruneOldestConversationItems(context: ToolContext, targetContentLength: Int) {
+    let currentContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+    let overage = currentContentLength - targetContentLength
 
-    guard turnsToRemove > 0 else {
+    guard overage > 0 else {
       self.logger.log(
-        "[WebRTCEventHandler] [TurnLimit] No pruning needed",
+        "[WebRTCEventHandler] [ContentLimit] No pruning needed",
         attributes: logAttributes(for: .debug, metadata: [
-          "currentTurns": self.conversationTurnCount,
-          "targetTurns": targetTurnCount
+          "currentContentLength": currentContentLength,
+          "targetContentLength": targetContentLength
         ])
       )
       return
     }
 
     self.logger.log(
-      "[WebRTCEventHandler] [TurnLimit] Starting to prune oldest conversation items",
+      "[WebRTCEventHandler] [ContentLimit] Starting to prune oldest conversation items",
       attributes: logAttributes(for: .info, metadata: [
-        "currentTurns": self.conversationTurnCount,
-        "targetTurns": targetTurnCount,
-        "turnsToRemove": turnsToRemove,
+        "currentContentLength": currentContentLength,
+        "targetContentLength": targetContentLength,
+        "overage": overage,
         "totalConversationItems": self.conversationItems.count
       ])
     )
 
     var itemsToDelete: [(item: ConversationItem, position: Int)] = []
-    var turnsRemoved = 0
+    var contentRemoved = 0
     let now = Date()
     let formatter = ISO8601DateFormatter()
 
-    // Iterate from oldest (front of array) and collect items to delete
+    // Iterate from oldest (front of array) and collect items to delete until we're under limit
     for (index, item) in self.conversationItems.enumerated() {
+      let itemContentLength = item.fullContent?.count ?? 0
       itemsToDelete.append((item, index))
+      contentRemoved += itemContentLength
 
-      if item.isTurn {
-        turnsRemoved += 1
+      let ageInSeconds = now.timeIntervalSince(item.createdAt)
+      var metadata: [String: Any] = [
+        "itemId": item.id,
+        "isTurn": item.isTurn,
+        "turnNumber": item.turnNumber as Any,
+        "role": item.role as Any,
+        "position": index,
+        "contentLength": itemContentLength,
+        "contentRemovedSoFar": contentRemoved,
+        "overageTarget": overage,
+        "ageSeconds": String(format: "%.2f", ageInSeconds),
+        "createdAt": formatter.string(from: item.createdAt)
+      ]
+      if let content = item.fullContent {
+        metadata["fullContent"] = content
+      }
+      
+      self.logger.log(
+        "[WebRTCEventHandler] [ContentLimit] Marking item for deletion",
+        attributes: logAttributes(for: .info, metadata: metadata)
+      )
 
-        // Log details about the turn being pruned
-        let ageInSeconds = now.timeIntervalSince(item.createdAt)
-        var metadata: [String: Any] = [
-          "itemId": item.id,
-          "turnNumber": item.turnNumber as Any,
-          "role": item.role as Any,
-          "position": index,
-          "ageSeconds": String(format: "%.2f", ageInSeconds),
-          "createdAt": formatter.string(from: item.createdAt),
-          "turnsRemovedSoFar": turnsRemoved,
-          "turnsToRemove": turnsToRemove
-        ]
-        if let content = item.fullContent {
-          metadata["contentLength"] = content.count
-          metadata["fullContent"] = content
-        }
-        self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Marking turn for deletion",
-          attributes: logAttributes(for: .info, metadata: metadata)
-        )
-
-        // Stop once we've identified enough turns to remove
-        if turnsRemoved >= turnsToRemove {
-          break
-        }
-      } else {
-        // Log non-turn items being pruned (associated with turns)
-        let ageInSeconds = now.timeIntervalSince(item.createdAt)
-        self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Marking non-turn item for deletion",
-          attributes: logAttributes(for: .debug, metadata: [
-            "itemId": item.id,
-            "type": item.type as Any,
-            "role": item.role as Any,
-            "position": index,
-            "ageSeconds": String(format: "%.2f", ageInSeconds),
-            "createdAt": formatter.string(from: item.createdAt)
-          ])
-        )
+      // Stop once we've removed enough content to get under the limit
+      if contentRemoved >= overage {
+        break
       }
     }
 
     self.logger.log(
-      "[WebRTCEventHandler] [TurnLimit] Identified items to prune",
+      "[WebRTCEventHandler] [ContentLimit] Identified items to prune",
       attributes: logAttributes(for: .info, metadata: [
         "itemsToDelete": itemsToDelete.count,
-        "turnsToRemove": turnsRemoved,
+        "contentRemoved": contentRemoved,
+        "overage": overage,
         "oldestItemAge": itemsToDelete.first.map { String(format: "%.2f", now.timeIntervalSince($0.item.createdAt)) } as Any,
         "newestPrunedItemAge": itemsToDelete.last.map { String(format: "%.2f", now.timeIntervalSince($0.item.createdAt)) } as Any
       ])
@@ -1411,7 +1412,7 @@ final class WebRTCEventHandler {
         )
       } else {
         self.logger.log(
-          "[TurnLimit] Sending prune delete event for item: \(item.id)",
+          "[ContentLimit] Sending prune delete event for item: \(item.id)",
           attributes: logAttributes(for: .debug, metadata: metadata)
         )
       }
@@ -1426,9 +1427,10 @@ final class WebRTCEventHandler {
     
     // Note: Turn count and items will be decremented as delete confirmations come in
     self.logger.log(
-      "[WebRTCEventHandler] [TurnLimit] Prune delete events sent, awaiting confirmations",
+      "[WebRTCEventHandler] [ContentLimit] Prune delete events sent, awaiting confirmations",
       attributes: logAttributes(for: .info, metadata: [
         "itemsSent": itemsToDelete.count,
+        "contentRemoved": contentRemoved,
         "compactionInProgress": self.compactionInProgress
       ])
     )
@@ -1438,24 +1440,24 @@ final class WebRTCEventHandler {
   ///
   /// Strategy:
   /// - Take ALL conversation items (entire history) and replace them with a single summary system message.
-  /// - This reduces the conversation context to a compact summary when the turn limit is exceeded.
+  /// - This reduces the conversation context to a compact summary when the content limit is exceeded.
   /// - The summary preserves key information: user goals, preferences, decisions, and open tasks.
   ///
   /// Assumptions:
   /// - `conversationItems` is ordered oldest → newest.
-  /// - `conversationTurnCount` counts only items where `isTurn == true`.
-  /// - Parameter `targetTurnCount` indicates the turn limit that was exceeded, triggering compaction.
+  /// - Compaction is triggered when total content length exceeds maxContentLength.
   @MainActor
-  func compactConversationItems(
-    context: ToolContext,
-    targetTurnCount: Int
-  ) async {
-    guard conversationTurnCount > targetTurnCount else {
+  func compactConversationItems(context: ToolContext) async {
+    let totalContentLength = await conversationQueue.sync {
+      self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+    }
+    
+    guard totalContentLength > maxContentLength else {
       self.logger.log(
         "[WebRTCEventHandler] [Compact] No compaction needed",
         attributes: logAttributes(for: .debug, metadata: [
-          "currentTurns": self.conversationTurnCount,
-          "targetTurns": targetTurnCount
+          "totalContentLength": totalContentLength,
+          "maxContentLength": self.maxContentLength
         ])
       )
       return
@@ -1488,7 +1490,8 @@ final class WebRTCEventHandler {
       attributes: logAttributes(for: .info, metadata: [
         "totalItems": self.conversationItems.count,
         "totalTurns": self.conversationTurnCount,
-        "targetTurns": targetTurnCount,
+        "totalContentLength": totalContentLength,
+        "maxContentLength": self.maxContentLength,
         "allItems": allItemsForLogging
       ])
     )
@@ -1530,8 +1533,8 @@ final class WebRTCEventHandler {
       "[WebRTCEventHandler] [Compact] Compaction selection logic completed",
       attributes: logAttributes(for: .info, metadata: [
         "selectionStrategy": "Compact ENTIRE conversation history into a single summary",
-        "currentTurns": self.conversationTurnCount,
-        "targetTurns": targetTurnCount,
+        "totalContentLength": totalContentLength,
+        "maxContentLength": self.maxContentLength,
         "itemsToCompact": compactOnlyItems.count,
         "turnsToCompact": compactOnlyItems.filter { $0.isTurn }.count,
         "compactionCandidates": compactCandidates
@@ -1556,7 +1559,7 @@ final class WebRTCEventHandler {
       )
 
       // If summarization fails, fall back to your existing pruning strategy
-      pruneOldestConversationItems(context: context, targetTurnCount: targetTurnCount)
+      pruneOldestConversationItems(context: context, targetContentLength: self.maxContentLength)
       return
     }
 

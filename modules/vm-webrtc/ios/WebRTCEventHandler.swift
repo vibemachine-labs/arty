@@ -1341,9 +1341,28 @@ final class WebRTCEventHandler {
 
     context.sendDataChannelMessage(summaryEvent)
 
-    // Note: you can adjust `conversationTurnCount` locally here if you
-    // treat this summary as a single turn, or keep relying on server
-    // `conversation.item.created` events to update the count.
+    // 5) Reset our local tracking immediately after compaction
+    // Remove all the items we just deleted from our local tracking
+    await conversationQueue.sync {
+      // Remove compacted items from our local array
+      let compactedIds = Set(itemsToCompact.map { $0.item.id })
+      self.conversationItems.removeAll { compactedIds.contains($0.id) }
+      
+      // Recalculate turn count from remaining items
+      self.conversationTurnCount = self.conversationItems.filter { $0.isTurn }.count
+      
+      self.logger.log(
+        "[WebRTCEventHandler] [Compact] Local tracking reset after compaction",
+        attributes: logAttributes(for: .info, metadata: [
+          "remainingItems": self.conversationItems.count,
+          "remainingTurns": self.conversationTurnCount,
+          "deletedItems": compactedIds.count
+        ])
+      )
+    }
+    
+    // Note: The summary system item will be added back to our tracking
+    // when we receive the conversation.item.created event from the server.
   }
 
   private func deleteAllConversationItems(context: ToolContext) {

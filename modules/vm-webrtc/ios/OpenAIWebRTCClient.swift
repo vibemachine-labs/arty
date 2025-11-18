@@ -436,6 +436,9 @@ final class OpenAIWebRTCClient: NSObject {
     // Configure conversation turn limit in event handler
     eventHandler.configureConversationTurnLimit(maxTurns: maxConversationTurns)
     eventHandler.resetConversationTracking()
+    
+    // Pass API key to event handler
+    eventHandler.setApiKey(resolvedApiKey)
 
     eventHandler.stopIdleMonitoring(reason: "starting_new_connection")
 

@@ -68,6 +68,25 @@ final class WebRTCEventHandler {
   private var idleTimeoutSeconds: TimeInterval = WebRTCEventHandler.defaultIdleTimeout
   private var isIdleMonitoringActive = false
   private let idleDebugInterval: TimeInterval = 2
+  private var apiKey: String?
+
+  func setApiKey(_ apiKey: String) {
+    let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedKey.isEmpty else {
+      self.apiKey = nil
+      logger.log(
+        "[WebRTCEventHandler] Cleared API key",
+        attributes: logAttributes(for: .warn, metadata: ["reason": "empty_key"])
+      )
+      return
+    }
+    
+    self.apiKey = trimmedKey
+    logger.log(
+      "[WebRTCEventHandler] Stored API key",
+      attributes: logAttributes(for: .debug, metadata: ["keyLength": trimmedKey.count])
+    )
+  }
 
   func handle(event: [String: Any], context: ToolContext) {
     guard let eventType = event["type"] as? String else {
@@ -938,7 +957,16 @@ final class WebRTCEventHandler {
 
     var urlRequest = URLRequest(url: url)
     urlRequest.httpMethod = "POST"
-    urlRequest.addValue("Bearer \(openAIAPIKey)", forHTTPHeaderField: "Authorization")
+    
+    guard let apiKey = self.apiKey else {
+      throw NSError(
+        domain: "OpenAI",
+        code: -3,
+        userInfo: [NSLocalizedDescriptionKey: "API key not set in WebRTCEventHandler"]
+      )
+    }
+    
+    urlRequest.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
     urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
     urlRequest.httpBody = try JSONEncoder().encode(request)
 

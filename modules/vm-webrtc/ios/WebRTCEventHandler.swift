@@ -1174,7 +1174,7 @@ final class WebRTCEventHandler {
         )
       } else {
         self.logger.log(
-          "[WebRTCEventHandler] [TurnLimit] Item deleted but not found in tracking",
+          "[WebRTCEventHandler] [TurnLimit] Item deleted: \(itemId)",
           attributes: logAttributes(for: .warn, metadata: [
             "itemId": itemId
           ])

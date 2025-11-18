@@ -18,23 +18,116 @@ final class WebRTCEventHandler {
 
   private let logger = VmWebrtcLogging.logger
 
-  // MARK: - Responses API Types
+  // MARK: - Responses API Types (Polymorphic Schema)
 
   private struct ResponsesRequest: Codable {
     let model: String
     let input: String
   }
 
-  private struct ResponsesOutputContent: Codable {
-    let text: String
+  // Polymorphic content part for message content array
+  private enum ResponsesContentPart: Codable {
+    case outputText(OutputTextContent)
+    case other(type: String)
+    
+    struct OutputTextContent: Codable {
+      let type: String
+      let text: String
+      let annotations: [String]?  // Optional: annotations
+      // logprobs and other optional fields can be added here
+    }
+    
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let type = try container.decode(String.self, forKey: .type)
+      
+      switch type {
+      case "output_text":
+        self = .outputText(try OutputTextContent(from: decoder))
+      default:
+        self = .other(type: type)
+      }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+      switch self {
+      case .outputText(let content):
+        try content.encode(to: encoder)
+      case .other(let type):
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+      }
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+      case type
+    }
   }
 
-  private struct ResponsesOutputMessage: Codable {
-    let content: [ResponsesOutputContent]
+  // Polymorphic output item for response.output array
+  private enum ResponsesOutputItem: Codable {
+    case message(MessageOutput)
+    case functionCall(FunctionCallOutput)
+    case toolCall(ToolCallOutput)
+    case other(type: String)
+    
+    struct MessageOutput: Codable {
+      let type: String
+      let role: String?
+      let content: [ResponsesContentPart]
+    }
+    
+    struct FunctionCallOutput: Codable {
+      let type: String
+      let id: String?
+      let name: String?
+      // Add other function_call fields as needed
+    }
+    
+    struct ToolCallOutput: Codable {
+      let type: String
+      let id: String?
+      let name: String?
+      // Add other tool_call fields as needed
+    }
+    
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let type = try container.decode(String.self, forKey: .type)
+      
+      switch type {
+      case "message":
+        self = .message(try MessageOutput(from: decoder))
+      case "function_call":
+        self = .functionCall(try FunctionCallOutput(from: decoder))
+      case "tool_call":
+        self = .toolCall(try ToolCallOutput(from: decoder))
+      default:
+        self = .other(type: type)
+      }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+      switch self {
+      case .message(let output):
+        try output.encode(to: encoder)
+      case .functionCall(let output):
+        try output.encode(to: encoder)
+      case .toolCall(let output):
+        try output.encode(to: encoder)
+      case .other(let type):
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+      }
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+      case type
+    }
   }
 
   private struct ResponsesResponse: Codable {
-    let output: [ResponsesOutputMessage]
+    let output: [ResponsesOutputItem]
   }
 
   // MARK: - Conversation turn tracking
@@ -1278,7 +1371,7 @@ final class WebRTCEventHandler {
       input: prompt
     )
 
-    // Build detailed item representation for logging
+    // Build safe item representation for logging (no full content)
     let itemsForLogging = items.map { item -> [String: Any] in
       var dict: [String: Any] = [
         "id": item.id,
@@ -1338,15 +1431,17 @@ final class WebRTCEventHandler {
 
     let decoded = try JSONDecoder().decode(ResponsesResponse.self, from: data)
 
-    // responses.output[0].content[0].text
+    // Extract text from polymorphic response: output[0] (message) -> content[0] (output_text) -> text
     guard
-      let firstMessage = decoded.output.first,
-      let firstContent = firstMessage.content.first
+      let firstOutputItem = decoded.output.first,
+      case .message(let messageOutput) = firstOutputItem,
+      let firstContentPart = messageOutput.content.first,
+      case .outputText(let textContent) = firstContentPart
     else {
-      throw NSError(domain: "OpenAI", code: -2, userInfo: [NSLocalizedDescriptionKey: "No output from model"])
+      throw NSError(domain: "OpenAI", code: -2, userInfo: [NSLocalizedDescriptionKey: "No text output from model"])
     }
 
-    return firstContent.text
+    return textContent.text
   }
 
   // MARK: - Conversation Pruning Strategies
@@ -1497,7 +1592,7 @@ final class WebRTCEventHandler {
   /// - Compaction is triggered when total content length exceeds maxContentLength.
   @MainActor
   func compactConversationItems(context: ToolContext) async {
-    let totalContentLength = await conversationQueue.sync {
+    let totalContentLength = conversationQueue.sync {
       self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
     }
     
@@ -1515,7 +1610,7 @@ final class WebRTCEventHandler {
     let now = Date()
     let formatter = ISO8601DateFormatter()
 
-    // Log all conversation items before processing
+    // Log conversation items metadata before processing (safe preview only)
     let allItemsForLogging = self.conversationItems.enumerated().map { (index, item) -> [String: Any] in
       var detail: [String: Any] = [
         "index": index,
@@ -1528,8 +1623,9 @@ final class WebRTCEventHandler {
         "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
       ]
       if let content = item.fullContent {
-        detail["fullContent"] = content
+        // Only log length and safe preview (first 100 chars)
         detail["contentLength"] = content.count
+        detail["contentPreview"] = String(content.prefix(100))
       }
       return detail
     }
@@ -1559,7 +1655,7 @@ final class WebRTCEventHandler {
       return
     }
 
-    // Build detailed logging for compaction candidates
+    // Build safe logging for compaction candidates (no full content)
     let compactCandidates = itemsToCompact.map { (item, index) -> [String: Any] in
       var detail: [String: Any] = [
         "index": index,
@@ -1572,8 +1668,9 @@ final class WebRTCEventHandler {
         "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
       ]
       if let content = item.fullContent {
-        detail["fullContent"] = content
+        // Only log length and safe preview (first 100 chars)
         detail["contentLength"] = content.count
+        detail["contentPreview"] = String(content.prefix(100))
       }
       return detail
     }
@@ -1617,7 +1714,7 @@ final class WebRTCEventHandler {
       attributes: logAttributes(for: .info, metadata: [
         "summaryLength": summaryText.count,
         "compactedItemCount": compactOnlyItems.count,
-        "summaryText": summaryText,
+        "summaryText": summaryText
       ])
     )
 
@@ -1710,7 +1807,7 @@ final class WebRTCEventHandler {
 
     // 5) Reset our local tracking immediately after compaction
     // Remove all the items we just deleted from our local tracking
-    await conversationQueue.sync {
+    conversationQueue.sync {
       // Remove compacted items from our local array
       let compactedIds = Set(itemsToCompact.map { $0.item.id })
       self.conversationItems.removeAll { compactedIds.contains($0.id) }

@@ -44,13 +44,14 @@ final class WebRTCEventHandler {
     let createdAt: Date
     let role: String?
     let type: String?
+    let fullContent: String?  // Complete content for summarization
     let contentSnippet: String?  // First 100 chars of content for logging
     let turnNumber: Int?  // Turn number if this is a turn item
 
     /// Fallback text used in the summarization prompt
     var transcriptLine: String {
       let roleLabel = (role ?? "unknown").capitalized
-      let text = contentSnippet ?? ""
+      let text = fullContent ?? contentSnippet ?? ""
       return "\(roleLabel): \(text)"
     }
   }
@@ -783,15 +784,18 @@ final class WebRTCEventHandler {
         )
       }
 
-      // Extract content snippet for logging
+      // Extract full content and snippet for logging
+      var fullContent: String?
       var contentSnippet: String?
       if let content = item["content"] as? [[String: Any]] {
         // Content is an array of content blocks
         for contentBlock in content {
           if let text = contentBlock["text"] as? String, !text.isEmpty {
+            fullContent = text
             contentSnippet = String(text.prefix(100))
             break
           } else if let transcript = contentBlock["transcript"] as? String, !transcript.isEmpty {
+            fullContent = transcript
             contentSnippet = String(transcript.prefix(100))
             break
           }
@@ -811,6 +815,7 @@ final class WebRTCEventHandler {
         createdAt: Date(),
         role: role,
         type: type,
+        fullContent: fullContent,
         contentSnippet: contentSnippet,
         turnNumber: turnNumber
       )
@@ -949,6 +954,32 @@ final class WebRTCEventHandler {
     let request = ResponsesRequest(
       model: "gpt-4o",
       input: prompt
+    )
+
+    // Build detailed item representation for logging
+    let itemsForLogging = items.map { item -> [String: Any] in
+      var dict: [String: Any] = [
+        "id": item.id,
+        "isTurn": item.isTurn,
+        "createdAt": ISO8601DateFormatter().string(from: item.createdAt)
+      ]
+      if let role = item.role { dict["role"] = role }
+      if let type = item.type { dict["type"] = type }
+      if let content = item.fullContent { dict["fullContent"] = content }
+      if let snippet = item.contentSnippet { dict["contentSnippet"] = snippet }
+      if let turnNum = item.turnNumber { dict["turnNumber"] = turnNum }
+      return dict
+    }
+
+    logger.log(
+      "[WebRTCEventHandler] [Compact] Sending summarization request to OpenAI",
+      attributes: logAttributes(for: .info, metadata: [
+        "model": request.model,
+        "promptLength": request.input.count,
+        "itemCount": items.count,
+        "items": itemsForLogging,
+        "prompt": request.input
+      ])
     )
 
     guard let url = URL(string: "https://api.openai.com/v1/responses") else {
@@ -1286,16 +1317,12 @@ final class WebRTCEventHandler {
     )
 
     // 4) Insert a single system "summary" item that stands in for all the deleted turns.
+    // Note: metadata is not supported in conversation.item.create, so we can't mark this as a summary
     let summaryEvent: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
         "type": "message",
         "role": "system",
-        "metadata": [
-          "kind": "summary",
-          "compacted_item_count": compactOnlyItems.count,
-          "compacted_until_item_id": compactOnlyItems.last?.id as Any
-        ],
         "content": [
           [
             "type": "input_text",

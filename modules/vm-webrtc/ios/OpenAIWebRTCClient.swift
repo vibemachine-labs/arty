@@ -212,12 +212,26 @@ final class OpenAIWebRTCClient: NSObject {
       let success = dataChannel.sendData(buffer)
 
       if success {
+        var metadata: [String: Any] = [
+          "eventType": event["type"] as Any,
+          "dataSize": jsonData.count
+        ]
+        
+        // Add event_id if present
+        if let eventId = event["event_id"] as? String {
+          metadata["eventId"] = eventId
+        }
+        
+        // Add item_id to metadata if it's a delete event
+        if let eventType = event["type"] as? String, eventType == "conversation.item.delete" {
+          if let itemId = event["item_id"] as? String {
+            metadata["itemId"] = itemId
+          }
+        }
+        
         logger.log(
           "[VmWebrtc] Data channel message sent",
-          attributes: logAttributes(for: .debug, metadata: [
-            "eventType": event["type"] as Any,
-            "dataSize": jsonData.count
-          ])
+          attributes: logAttributes(for: .debug, metadata: metadata)
         )
       } else {
         logger.log(

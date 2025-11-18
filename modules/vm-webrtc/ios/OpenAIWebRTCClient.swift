@@ -105,6 +105,7 @@ final class OpenAIWebRTCClient: NSObject {
   private var maxConversationTurns: Int?
   var retentionRatio: Double?
   private let retentionRatioScale: Int = 2
+  var transcriptionEnabled: Bool = false
   let logger = VmWebrtcLogging.logger
 
   // Reference to the github connector tool delegate
@@ -361,7 +362,8 @@ final class OpenAIWebRTCClient: NSObject {
     audioSpeed: Double?,
     enableRecording: Bool,
     maxConversationTurns: Int?,
-    retentionRatio: Double?
+    retentionRatio: Double?,
+    transcriptionEnabled: Bool
   ) async throws -> String {
     let sanitizedInstructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !sanitizedInstructions.isEmpty else {
@@ -394,6 +396,7 @@ final class OpenAIWebRTCClient: NSObject {
     // Store context control settings
     self.maxConversationTurns = maxConversationTurns
     self.retentionRatio = retentionRatio
+    self.transcriptionEnabled = transcriptionEnabled
 
     // Configure conversation turn limit in event handler
     eventHandler.configureConversationTurnLimit(maxTurns: maxConversationTurns)

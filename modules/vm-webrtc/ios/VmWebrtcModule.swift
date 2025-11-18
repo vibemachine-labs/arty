@@ -37,6 +37,9 @@ struct OpenAIConnectionOptions: Record {
 
   @Field
   var retentionRatio: Double?
+
+  @Field
+  var transcriptionEnabled: Bool?
 }
 
 public class VmWebrtcModule: Module {
@@ -211,7 +214,8 @@ public class VmWebrtcModule: Module {
         audioSpeed: options.audioSpeed,
         enableRecording: options.enableRecording ?? false,
         maxConversationTurns: options.maxConversationTurns,
-        retentionRatio: options.retentionRatio
+        retentionRatio: options.retentionRatio,
+        transcriptionEnabled: options.transcriptionEnabled ?? false
       )
       return state
     }

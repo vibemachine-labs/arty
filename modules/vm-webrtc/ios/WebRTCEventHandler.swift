@@ -89,6 +89,8 @@ final class WebRTCEventHandler {
       handleConversationItemCreated(event, context: context)
     case "conversation.item.deleted":
       handleConversationItemDeleted(event, context: context)
+    case "conversation.item.input_audio_transcription.completed":
+      handleInputAudioTranscriptionCompleted(event, context: context)
     default:
       logger.log(
         "[WebRTCEventHandler] Unhandled WebRTC event",
@@ -499,13 +501,63 @@ final class WebRTCEventHandler {
     }
 
     logger.log(
-      "[WebRTCEventHandler] Transcript complete",
+      "[WebRTCEventHandler] Transcript complete (assistant)",
       attributes: logAttributes(for: .info, metadata: [
         "type": type,
+        "speaker": "assistant",
         "transcriptLength": (payload["transcript"] as? String)?.count as Any,
+        "transcript": payload["transcript"] as Any,
         "responseId": payload["responseId"] as Any
       ])
     )
+
+    context.emitModuleEvent("onTranscript", payload)
+  }
+
+  private func handleInputAudioTranscriptionCompleted(_ event: [String: Any], context: ToolContext) {
+    var payload: [String: Any] = [
+      "type": "input_audio_transcription",
+      "isDone": true,
+      "timestampMs": Int(Date().timeIntervalSince1970 * 1000)
+    ]
+
+    // Extract transcript
+    if let transcript = event["transcript"] as? String {
+      payload["transcript"] = transcript
+    }
+
+    // Extract item ID
+    if let itemId = event["item_id"] as? String {
+      payload["itemId"] = itemId
+    }
+
+    // Extract content index
+    if let contentIndex = event["content_index"] as? Int {
+      payload["contentIndex"] = contentIndex
+    }
+
+    let transcript = payload["transcript"] as? String
+    let transcriptText = transcript?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+    if !transcriptText.isEmpty {
+      logger.log(
+        "[WebRTCEventHandler] Transcript complete (user)",
+        attributes: logAttributes(for: .info, metadata: [
+          "type": "input_audio_transcription",
+          "speaker": "user",
+          "transcriptLength": transcriptText.count,
+          "transcript": String(transcriptText),
+          "itemId": payload["itemId"] as Any
+        ])
+      )
+    } else {
+      logger.log(
+        "[WebRTCEventHandler] Transcript complete (user, empty)",
+        attributes: logAttributes(for: .debug, metadata: [
+          "itemId": payload["itemId"] as Any
+        ])
+      )
+    }
 
     context.emitModuleEvent("onTranscript", payload)
   }

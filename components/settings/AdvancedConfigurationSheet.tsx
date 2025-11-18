@@ -12,10 +12,11 @@ interface AdvancedConfigurationSheetProps {
   onConfigureTools: () => void;
   onConfigureVad: () => void;
   onConfigureContextWindow: () => void;
+  onConfigureTranscription: () => void;
 }
 
 type AdvancedAction = {
-  id: "mainPrompt" | "tools" | "vad" | "contextWindow" | "clearSecrets";
+  id: "mainPrompt" | "tools" | "vad" | "contextWindow" | "transcription" | "clearSecrets";
   title: string;
   subtitle: string;
   onPress?: () => void;
@@ -30,6 +31,7 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
   onConfigureTools,
   onConfigureVad,
   onConfigureContextWindow,
+  onConfigureTranscription,
 }) => {
   const handleClearStoredSecrets = useCallback(() => {
     Alert.alert(
@@ -96,6 +98,15 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
       onPress: () => {
         onClose();
         onConfigureContextWindow();
+      },
+    },
+    {
+      id: "transcription",
+      title: "Transcription",
+      subtitle: "Enable audio transcription using Whisper for your input.",
+      onPress: () => {
+        onClose();
+        onConfigureTranscription();
       },
     },
     {

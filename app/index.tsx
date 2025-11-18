@@ -16,6 +16,7 @@ import { ConfigureVoice } from "../components/settings/ConfigureVoice";
 import { ConfigureVad } from "../components/settings/ConfigureVad";
 import { ConfigureContextWindow } from "../components/settings/ConfigureContextWindow";
 import { ConfigureToolsSheet } from "../components/settings/ConfigureToolsSheet";
+import { ConfigureTranscription } from "../components/settings/ConfigureTranscription";
 import { ConnectorsConfig } from "../components/settings/ConnectorsConfig";
 import { DeveloperMode } from "../components/ui/DeveloperMode";
 import { HamburgerButton } from "../components/ui/HamburgerButton";
@@ -30,6 +31,7 @@ import {
   saveRetentionRatio,
   saveMaxConversationTurns
 } from "../lib/contextWindowPreference";
+import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
 import { getApiKey } from "../lib/secure-storage";
 import { loadMainPromptAddition } from "../lib/mainPrompt";
 import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
@@ -90,6 +92,8 @@ export default function Index() {
   const [contextWindowVisible, setContextWindowVisible] = useState(false);
   const [retentionRatio, setRetentionRatio] = useState(DEFAULT_RETENTION_RATIO);
   const [maxConversationTurns, setMaxConversationTurns] = useState<number>(DEFAULT_MAX_CONVERSATION_TURNS);
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(DEFAULT_TRANSCRIPTION_ENABLED);
+  const [transcriptionSheetVisible, setTranscriptionSheetVisible] = useState(false);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
@@ -184,6 +188,24 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const hydrateTranscriptionPreference = async () => {
+      const stored = await loadTranscriptionPreference();
+      if (!isMounted) {
+        return;
+      }
+      setTranscriptionEnabled(stored);
+    };
+
+    hydrateTranscriptionPreference();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     let isActive = true;
 
     const evaluateOnboardingStatus = async () => {
@@ -266,6 +288,15 @@ export default function Index() {
       setRetentionRatio(value);
       void saveRetentionRatio(value);
       log.info("Retention ratio preference updated and saved", {}, { retentionRatio: value });
+    },
+    []
+  );
+
+  const handleToggleTranscription = useCallback(
+    (enabled: boolean) => {
+      setTranscriptionEnabled(enabled);
+      void saveTranscriptionPreference(enabled);
+      log.info("Transcription preference updated and saved", {}, { transcriptionEnabled: enabled });
     },
     []
   );
@@ -429,6 +460,7 @@ export default function Index() {
         }}
         onConfigureVad={() => setVadSheetVisible(true)}
         onConfigureContextWindow={() => setContextWindowVisible(true)}
+        onConfigureTranscription={() => setTranscriptionSheetVisible(true)}
         onConfigureTools={() => setConfigureToolsVisible(true)}
       />
       <ConfigureContextWindow
@@ -438,6 +470,12 @@ export default function Index() {
         onRetentionRatioChange={handleRetentionRatioChange}
         onMaxConversationTurnsChange={handleMaxConversationTurnsChange}
         onClose={() => setContextWindowVisible(false)}
+      />
+      <ConfigureTranscription
+        visible={transcriptionSheetVisible}
+        transcriptionEnabled={transcriptionEnabled}
+        onToggleTranscription={handleToggleTranscription}
+        onClose={() => setTranscriptionSheetVisible(false)}
       />
       <ConfigureToolsSheet
         visible={configureToolsVisible}

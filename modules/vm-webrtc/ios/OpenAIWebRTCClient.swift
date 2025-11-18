@@ -5,6 +5,7 @@ import WebRTC
 enum OpenAIWebRTCError: LocalizedError {
   case invalidEndpoint
   case missingLocalDescription
+  case missingAPIKey
   case openAIRejected(Int)
   case openAIResponseDecoding
   case connectionTimeout
@@ -18,6 +19,8 @@ enum OpenAIWebRTCError: LocalizedError {
       return "Failed to build the OpenAI Realtime endpoint URL."
     case .missingLocalDescription:
       return "The local WebRTC session description is missing after ICE gathering."
+    case .missingAPIKey:
+      return "An OpenAI API key must be set before starting a session."
     case .openAIRejected(let status):
       return "OpenAI Realtime endpoint rejected the SDP offer with status code \(status)."
     case .openAIResponseDecoding:
@@ -120,6 +123,7 @@ final class OpenAIWebRTCClient: NSObject {
   var toolkitHelper: ToolkitHelper?
         
   var toolDefinitions: [[String: Any]] = []
+  private var apiKey: String?
   lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
     InboundAudioStatsMonitor(
@@ -266,6 +270,28 @@ final class OpenAIWebRTCClient: NSObject {
     self.toolkitHelper = helper
   }
 
+  func setAPIKey(_ apiKey: String) {
+    let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmedKey.isEmpty == false else {
+      self.apiKey = nil
+      self.logger.log(
+        "[VmWebrtc] " + "Cleared OpenAI API key for WebRTC client",
+        attributes: logAttributes(for: .warn, metadata: [
+          "reason": "empty_key"
+        ])
+      )
+      return
+    }
+
+    self.apiKey = trimmedKey
+    self.logger.log(
+      "[VmWebrtc] " + "Stored OpenAI API key for WebRTC client",
+      attributes: logAttributes(for: .debug, metadata: [
+        "keyLength": trimmedKey.count
+      ])
+    )
+  }
+
   @MainActor
   func setOutgoingAudioMuted(_ muted: Bool) {
     isOutgoingAudioMuted = muted
@@ -352,7 +378,6 @@ final class OpenAIWebRTCClient: NSObject {
 
   @MainActor
   func openConnection(
-    apiKey: String,
     model: String?,
     baseURL: String?,
     audioOutput: AudioOutputPreference,
@@ -371,6 +396,16 @@ final class OpenAIWebRTCClient: NSObject {
       throw OpenAIWebRTCError.missingInstructions
     }
     sessionInstructions = sanitizedInstructions
+
+    guard let resolvedApiKey = self.apiKey, resolvedApiKey.isEmpty == false else {
+      self.logger.log(
+        "[VmWebrtc] " + "Missing OpenAI API key before starting connection",
+        attributes: logAttributes(for: .error, metadata: [
+          "reason": "api_key_not_set"
+        ])
+      )
+      throw OpenAIWebRTCError.missingAPIKey
+    }
 
     let sanitizedVoice = voice?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let sanitizedVoice, !sanitizedVoice.isEmpty {
@@ -444,7 +479,7 @@ final class OpenAIWebRTCClient: NSObject {
       do {
         try await recordingManager.startRecording(
           using: audioSession,
-          apiKey: apiKey,
+          apiKey: resolvedApiKey,
           voice: sessionVoice
         )
       } catch {
@@ -481,7 +516,7 @@ final class OpenAIWebRTCClient: NSObject {
       throw OpenAIWebRTCError.missingLocalDescription
     }
 
-    let answerSDP = try await exchangeSDPWithOpenAI(apiKey: apiKey, endpointURL: endpointURL, offerSDP: localSDP)
+    let answerSDP = try await exchangeSDPWithOpenAI(apiKey: resolvedApiKey, endpointURL: endpointURL, offerSDP: localSDP)
     let remoteDescription = RTCSessionDescription(type: .answer, sdp: answerSDP)
     try await setRemoteDescription(remoteDescription, for: connection)
     self.logger.log("[VmWebrtc] " + "Remote description applied", attributes: logAttributes(for: .debug))

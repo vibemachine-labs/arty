@@ -201,10 +201,10 @@ public class VmWebrtcModule: Module {
       let toolDefinitions = options.toolDefinitions ?? []
       await MainActor.run {
         self.webrtcClient.setToolDefinitions(toolDefinitions)
+        self.webrtcClient.setAPIKey(options.apiKey)
       }
 
       let state = try await self.webrtcClient.openConnection(
-        apiKey: options.apiKey,
         model: options.model,
         baseURL: options.baseUrl,
         audioOutput: outputPreference,

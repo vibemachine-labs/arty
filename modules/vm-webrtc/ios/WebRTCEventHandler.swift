@@ -45,13 +45,13 @@ final class WebRTCEventHandler {
     let role: String?
     let type: String?
     var fullContent: String?  // Complete content for summarization (mutable to update with transcript)
-    var contentSnippet: String?  // First 100 chars of content for logging (mutable to update with transcript)
+    var contentSnippet: String?  // DEPRECATED: Only used as temporary placeholder until transcript arrives. Use fullContent instead.
     let turnNumber: Int?  // Turn number if this is a turn item
 
     /// Fallback text used in the summarization prompt
     var transcriptLine: String {
       let roleLabel = (role ?? "unknown").capitalized
-      let text = fullContent ?? contentSnippet ?? ""
+      let text = fullContent ?? ""
       return "\(roleLabel): \(text)"
     }
   }
@@ -553,7 +553,6 @@ final class WebRTCEventHandler {
           // Find and update the corresponding conversation item
           if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
             self.conversationItems[index].fullContent = transcript
-            self.conversationItems[index].contentSnippet = String(transcript.prefix(100))
 
             self.logger.log(
               "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
@@ -626,7 +625,6 @@ final class WebRTCEventHandler {
           // Find and update the corresponding conversation item
           if let index = self.conversationItems.firstIndex(where: { $0.id == itemId }) {
             self.conversationItems[index].fullContent = transcript
-            self.conversationItems[index].contentSnippet = String(transcript.prefix(100))
 
             self.logger.log(
               "[WebRTCEventHandler] Stored user transcript for item and updated conversation item",
@@ -814,13 +812,13 @@ final class WebRTCEventHandler {
         "createdAt": ISO8601DateFormatter().string(from: item.createdAt),
         "ageSeconds": String(format: "%.2f", Date().timeIntervalSince(item.createdAt))
       ]
-      if let snippet = item.contentSnippet {
-        detail["contentSnippet"] = snippet
-      }
-      // Add full transcript from the itemTranscripts map if available
-      if let fullTranscript = self.itemTranscripts[item.id] {
-        detail["transcript"] = fullTranscript
-        detail["transcriptLength"] = fullTranscript.count
+      // Add full content if available (from fullContent or itemTranscripts map)
+      if let fullContent = item.fullContent {
+        detail["fullContent"] = fullContent
+        detail["contentLength"] = fullContent.count
+      } else if let fullTranscript = self.itemTranscripts[item.id] {
+        detail["fullContent"] = fullTranscript
+        detail["contentLength"] = fullTranscript.count
       }
       return detail
     }
@@ -927,22 +925,25 @@ final class WebRTCEventHandler {
       if isTurn {
         let ageInSeconds = Date().timeIntervalSince(conversationItem.createdAt)
         let turnDetails = self.getTurnDetails()
+        var metadata: [String: Any] = [
+          "itemId": itemId,
+          "role": role as Any,
+          "turnNumber": turnNumber as Any,
+          "turnCount": self.conversationTurnCount,
+          "totalConversationItems": self.conversationItems.count,
+          "position": self.conversationItems.count - 1,
+          "createdAt": ISO8601DateFormatter().string(from: conversationItem.createdAt),
+          "maxTurns": self.maxConversationTurns as Any,
+          "allTurns": turnDetails,
+          "turnItemCount": turnDetails.count
+        ]
+        if let content = fullContent {
+          metadata["contentLength"] = content.count
+          metadata["fullContent"] = content
+        }
         self.logger.log(
           "[TurnLimit] Turn item created: \(itemId)",
-          attributes: logAttributes(for: .debug, metadata: [
-            "itemId": itemId,
-            "role": role as Any,
-            "turnNumber": turnNumber as Any,
-            "turnCount": self.conversationTurnCount,
-            "totalConversationItems": self.conversationItems.count,
-            "position": self.conversationItems.count - 1,
-            "contentLength": contentSnippet?.count as Any,
-            "contentSnippet": contentSnippet as Any,
-            "createdAt": ISO8601DateFormatter().string(from: conversationItem.createdAt),
-            "maxTurns": self.maxConversationTurns as Any,
-            "allTurns": turnDetails,
-            "turnItemCount": turnDetails.count
-          ])
+          attributes: logAttributes(for: .debug, metadata: metadata)
         )
 
         // Check if we've exceeded the turn limit
@@ -1025,21 +1026,24 @@ final class WebRTCEventHandler {
           self.conversationTurnCount -= 1
         }
 
+        var metadata: [String: Any] = [
+          "itemId": itemId,
+          "wasTurn": item.isTurn,
+          "turnNumber": item.turnNumber as Any,
+          "role": item.role as Any,
+          "positionWas": index,
+          "ageSeconds": String(format: "%.2f", ageInSeconds),
+          "createdAt": formatter.string(from: item.createdAt),
+          "remainingItems": self.conversationItems.count,
+          "remainingTurns": self.conversationTurnCount
+        ]
+        if let content = item.fullContent {
+          metadata["contentLength"] = content.count
+          metadata["fullContent"] = content
+        }
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Item deleted confirmation",
-          attributes: logAttributes(for: .info, metadata: [
-            "itemId": itemId,
-            "wasTurn": item.isTurn,
-            "turnNumber": item.turnNumber as Any,
-            "role": item.role as Any,
-            "positionWas": index,
-            "ageSeconds": String(format: "%.2f", ageInSeconds),
-            "createdAt": formatter.string(from: item.createdAt),
-            "contentLength": item.contentSnippet?.count as Any,
-            "contentSnippet": item.contentSnippet as Any,
-            "remainingItems": self.conversationItems.count,
-            "remainingTurns": self.conversationTurnCount
-          ])
+          attributes: logAttributes(for: .info, metadata: metadata)
         )
       } else {
         self.logger.log(
@@ -1070,9 +1074,10 @@ final class WebRTCEventHandler {
     - user goals and preferences
     - open tasks / TODOs
     - any important decisions or constraints
+    - URLs can be helpful, but be judicious about including them since they take up space
 
     Avoid fluff. Use neutral third-person.
-    Target length: 1–3 short paragraphs.
+    Target length: 1-3 very short paragraphs.
 
     Conversation:
     \(transcript)
@@ -1092,8 +1097,10 @@ final class WebRTCEventHandler {
       ]
       if let role = item.role { dict["role"] = role }
       if let type = item.type { dict["type"] = type }
-      if let content = item.fullContent { dict["fullContent"] = content }
-      if let snippet = item.contentSnippet { dict["contentSnippet"] = snippet }
+      if let content = item.fullContent {
+        dict["fullContent"] = content
+        dict["contentLength"] = content.count
+      }
       if let turnNum = item.turnNumber { dict["turnNumber"] = turnNum }
       return dict
     }
@@ -1192,20 +1199,23 @@ final class WebRTCEventHandler {
 
         // Log details about the turn being pruned
         let ageInSeconds = now.timeIntervalSince(item.createdAt)
+        var metadata: [String: Any] = [
+          "itemId": item.id,
+          "turnNumber": item.turnNumber as Any,
+          "role": item.role as Any,
+          "position": index,
+          "ageSeconds": String(format: "%.2f", ageInSeconds),
+          "createdAt": formatter.string(from: item.createdAt),
+          "turnsRemovedSoFar": turnsRemoved,
+          "turnsToRemove": turnsToRemove
+        ]
+        if let content = item.fullContent {
+          metadata["contentLength"] = content.count
+          metadata["fullContent"] = content
+        }
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Marking turn for deletion",
-          attributes: logAttributes(for: .info, metadata: [
-            "itemId": item.id,
-            "turnNumber": item.turnNumber as Any,
-            "role": item.role as Any,
-            "position": index,
-            "ageSeconds": String(format: "%.2f", ageInSeconds),
-            "createdAt": formatter.string(from: item.createdAt),
-            "contentLength": item.contentSnippet?.count as Any,
-            "contentSnippet": item.contentSnippet as Any,
-            "turnsRemovedSoFar": turnsRemoved,
-            "turnsToRemove": turnsToRemove
-          ])
+          attributes: logAttributes(for: .info, metadata: metadata)
         )
 
         // Stop once we've identified enough turns to remove
@@ -1256,10 +1266,12 @@ final class WebRTCEventHandler {
         "isTurn": item.isTurn,
         "turnNumber": item.turnNumber as Any,
         "ageSeconds": String(format: "%.2f", ageInSeconds),
-        "createdAt": formatter.string(from: item.createdAt),
-        "contentLength": item.contentSnippet?.count as Any,
-        "contentSnippet": item.contentSnippet as Any
+        "createdAt": formatter.string(from: item.createdAt)
       ]
+      if let content = item.fullContent {
+        metadata["contentLength"] = content.count
+        metadata["fullContent"] = content
+      }
 
       // CRITICAL: Flag if this is a function call (contains call_id)
       if item.type == "function_call" {
@@ -1323,9 +1335,38 @@ final class WebRTCEventHandler {
     let now = Date()
     let formatter = ISO8601DateFormatter()
 
+    // Log all conversation items before processing
+    let allItemsForLogging = self.conversationItems.enumerated().map { (index, item) -> [String: Any] in
+      var detail: [String: Any] = [
+        "index": index,
+        "id": item.id,
+        "isTurn": item.isTurn,
+        "role": item.role as Any,
+        "type": item.type as Any,
+        "turnNumber": item.turnNumber as Any,
+        "createdAt": formatter.string(from: item.createdAt),
+        "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
+      ]
+      if let content = item.fullContent {
+        detail["fullContent"] = content
+        detail["contentLength"] = content.count
+      }
+      return detail
+    }
+
+    self.logger.log(
+      "[WebRTCEventHandler] [Compact] All conversation items before compaction",
+      attributes: logAttributes(for: .info, metadata: [
+        "totalItems": self.conversationItems.count,
+        "totalTurns": self.conversationTurnCount,
+        "targetTurns": targetTurnCount,
+        "allItems": allItemsForLogging
+      ])
+    )
+
     // 1) Figure out which items belong to the "older" part of the convo we want to compact.
     var itemsToCompact: [(item: ConversationItem, index: Int)] = []
-    var recentItems: [ConversationItem] = []
+    var recentItems: [(item: ConversationItem, index: Int)] = []
     var turnsSeenFromEnd = 0
 
     // Work backwards from newest to oldest, keeping `targetTurnCount` turns
@@ -1333,7 +1374,7 @@ final class WebRTCEventHandler {
       if item.isTurn {
         if turnsSeenFromEnd < targetTurnCount {
           turnsSeenFromEnd += 1
-          recentItems.append(item)
+          recentItems.append((item, index))
           continue
         }
       }
@@ -1351,22 +1392,58 @@ final class WebRTCEventHandler {
 
     // Sort oldest → newest again
     itemsToCompact.sort { $0.index < $1.index }
+    recentItems.sort { $0.index < $1.index }
     let compactOnlyItems = itemsToCompact.map { $0.item }
 
-    // Build detailed item info for logging
-    let itemDetails = compactOnlyItems.map { item in
-      "\(item.id) (\(item.role ?? "none")/\(item.type ?? "none"))"
-    }.joined(separator: ", ")
+    // Build detailed logging for compaction candidates
+    let compactCandidates = itemsToCompact.map { (item, index) -> [String: Any] in
+      var detail: [String: Any] = [
+        "index": index,
+        "id": item.id,
+        "isTurn": item.isTurn,
+        "role": item.role as Any,
+        "type": item.type as Any,
+        "turnNumber": item.turnNumber as Any,
+        "createdAt": formatter.string(from: item.createdAt),
+        "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
+      ]
+      if let content = item.fullContent {
+        detail["fullContent"] = content
+        detail["contentLength"] = content.count
+      }
+      return detail
+    }
+
+    // Build detailed logging for items being kept
+    let keptItems = recentItems.map { (item, index) -> [String: Any] in
+      var detail: [String: Any] = [
+        "index": index,
+        "id": item.id,
+        "isTurn": item.isTurn,
+        "role": item.role as Any,
+        "type": item.type as Any,
+        "turnNumber": item.turnNumber as Any,
+        "createdAt": formatter.string(from: item.createdAt),
+        "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
+      ]
+      if let content = item.fullContent {
+        detail["fullContent"] = content
+        detail["contentLength"] = content.count
+      }
+      return detail
+    }
 
     self.logger.log(
-      "[WebRTCEventHandler] [Compact] Identified items to compact",
+      "[WebRTCEventHandler] [Compact] Compaction selection logic completed",
       attributes: logAttributes(for: .info, metadata: [
-        "itemsToCompact": compactOnlyItems.count,
-        "itemIds": itemDetails,
-        "oldestItemCreatedAt": formatter.string(from: compactOnlyItems.first?.createdAt ?? now),
-        "newestItemCreatedAt": formatter.string(from: compactOnlyItems.last?.createdAt ?? now),
+        "selectionStrategy": "Keep most recent \(targetTurnCount) turns, compact all older items",
         "currentTurns": self.conversationTurnCount,
-        "targetTurns": targetTurnCount
+        "targetTurns": targetTurnCount,
+        "turnsKept": turnsSeenFromEnd,
+        "itemsToCompact": compactOnlyItems.count,
+        "itemsToKeep": recentItems.count,
+        "compactionCandidates": compactCandidates,
+        "keptItems": keptItems
       ])
     )
 
@@ -1413,10 +1490,12 @@ final class WebRTCEventHandler {
         "isTurn": item.isTurn,
         "turnNumber": item.turnNumber as Any,
         "ageSeconds": String(format: "%.2f", ageInSeconds),
-        "createdAt": formatter.string(from: item.createdAt),
-        "contentLength": item.contentSnippet?.count as Any,
-        "contentSnippet": item.contentSnippet as Any
+        "createdAt": formatter.string(from: item.createdAt)
       ]
+      if let content = item.fullContent {
+        metadata["contentLength"] = content.count
+        metadata["fullContent"] = content
+      }
 
       if item.type == "function_call" {
         metadata["WARNING"] = "DELETING FUNCTION CALL - call_id will become invalid"

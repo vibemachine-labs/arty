@@ -2,6 +2,7 @@
 - When creating expo react native UI, avoid making components too large - better refactor them into smaller reusable components
 - Despite being a cross-platform expo app, the team only has the capacity to maintain an ios version for now.  Later we will tackle android, but for now completely ignore it.
 - Always use Apple Human Interface Guidelines (HIG) and known UI / UX best practices, as you are an iOS swift superstar developer
+- When logging, default to logging full values and not substrings.  Later we can prune as needed, but right now there is an observability crisis.
 
 Always use expo libraries, for example:
 

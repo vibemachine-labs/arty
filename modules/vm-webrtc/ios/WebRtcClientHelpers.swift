@@ -569,6 +569,12 @@ extension OpenAIWebRTCClient {
       "session": session
     ])
 
+    Task { @MainActor in
+      self.emitModuleEvent("onVoiceSessionStatus", payload: [
+        "status_update": "Started Voice Session"
+      ])
+    }
+
     DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(300)) { [weak self] in
       guard let strongSelf = self else {
         return

@@ -728,6 +728,25 @@ final class WebRTCEventHandler {
 
   // MARK: - Conversation Turn Management
 
+  /// Build detailed turn list for debugging
+  private func getTurnDetails() -> [[String: Any]] {
+    let turnItems = self.conversationItems.filter { $0.isTurn }
+    return turnItems.map { item -> [String: Any] in
+      var detail: [String: Any] = [
+        "id": item.id,
+        "turnNumber": item.turnNumber as Any,
+        "role": item.role as Any,
+        "type": item.type as Any,
+        "createdAt": ISO8601DateFormatter().string(from: item.createdAt),
+        "ageSeconds": String(format: "%.2f", Date().timeIntervalSince(item.createdAt))
+      ]
+      if let snippet = item.contentSnippet {
+        detail["contentSnippet"] = snippet
+      }
+      return detail
+    }
+  }
+
   func configureConversationTurnLimit(maxTurns: Int?) {
     conversationQueue.async {
       self.maxConversationTurns = maxTurns
@@ -825,6 +844,7 @@ final class WebRTCEventHandler {
 
       if isTurn {
         let ageInSeconds = Date().timeIntervalSince(conversationItem.createdAt)
+        let turnDetails = self.getTurnDetails()
         self.logger.log(
           "[TurnLimit] Turn item created: \(itemId)",
           attributes: logAttributes(for: .debug, metadata: [
@@ -837,7 +857,9 @@ final class WebRTCEventHandler {
             "contentLength": contentSnippet?.count as Any,
             "contentSnippet": contentSnippet as Any,
             "createdAt": ISO8601DateFormatter().string(from: conversationItem.createdAt),
-            "maxTurns": self.maxConversationTurns as Any
+            "maxTurns": self.maxConversationTurns as Any,
+            "allTurns": turnDetails,
+            "turnItemCount": turnDetails.count
           ])
         )
 
@@ -859,6 +881,9 @@ final class WebRTCEventHandler {
           // Set flag to prevent duplicate compaction runs
           self.compactionInProgress = true
           
+          // Build detailed turn list for debugging
+          let turnDetails = self.getTurnDetails()
+          
           let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
           self.logger.log(
             "[WebRTCEventHandler] [TurnLimit] Turn limit exceeded, using \(strategyName) strategy",
@@ -867,7 +892,9 @@ final class WebRTCEventHandler {
               "maxTurns": maxTurns,
               "totalItems": self.conversationItems.count,
               "turnsToRemove": self.conversationTurnCount - maxTurns,
-              "strategy": strategyName
+              "strategy": strategyName,
+              "allTurns": turnDetails,
+              "turnItemCount": turnDetails.count
             ])
           )
 

@@ -786,7 +786,7 @@ final class WebRTCEventHandler {
 
     // item_truncate_invalid_item_id errors are non-breaking - log as warning
     let isItemTruncateError = errorCode == "item_truncate_invalid_item_id"
-    let logLevel: VmWebrtcLogLevel = isItemTruncateError ? .warn : .error
+    let logLevel: OpenAIWebRTCClient.NativeLogLevel = isItemTruncateError ? .warn : .error
     let logPrefix = isItemTruncateError ? "⚠️" : "❌"
 
     logger.log(

@@ -558,6 +558,7 @@ final class WebRTCEventHandler {
               "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
               attributes: logAttributes(for: .debug, metadata: [
                 "itemId": itemId,
+                "transcript": transcript,
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": true,
@@ -569,6 +570,7 @@ final class WebRTCEventHandler {
               "[WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
               attributes: logAttributes(for: .debug, metadata: [
                 "itemId": itemId,
+                "transcript": transcript,
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": false
@@ -630,6 +632,7 @@ final class WebRTCEventHandler {
               "[WebRTCEventHandler] Stored user transcript for item and updated conversation item",
               attributes: logAttributes(for: .debug, metadata: [
                 "itemId": itemId,
+                "transcript": transcript,
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": true,
@@ -641,6 +644,7 @@ final class WebRTCEventHandler {
               "[WebRTCEventHandler] Stored user transcript for item (conversation item not found yet)",
               attributes: logAttributes(for: .debug, metadata: [
                 "itemId": itemId,
+                "transcript": transcript,
                 "transcriptLength": transcript.count,
                 "totalStoredTranscripts": self.itemTranscripts.count,
                 "conversationItemUpdated": false
@@ -1307,15 +1311,17 @@ final class WebRTCEventHandler {
     )
   }
 
-  /// Compact older parts of the conversation into a summarized system item.
+  /// Compact the ENTIRE conversation history into a summarized system item.
   ///
   /// Strategy:
-  /// - Keep the most recent `targetTurnCount` turns as-is.
-  /// - Take *all earlier turns* and replace them with a single summary system message.
+  /// - Take ALL conversation items (entire history) and replace them with a single summary system message.
+  /// - This reduces the conversation context to a compact summary when the turn limit is exceeded.
+  /// - The summary preserves key information: user goals, preferences, decisions, and open tasks.
   ///
   /// Assumptions:
   /// - `conversationItems` is ordered oldest → newest.
   /// - `conversationTurnCount` counts only items where `isTurn == true`.
+  /// - Parameter `targetTurnCount` indicates the turn limit that was exceeded, triggering compaction.
   @MainActor
   func compactConversationItems(
     context: ToolContext,
@@ -1364,22 +1370,10 @@ final class WebRTCEventHandler {
       ])
     )
 
-    // 1) Figure out which items belong to the "older" part of the convo we want to compact.
-    var itemsToCompact: [(item: ConversationItem, index: Int)] = []
-    var recentItems: [(item: ConversationItem, index: Int)] = []
-    var turnsSeenFromEnd = 0
-
-    // Work backwards from newest to oldest, keeping `targetTurnCount` turns
-    for (index, item) in self.conversationItems.enumerated().reversed() {
-      if item.isTurn {
-        if turnsSeenFromEnd < targetTurnCount {
-          turnsSeenFromEnd += 1
-          recentItems.append((item, index))
-          continue
-        }
-      }
-      itemsToCompact.append((item, index))
-    }
+    // 1) Compact ALL conversation items (entire history)
+    // Strategy: Replace all existing conversation items with a single summary
+    let itemsToCompact: [(item: ConversationItem, index: Int)] = self.conversationItems.enumerated().map { ($0.element, $0.offset) }
+    let compactOnlyItems = itemsToCompact.map { $0.item }
 
     // Nothing to compact (shouldn't happen because of guard above, but be safe)
     guard !itemsToCompact.isEmpty else {
@@ -1389,11 +1383,6 @@ final class WebRTCEventHandler {
       )
       return
     }
-
-    // Sort oldest → newest again
-    itemsToCompact.sort { $0.index < $1.index }
-    recentItems.sort { $0.index < $1.index }
-    let compactOnlyItems = itemsToCompact.map { $0.item }
 
     // Build detailed logging for compaction candidates
     let compactCandidates = itemsToCompact.map { (item, index) -> [String: Any] in
@@ -1414,36 +1403,15 @@ final class WebRTCEventHandler {
       return detail
     }
 
-    // Build detailed logging for items being kept
-    let keptItems = recentItems.map { (item, index) -> [String: Any] in
-      var detail: [String: Any] = [
-        "index": index,
-        "id": item.id,
-        "isTurn": item.isTurn,
-        "role": item.role as Any,
-        "type": item.type as Any,
-        "turnNumber": item.turnNumber as Any,
-        "createdAt": formatter.string(from: item.createdAt),
-        "ageSeconds": String(format: "%.2f", now.timeIntervalSince(item.createdAt))
-      ]
-      if let content = item.fullContent {
-        detail["fullContent"] = content
-        detail["contentLength"] = content.count
-      }
-      return detail
-    }
-
     self.logger.log(
       "[WebRTCEventHandler] [Compact] Compaction selection logic completed",
       attributes: logAttributes(for: .info, metadata: [
-        "selectionStrategy": "Keep most recent \(targetTurnCount) turns, compact all older items",
+        "selectionStrategy": "Compact ENTIRE conversation history into a single summary",
         "currentTurns": self.conversationTurnCount,
         "targetTurns": targetTurnCount,
-        "turnsKept": turnsSeenFromEnd,
         "itemsToCompact": compactOnlyItems.count,
-        "itemsToKeep": recentItems.count,
-        "compactionCandidates": compactCandidates,
-        "keptItems": keptItems
+        "turnsToCompact": compactOnlyItems.filter { $0.isTurn }.count,
+        "compactionCandidates": compactCandidates
       ])
     )
 

@@ -59,7 +59,7 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
-    "string-strip-html": "^13.5.0"
+    "striptags": "^3.2.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -3,7 +3,7 @@
 global.__DEV__ = false;
 
 // Import required modules
-const { stripHtml } = require('string-strip-html');
+const striptags = require('striptags');
 // Use built-in Node.js fetch (available in Node 18+)
 
 async function getContentsFromUrl(url) {
@@ -119,7 +119,7 @@ async function getContentsFromUrl(url) {
 
       // Now strip all remaining HTML tags to get plain text
       console.log(`[web] Stripping remaining HTML tags...`);
-      const cleanedText = stripHtml(cleaned).result.trim();
+      const cleanedText = striptags(cleaned).trim();
       console.log(`[web] Cleaned text length: ${cleanedText.length}`);
       console.log(`[web] Cleaned text preview:`, cleanedText.substring(0, 200));
 

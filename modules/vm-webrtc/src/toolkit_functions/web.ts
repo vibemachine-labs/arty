@@ -1,5 +1,5 @@
 import { fetch } from 'expo/fetch';
-import { stripHtml } from 'string-strip-html';
+import striptags from 'striptags';
 import { log } from '../../../../lib/logger';
 import { getApiKey } from '../../../../lib/secure-storage';
 
@@ -183,9 +183,24 @@ export async function getContentsFromUrl(
       log.debug('[web] Removed self-closing tags', {}, { length: cleaned.length });
 
       // Strip all remaining HTML tags to get plain text
-      log.debug('[web] Stripping remaining HTML tags', {}, {});
-      const cleanedText = stripHtml(cleaned).result.trim();
+      log.debug('[web] About to strip remaining HTML tags', {}, {
+        cleanedLength: cleaned.length,
+        cleanedType: typeof cleaned,
+        cleanedPreview: cleaned.substring(0, 500),
+        containsHtml: cleaned.includes('<'),
+      });
+      
+      const stripHtmlStartTime = Date.now();
+      const cleanedText = striptags(cleaned).trim();
+      const stripHtmlDuration = Date.now() - stripHtmlStartTime;
       // codacy-enable Security/DetectUnsafeHTML
+
+      log.debug('[web] Completed striptags call', {}, {
+        durationMs: stripHtmlDuration,
+        inputLength: cleaned.length,
+        outputLength: cleanedText.length,
+        outputType: typeof cleanedText,
+      });
 
       log.debug('[web] Completed text cleaning', {}, {
         totalChunks: chunkCount,

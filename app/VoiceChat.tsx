@@ -17,6 +17,7 @@ import { log } from "../lib/logger";
 import { composeMainPrompt } from "../lib/mainPrompt";
 import { TokenUsageTracker } from "../lib/tokenUsageTracker";
 import type { VadMode } from "../lib/vadPreference";
+import { loadTranscriptionPreference } from "../lib/transcriptionPreference";
 import toolManager from "../modules/vm-webrtc/src/ToolManager";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
@@ -46,7 +47,6 @@ type VoiceChatProps = {
   mainPromptAddition: string;
   retentionRatio: number;
   maxConversationTurns: number;
-  transcriptionEnabled: boolean;
 };
 
 export function VoiceChat({
@@ -58,7 +58,6 @@ export function VoiceChat({
   mainPromptAddition,
   retentionRatio,
   maxConversationTurns,
-  transcriptionEnabled,
 }: VoiceChatProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -303,6 +302,9 @@ export function VoiceChat({
 
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
 
+      // Load transcription preference from storage
+      const transcriptionEnabled = await loadTranscriptionPreference();
+
       log.info("Starting OpenAI voice session", {}, {
         hasBaseUrl: Boolean(baseConnectionOptions.baseUrl),
         hasModel: Boolean(baseConnectionOptions.model),
@@ -311,6 +313,7 @@ export function VoiceChat({
         hasInstructions: resolvedPrompt.trim().length > 0,
         hasCustomAddition: mainPromptAddition.trim().length > 0,
         toolNames: voiceToolNames,
+        transcriptionEnabled,
       });
       setIsConnecting(true);
       setIsSessionActive(false);

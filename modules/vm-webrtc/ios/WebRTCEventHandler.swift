@@ -541,7 +541,7 @@ final class WebRTCEventHandler {
 
     if !transcriptText.isEmpty {
       logger.log(
-        "[WebRTCEventHandler] User transcript completed",
+        "[WebRTCEventHandler] Transcript complete (user)",
         attributes: logAttributes(for: .info, metadata: [
           "type": "input_audio_transcription",
           "speaker": "user",
@@ -552,7 +552,7 @@ final class WebRTCEventHandler {
       )
     } else {
       logger.log(
-        "[WebRTCEventHandler] User transcript completed (empty)",
+        "[WebRTCEventHandler] Transcript complete (user, empty)",
         attributes: logAttributes(for: .debug, metadata: [
           "itemId": payload["itemId"] as Any
         ])

@@ -413,7 +413,6 @@ export default function Index() {
         mainPromptAddition={mainPromptAddition}
         retentionRatio={retentionRatio}
         maxConversationTurns={maxConversationTurns}
-        transcriptionEnabled={transcriptionEnabled}
       />
     ) : (
       <TextChat mainPromptAddition={mainPromptAddition} />

@@ -648,13 +648,16 @@ final class OpenAIWebRTCClient: NSObject {
 
 extension OpenAIWebRTCClient: ToolCallResponder {
   func sendToolCallResult(callId: String, result: String) {
+    // Generate client-controlled ID for this function call output (max 32 chars, no hyphens)
+    let itemId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    
     // PRE-SEND DIAGNOSTICS
     self.logger.log(
       "🔧 [TOOL_OUTPUT_START] Preparing to send tool call result",
       attributes: logAttributes(for: .info, metadata: [
         "callId": callId,
+        "itemId": itemId,
         "resultLength": result.count,
-        "result_preview": String(result.prefix(500)),
         "result": result,
         "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
         "peerConnectionState": peerConnection?.connectionState.rawValue ?? -1,
@@ -665,11 +668,21 @@ extension OpenAIWebRTCClient: ToolCallResponder {
     let outputDict: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
+        "id": itemId,
         "type": "function_call_output",
         "call_id": callId,
         "output": result
       ]
     ]
+
+    // Save this item to conversation tracking BEFORE sending
+    // This ensures we have the full content for compaction
+    eventHandler.saveConversationItem(
+      itemId: itemId,
+      role: "system",
+      type: "function_call_output",
+      fullContent: result
+    )
 
     let didSend = sendEvent(outputDict)
 
@@ -678,8 +691,8 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "✅ [TOOL_OUTPUT_SENT] Tool call result successfully sent via data channel",
         attributes: logAttributes(for: .info, metadata: [
           "callId": callId,
+          "itemId": itemId,
           "resultLength": result.count,
-          "result_preview": String(result.prefix(500)),
           "result": result,
           "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
@@ -713,6 +726,9 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "❌ [TOOL_OUTPUT_FAILED] Failed to send conversation.item.create for tool result",
         attributes: logAttributes(for: .error, metadata: [
           "callId": callId,
+          "itemId": itemId,
+          "resultLength": result.count,
+          "result": result,
           "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
           "peerConnectionState": peerConnection?.connectionState.rawValue ?? -1,
           "likelyReason": "call_id may not exist in conversation (could have been pruned)",
@@ -727,11 +743,17 @@ extension OpenAIWebRTCClient: ToolCallResponder {
   }
 
   func sendToolCallError(callId: String, error: String) {
+    // Generate client-controlled ID for this error output (max 32 chars, no hyphens)
+    let itemId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    let errorOutput = "{\"error\": \"\(error)\"}"
+    
     self.logger.log(
       "⚠️ [TOOL_ERROR] Sending tool call error response",
       attributes: logAttributes(for: .warn, metadata: [
         "callId": callId,
+        "itemId": itemId,
         "error": error,
+        "errorOutput": errorOutput,
         "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
         "timestamp": ISO8601DateFormatter().string(from: Date())
       ])
@@ -740,11 +762,20 @@ extension OpenAIWebRTCClient: ToolCallResponder {
     let outputDict: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
+        "id": itemId,
         "type": "function_call_output",
         "call_id": callId,
-        "output": "{\"error\": \"\(error)\"}"
+        "output": errorOutput
       ]
     ]
+
+    // Save this error output to conversation tracking
+    eventHandler.saveConversationItem(
+      itemId: itemId,
+      role: "system",
+      type: "function_call_output",
+      fullContent: errorOutput
+    )
 
     let didSend = sendEvent(outputDict)
 
@@ -753,7 +784,9 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "❌ [TOOL_ERROR_SEND_FAILED] Failed to send tool error response",
         attributes: logAttributes(for: .error, metadata: [
           "callId": callId,
+          "itemId": itemId,
           "error": error,
+          "errorOutput": errorOutput,
           "likelyReason": "call_id may not exist in conversation (could have been pruned)",
           "timestamp": ISO8601DateFormatter().string(from: Date())
         ])

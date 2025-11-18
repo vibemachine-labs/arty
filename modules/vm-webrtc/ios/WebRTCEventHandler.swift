@@ -196,6 +196,46 @@ final class WebRTCEventHandler {
     recordIdleActivity(source: "remote_speaking")
   }
 
+  /// Manually save a conversation item to tracking (for items we create client-side)
+  func saveConversationItem(itemId: String, role: String, type: String, fullContent: String) {
+    conversationQueue.async {
+      let isTurn = (role == "user" || role == "assistant")
+      let turnNumber = isTurn ? self.conversationTurnCount + 1 : nil
+      
+      if isTurn {
+        self.conversationTurnCount += 1
+      }
+      
+      let conversationItem = ConversationItem(
+        id: itemId,
+        isTurn: isTurn,
+        createdAt: Date(),
+        role: role,
+        type: type,
+        fullContent: fullContent,
+        contentSnippet: String(fullContent.prefix(100)),
+        turnNumber: turnNumber
+      )
+      self.conversationItems.append(conversationItem)
+      
+      self.logger.log(
+        "[WebRTCEventHandler] [ManualSave] Conversation item saved manually",
+        attributes: logAttributes(for: .info, metadata: [
+          "itemId": itemId,
+          "role": role,
+          "type": type,
+          "isTurn": isTurn,
+          "turnNumber": turnNumber as Any,
+          "fullContentLength": fullContent.count,
+          "fullContent": fullContent,
+          "totalConversationItems": self.conversationItems.count,
+          "turnCount": self.conversationTurnCount,
+          "createdAt": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+  }
+
   // MARK: - Idle Detection Helpers
 
   private func shouldResetIdleTimer(for eventType: String) -> Bool {

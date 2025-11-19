@@ -11,14 +11,14 @@ import {
   type AppStateStatus,
 } from "react-native";
 import { MiniVisualizer } from "../components/AudioVisualizer";
+import VoiceSessionStatus from "../components/VoiceSessionStatus";
 import { VoiceSpeedCustomization } from "../components/VoiceSpeedCustomization";
 import { loadShowRealtimeErrorAlerts } from "../lib/developerSettings";
 import { log } from "../lib/logger";
 import { composeMainPrompt } from "../lib/mainPrompt";
 import { TokenUsageTracker } from "../lib/tokenUsageTracker";
-import type { VadMode } from "../lib/vadPreference";
 import { loadTranscriptionPreference } from "../lib/transcriptionPreference";
-import toolManager from "../modules/vm-webrtc/src/ToolManager";
+import type { VadMode } from "../lib/vadPreference";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
   muteUnmuteOutgoingAudio,
@@ -28,11 +28,12 @@ import VmWebrtcModule, {
   type IdleTimeoutEventPayload,
   type OpenAIConnectionOptions,
   type OpenAIConnectionState,
+  type OutboundAudioStatsEventPayload,
   type RealtimeErrorEventPayload,
   type TokenUsageEventPayload,
   type TranscriptEventPayload,
-  type OutboundAudioStatsEventPayload,
 } from "../modules/vm-webrtc";
+import toolManager from "../modules/vm-webrtc/src/ToolManager";
 
 export type AudioOutput = "handset" | "speakerphone";
 
@@ -652,9 +653,11 @@ export function VoiceChat({
 
       {shouldShowSessionCost ? (
         <View pointerEvents="none" style={styles.sessionCostContainer}>
-          <Text style={styles.sessionCostText}>{`💸 $${formattedSessionCost}`}</Text>
+          <Text style={styles.sessionCostText}>{`💵 $${formattedSessionCost}`}</Text>
         </View>
       ) : null}
+
+      <VoiceSessionStatus />
     </View>
   );
 }

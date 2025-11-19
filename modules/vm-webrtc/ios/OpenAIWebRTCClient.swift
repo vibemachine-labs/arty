@@ -5,6 +5,7 @@ import WebRTC
 enum OpenAIWebRTCError: LocalizedError {
   case invalidEndpoint
   case missingLocalDescription
+  case missingAPIKey
   case openAIRejected(Int)
   case openAIResponseDecoding
   case connectionTimeout
@@ -18,6 +19,8 @@ enum OpenAIWebRTCError: LocalizedError {
       return "Failed to build the OpenAI Realtime endpoint URL."
     case .missingLocalDescription:
       return "The local WebRTC session description is missing after ICE gathering."
+    case .missingAPIKey:
+      return "An OpenAI API key must be set before starting a session."
     case .openAIRejected(let status):
       return "OpenAI Realtime endpoint rejected the SDP offer with status code \(status)."
     case .openAIResponseDecoding:
@@ -120,6 +123,7 @@ final class OpenAIWebRTCClient: NSObject {
   var toolkitHelper: ToolkitHelper?
         
   var toolDefinitions: [[String: Any]] = []
+  private var apiKey: String?
   lazy var eventHandler = WebRTCEventHandler()
   lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
     InboundAudioStatsMonitor(
@@ -208,12 +212,26 @@ final class OpenAIWebRTCClient: NSObject {
       let success = dataChannel.sendData(buffer)
 
       if success {
+        var metadata: [String: Any] = [
+          "eventType": event["type"] as Any,
+          "dataSize": jsonData.count
+        ]
+        
+        // Add event_id if present
+        if let eventId = event["event_id"] as? String {
+          metadata["eventId"] = eventId
+        }
+        
+        // Add item_id to metadata if it's a delete event
+        if let eventType = event["type"] as? String, eventType == "conversation.item.delete" {
+          if let itemId = event["item_id"] as? String {
+            metadata["itemId"] = itemId
+          }
+        }
+        
         logger.log(
           "[VmWebrtc] Data channel message sent",
-          attributes: logAttributes(for: .debug, metadata: [
-            "eventType": event["type"] as Any,
-            "dataSize": jsonData.count
-          ])
+          attributes: logAttributes(for: .debug, metadata: metadata)
         )
       } else {
         logger.log(
@@ -264,6 +282,28 @@ final class OpenAIWebRTCClient: NSObject {
 
   func setToolkitHelper(_ helper: ToolkitHelper) {
     self.toolkitHelper = helper
+  }
+
+  func setAPIKey(_ apiKey: String) {
+    let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmedKey.isEmpty == false else {
+      self.apiKey = nil
+      self.logger.log(
+        "[VmWebrtc] " + "Cleared OpenAI API key for WebRTC client",
+        attributes: logAttributes(for: .warn, metadata: [
+          "reason": "empty_key"
+        ])
+      )
+      return
+    }
+
+    self.apiKey = trimmedKey
+    self.logger.log(
+      "[VmWebrtc] " + "Stored OpenAI API key for WebRTC client",
+      attributes: logAttributes(for: .debug, metadata: [
+        "keyLength": trimmedKey.count
+      ])
+    )
   }
 
   @MainActor
@@ -352,7 +392,6 @@ final class OpenAIWebRTCClient: NSObject {
 
   @MainActor
   func openConnection(
-    apiKey: String,
     model: String?,
     baseURL: String?,
     audioOutput: AudioOutputPreference,
@@ -371,6 +410,16 @@ final class OpenAIWebRTCClient: NSObject {
       throw OpenAIWebRTCError.missingInstructions
     }
     sessionInstructions = sanitizedInstructions
+
+    guard let resolvedApiKey = self.apiKey, resolvedApiKey.isEmpty == false else {
+      self.logger.log(
+        "[VmWebrtc] " + "Missing OpenAI API key before starting connection",
+        attributes: logAttributes(for: .error, metadata: [
+          "reason": "api_key_not_set"
+        ])
+      )
+      throw OpenAIWebRTCError.missingAPIKey
+    }
 
     let sanitizedVoice = voice?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let sanitizedVoice, !sanitizedVoice.isEmpty {
@@ -401,6 +450,9 @@ final class OpenAIWebRTCClient: NSObject {
     // Configure conversation turn limit in event handler
     eventHandler.configureConversationTurnLimit(maxTurns: maxConversationTurns)
     eventHandler.resetConversationTracking()
+    
+    // Pass API key to event handler
+    eventHandler.setApiKey(resolvedApiKey)
 
     eventHandler.stopIdleMonitoring(reason: "starting_new_connection")
 
@@ -444,7 +496,7 @@ final class OpenAIWebRTCClient: NSObject {
       do {
         try await recordingManager.startRecording(
           using: audioSession,
-          apiKey: apiKey,
+          apiKey: resolvedApiKey,
           voice: sessionVoice
         )
       } catch {
@@ -481,7 +533,7 @@ final class OpenAIWebRTCClient: NSObject {
       throw OpenAIWebRTCError.missingLocalDescription
     }
 
-    let answerSDP = try await exchangeSDPWithOpenAI(apiKey: apiKey, endpointURL: endpointURL, offerSDP: localSDP)
+    let answerSDP = try await exchangeSDPWithOpenAI(apiKey: resolvedApiKey, endpointURL: endpointURL, offerSDP: localSDP)
     let remoteDescription = RTCSessionDescription(type: .answer, sdp: answerSDP)
     try await setRemoteDescription(remoteDescription, for: connection)
     self.logger.log("[VmWebrtc] " + "Remote description applied", attributes: logAttributes(for: .debug))
@@ -596,13 +648,16 @@ final class OpenAIWebRTCClient: NSObject {
 
 extension OpenAIWebRTCClient: ToolCallResponder {
   func sendToolCallResult(callId: String, result: String) {
+    // Generate client-controlled ID for this function call output (max 32 chars, no hyphens)
+    let itemId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    
     // PRE-SEND DIAGNOSTICS
     self.logger.log(
       "🔧 [TOOL_OUTPUT_START] Preparing to send tool call result",
       attributes: logAttributes(for: .info, metadata: [
         "callId": callId,
+        "itemId": itemId,
         "resultLength": result.count,
-        "result_preview": String(result.prefix(500)),
         "result": result,
         "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
         "peerConnectionState": peerConnection?.connectionState.rawValue ?? -1,
@@ -613,11 +668,21 @@ extension OpenAIWebRTCClient: ToolCallResponder {
     let outputDict: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
+        "id": itemId,
         "type": "function_call_output",
         "call_id": callId,
         "output": result
       ]
     ]
+
+    // Save this item to conversation tracking BEFORE sending
+    // This ensures we have the full content for compaction
+    eventHandler.saveConversationItem(
+      itemId: itemId,
+      role: "system",
+      type: "function_call_output",
+      fullContent: result
+    )
 
     let didSend = sendEvent(outputDict)
 
@@ -626,8 +691,8 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "✅ [TOOL_OUTPUT_SENT] Tool call result successfully sent via data channel",
         attributes: logAttributes(for: .info, metadata: [
           "callId": callId,
+          "itemId": itemId,
           "resultLength": result.count,
-          "result_preview": String(result.prefix(500)),
           "result": result,
           "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
@@ -661,6 +726,9 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "❌ [TOOL_OUTPUT_FAILED] Failed to send conversation.item.create for tool result",
         attributes: logAttributes(for: .error, metadata: [
           "callId": callId,
+          "itemId": itemId,
+          "resultLength": result.count,
+          "result": result,
           "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
           "peerConnectionState": peerConnection?.connectionState.rawValue ?? -1,
           "likelyReason": "call_id may not exist in conversation (could have been pruned)",
@@ -675,11 +743,17 @@ extension OpenAIWebRTCClient: ToolCallResponder {
   }
 
   func sendToolCallError(callId: String, error: String) {
+    // Generate client-controlled ID for this error output (max 32 chars, no hyphens)
+    let itemId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+    let errorOutput = "{\"error\": \"\(error)\"}"
+    
     self.logger.log(
       "⚠️ [TOOL_ERROR] Sending tool call error response",
       attributes: logAttributes(for: .warn, metadata: [
         "callId": callId,
+        "itemId": itemId,
         "error": error,
+        "errorOutput": errorOutput,
         "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
         "timestamp": ISO8601DateFormatter().string(from: Date())
       ])
@@ -688,11 +762,20 @@ extension OpenAIWebRTCClient: ToolCallResponder {
     let outputDict: [String: Any] = [
       "type": "conversation.item.create",
       "item": [
+        "id": itemId,
         "type": "function_call_output",
         "call_id": callId,
-        "output": "{\"error\": \"\(error)\"}"
+        "output": errorOutput
       ]
     ]
+
+    // Save this error output to conversation tracking
+    eventHandler.saveConversationItem(
+      itemId: itemId,
+      role: "system",
+      type: "function_call_output",
+      fullContent: errorOutput
+    )
 
     let didSend = sendEvent(outputDict)
 
@@ -701,7 +784,9 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         "❌ [TOOL_ERROR_SEND_FAILED] Failed to send tool error response",
         attributes: logAttributes(for: .error, metadata: [
           "callId": callId,
+          "itemId": itemId,
           "error": error,
+          "errorOutput": errorOutput,
           "likelyReason": "call_id may not exist in conversation (could have been pruned)",
           "timestamp": ISO8601DateFormatter().string(from: Date())
         ])

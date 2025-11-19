@@ -38,25 +38,26 @@ enum OpenAIWebRTCError: LocalizedError {
 }
 
 final class OpenAIWebRTCClient: NSObject {
-  @MainActor lazy var recordingManager: VoiceSessionRecordingManager = {
-    let manager = VoiceSessionRecordingManager()
-    manager.setMetricsHandler { [weak self] metrics in
-      guard let self else { return }
-      self.logger.log("[VmWebrtc] " + "Outgoing audio meters", attributes: logAttributes(for: .debug, metadata: metrics.toMetadata()))
-      Task { @MainActor in
-        self.emitModuleEvent("onAudioMetrics", payload: metrics.toMetadata())
-      }
-    }
-    manager.setLogEmitter { [weak self] level, message, metadata in
-      guard let self else { return }
-      let logLevel = self.convertLogLevel(level)
-      self.logger.log(
-        "[VmWebrtc][\(logLevel.rawValue.uppercased())] " + message,
-        attributes: logAttributes(for: logLevel, metadata: metadata)
-      )
-    }
-    return manager
-  }()
+  // DISABLED: VoiceSessionRecordingManager temporarily removed to avoid issues
+  // @MainActor lazy var recordingManager: VoiceSessionRecordingManager = {
+  //   let manager = VoiceSessionRecordingManager()
+  //   manager.setMetricsHandler { [weak self] metrics in
+  //     guard let self else { return }
+  //     self.logger.log("[VmWebrtc] " + "Outgoing audio meters", attributes: logAttributes(for: .debug, metadata: metrics.toMetadata()))
+  //     Task { @MainActor in
+  //       self.emitModuleEvent("onAudioMetrics", payload: metrics.toMetadata())
+  //     }
+  //   }
+  //   manager.setLogEmitter { [weak self] level, message, metadata in
+  //     guard let self else { return }
+  //     let logLevel = self.convertLogLevel(level)
+  //     self.logger.log(
+  //       "[VmWebrtc][\(logLevel.rawValue.uppercased())] " + message,
+  //       attributes: logAttributes(for: logLevel, metadata: metadata)
+  //     )
+  //   }
+  //   return manager
+  // }()
   var isRecordingEnabled: Bool = false
   
   public enum NativeLogLevel: String {
@@ -505,24 +506,25 @@ final class OpenAIWebRTCClient: NSObject {
 
     let audioSession = AVAudioSession.sharedInstance()
 
-    if enableRecording {
-      do {
-        try await recordingManager.startRecording(
-          using: audioSession,
-          apiKey: resolvedApiKey,
-          voice: sessionVoice
-        )
-      } catch {
-        self.logger.log("[VmWebrtc] " + "Failed to start recording", attributes: logAttributes(for: .warn, metadata: [
-            "error": error.localizedDescription
-          ]))
-      }
-    } else {
-      self.logger.log("[VmWebrtc] " + "Recording disabled by user preference", attributes: logAttributes(for: .info, metadata: [
+    // DISABLED: VoiceSessionRecordingManager temporarily removed
+    // if enableRecording {
+    //   do {
+    //     try await recordingManager.startRecording(
+    //       using: audioSession,
+    //       apiKey: resolvedApiKey,
+    //       voice: sessionVoice
+    //     )
+    //   } catch {
+    //     self.logger.log("[VmWebrtc] " + "Failed to start recording", attributes: logAttributes(for: .warn, metadata: [
+    //         "error": error.localizedDescription
+    //       ]))
+    //   }
+    // } else {
+      self.logger.log("[VmWebrtc] " + "Recording disabled (VoiceSessionRecordingManager removed)", attributes: logAttributes(for: .info, metadata: [
         "recordingRequested": enableRecording,
-        "reason": "user_preference"
+        "reason": "feature_disabled"
       ]))
-    }
+    // }
 
     let connection = try makePeerConnection()
     firstCandidateTimestamp = nil
@@ -554,9 +556,10 @@ final class OpenAIWebRTCClient: NSObject {
     let state = try await waitForConnection(toReach: connection, timeout: 15)
     self.logger.log("[VmWebrtc] " + "OpenAI WebRTC connection flow finished", attributes: logAttributes(for: .info, metadata: ["state": state]))
 
-    if enableRecording {
-      await recordingManager.startConversationTracking()
-    }
+    // DISABLED: VoiceSessionRecordingManager temporarily removed
+    // if enableRecording {
+    //   await recordingManager.startConversationTracking()
+    // }
     if state == "connected" || state == "completed" {
       eventHandler.startIdleMonitoring(timeout: Constants.idleTimeoutSeconds) { [weak self] in
         guard let self else { return }
@@ -570,16 +573,18 @@ final class OpenAIWebRTCClient: NSObject {
   }
 
   /// Convert saved transcript to OpenAI TTS voice and merge
+  /// DISABLED: VoiceSessionRecordingManager temporarily removed
   /// Call this AFTER the call has ended if you want premium AI voice instead of Siri
   /// - Parameters:
   ///   - apiKey: OpenAI API key
   ///   - voice: Optional override; if nil or empty, uses sessionVoice.
   @MainActor
   func convertTranscriptToOpenAIVoice(apiKey: String, voice: String? = nil) {
-    recordingManager.convertTranscriptToOpenAIVoice(
-      apiKey: apiKey,
-      voice: voice
-    )
+    self.logger.log("[VmWebrtc] " + "convertTranscriptToOpenAIVoice disabled (VoiceSessionRecordingManager removed)", attributes: logAttributes(for: .warn))
+    // recordingManager.convertTranscriptToOpenAIVoice(
+    //   apiKey: apiKey,
+    //   voice: voice
+    // )
   }
 
   @MainActor
@@ -633,16 +638,17 @@ final class OpenAIWebRTCClient: NSObject {
 
       // ============================================
       // TTS Recording & Merge Workflow
+      // DISABLED: VoiceSessionRecordingManager temporarily removed
       // ============================================
 
-      if isRecordingEnabled {
-        recordingManager.stopRecordingAndProcess {
-          // Completion handler - nothing needed here
-        }
-      } else {
-        self.logger.log("[VmWebrtc] " + "Recording was disabled - skipping TTS generation and merge", attributes: logAttributes(for: .info))
-        recordingManager.reset()
-      }
+      // if isRecordingEnabled {
+      //   recordingManager.stopRecordingAndProcess {
+      //     // Completion handler - nothing needed here
+      //   }
+      // } else {
+        self.logger.log("[VmWebrtc] " + "Recording disabled (VoiceSessionRecordingManager removed)", attributes: logAttributes(for: .info))
+      //   recordingManager.reset()
+      // }
 
       stopMonitoringAudioRouteChanges()
       deactivateAudioSession()

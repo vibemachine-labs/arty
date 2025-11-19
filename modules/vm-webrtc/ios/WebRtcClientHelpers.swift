@@ -107,7 +107,11 @@ extension OpenAIWebRTCClient {
         self.logger.log("[VmWebrtc] " + "RECORDING MODE audio route configured", attributes: logAttributes(for: .info, metadata: [
           "mode": "default",
           "options": describeCategoryOptions(options),
-          "note": "Audio is now mixable with screen recording"
+          "note": "Audio is now mixable with screen recording",
+          "category": session.category.rawValue,
+          "currentOutputs": describeAudioOutputs(session.currentRoute),
+          "currentInputs": describeAudioInputs(session.currentRoute),
+          "outputVolume": session.outputVolume
         ]))
       } else {
         // Normal mode: use .voiceChat mode for optimal WebRTC quality
@@ -121,17 +125,17 @@ extension OpenAIWebRTCClient {
 
         let overridePort: AVAudioSession.PortOverride = (route == .speaker) ? .speaker : .none
         try session.overrideOutputAudioPort(overridePort)
+        
+        self.logger.log("[VmWebrtc] " + "Audio route updated", attributes: logAttributes(for: .info, metadata: [
+          "override": overridePort == .speaker ? "speaker" : "receiver",
+          "category": session.category.rawValue,
+          "mode": session.mode.rawValue,
+          "options": describeCategoryOptions(session.categoryOptions),
+          "currentOutputs": describeAudioOutputs(session.currentRoute),
+          "currentInputs": describeAudioInputs(session.currentRoute),
+          "outputVolume": session.outputVolume
+        ]))
       }
-
-      self.logger.log("[VmWebrtc] " + "Audio route updated", attributes: logAttributes(for: .info, metadata: [
-        "override": overridePort == .speaker ? "speaker" : "receiver",
-        "category": session.category.rawValue,
-        "mode": session.mode.rawValue,
-        "options": describeCategoryOptions(session.categoryOptions),
-        "currentOutputs": describeAudioOutputs(session.currentRoute),
-        "currentInputs": describeAudioInputs(session.currentRoute),
-        "outputVolume": session.outputVolume
-      ]))
     } catch {
       self.logger.log("[VmWebrtc] " + "Audio route switch failed", attributes: logAttributes(for: .error, metadata: [
         "override": route == .speaker ? "speaker" : "receiver",
@@ -940,40 +944,41 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
       if let eventDict = try JSONSerialization.jsonObject(with: buffer.data, options: []) as? [String: Any] {
         
         // ============================================
-        // NEW: Capture transcripts for TTS recording
+        // DISABLED: Capture transcripts for TTS recording
+        // VoiceSessionRecordingManager temporarily removed
         // ============================================
-        if isRecordingEnabled, let eventType = eventDict["type"] as? String {
-
-          // Capture USER transcript
-          if eventType == "conversation.item.created" {
-            if let item = eventDict["item"] as? [String: Any],
-                let role = item["role"] as? String,
-                role == "user",
-                let content = item["content"] as? [[String: Any]],
-                let firstContent = content.first,
-                firstContent["type"] as? String == "input_audio",
-                let transcript = firstContent["transcript"] as? String,
-                !transcript.isEmpty {
-
-              // Add to recording manager
-              Task { @MainActor in
-                await self.recordingManager.addUserTranscript(transcript)
-              }
-            }
-          }
-
-          // Capture AI transcript
-          if eventType == "response.audio_transcript.done" {
-              if let transcript = eventDict["transcript"] as? String,
-                  !transcript.isEmpty {
-
-                  // Add to recording manager
-                  Task { @MainActor in
-                    await self.recordingManager.addAITranscript(transcript)
-                  }
-              }
-          }
-        }
+        // if isRecordingEnabled, let eventType = eventDict["type"] as? String {
+        //
+        //   // Capture USER transcript
+        //   if eventType == "conversation.item.created" {
+        //     if let item = eventDict["item"] as? [String: Any],
+        //         let role = item["role"] as? String,
+        //         role == "user",
+        //         let content = item["content"] as? [[String: Any]],
+        //         let firstContent = content.first,
+        //         firstContent["type"] as? String == "input_audio",
+        //         let transcript = firstContent["transcript"] as? String,
+        //         !transcript.isEmpty {
+        //
+        //       // Add to recording manager
+        //       Task { @MainActor in
+        //         await self.recordingManager.addUserTranscript(transcript)
+        //       }
+        //     }
+        //   }
+        //
+        //   // Capture AI transcript
+        //   if eventType == "response.audio_transcript.done" {
+        //       if let transcript = eventDict["transcript"] as? String,
+        //           !transcript.isEmpty {
+        //
+        //           // Add to recording manager
+        //           Task { @MainActor in
+        //             await self.recordingManager.addAITranscript(transcript)
+        //           }
+        //       }
+        //   }
+        // }
         
         // ============================================
         // EXISTING: Pass to event handler

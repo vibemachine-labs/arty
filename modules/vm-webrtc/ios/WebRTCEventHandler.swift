@@ -786,8 +786,8 @@ final class WebRTCEventHandler {
                     await self.compactConversationItems(context: context)
                   }
                 } else {
-                  // Fallback to pruning if compaction disabled
-                  self.pruneOldestConversationItems(context: context, targetContentLength: self.maxContentLength)
+                  // Fallback to pruning if compaction disabled (already on conversationQueue, use Locked variant)
+                  self.pruneOldestConversationItemsLocked(context: context, targetContentLength: self.maxContentLength)
                 }
               }
             }
@@ -912,8 +912,8 @@ final class WebRTCEventHandler {
                     await self.compactConversationItems(context: context)
                   }
                 } else {
-                  // Fallback to pruning if compaction disabled
-                  self.pruneOldestConversationItems(context: context, targetContentLength: self.maxContentLength)
+                  // Fallback to pruning if compaction disabled (already on conversationQueue, use Locked variant)
+                  self.pruneOldestConversationItemsLocked(context: context, targetContentLength: self.maxContentLength)
                 }
               }
             }
@@ -1455,10 +1455,17 @@ final class WebRTCEventHandler {
 
   // MARK: - Conversation Pruning Strategies
 
+  /// Async wrapper for pruning - schedules work on conversationQueue
   private func pruneOldestConversationItems(context: ToolContext, targetContentLength: Int) {
-    let currentContentLength = conversationQueue.sync {
-      self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
+    conversationQueue.async {
+      self.pruneOldestConversationItemsLocked(context: context, targetContentLength: targetContentLength)
     }
+  }
+
+  /// Prune oldest conversation items - MUST be called while already on conversationQueue
+  private func pruneOldestConversationItemsLocked(context: ToolContext, targetContentLength: Int) {
+    // Already on conversationQueue, access properties directly
+    let currentContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
     let overage = currentContentLength - targetContentLength
 
     guard overage > 0 else {
@@ -1472,9 +1479,7 @@ final class WebRTCEventHandler {
       return
     }
 
-    let conversationItemsCount = conversationQueue.sync {
-      self.conversationItems.count
-    }
+    let conversationItemsCount = self.conversationItems.count
 
     self.logger.log(
       "[WebRTCEventHandler] [ContentLimit] Starting to prune oldest conversation items",
@@ -1492,9 +1497,7 @@ final class WebRTCEventHandler {
     let formatter = ISO8601DateFormatter()
 
     // Iterate from oldest (front of array) and collect items to delete until we're under limit
-    let conversationItemsSnapshot = conversationQueue.sync {
-      self.conversationItems
-    }
+    let conversationItemsSnapshot = self.conversationItems
 
     for (index, item) in conversationItemsSnapshot.enumerated() {
       let itemContentLength = item.fullContent?.count ?? 0

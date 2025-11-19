@@ -165,27 +165,36 @@ final class WebRTCEventHandler {
   private var idleTimeoutSeconds: TimeInterval = WebRTCEventHandler.defaultIdleTimeout
   private var isIdleMonitoringActive = false
   private let idleDebugInterval: TimeInterval = 2
-  private var apiKey: String?
+  private var apiKey: String?  // Access only via conversationQueue
 
   // Map of item IDs to their complete transcripts
   private var itemTranscripts: [String: String] = [:]
 
   func setApiKey(_ apiKey: String) {
     let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedKey.isEmpty else {
-      self.apiKey = nil
-      logger.log(
-        "[WebRTCEventHandler] Cleared API key",
-        attributes: logAttributes(for: .warn, metadata: ["reason": "empty_key"])
+    conversationQueue.async {
+      guard !trimmedKey.isEmpty else {
+        self.apiKey = nil
+        self.logger.log(
+          "[WebRTCEventHandler] Cleared API key",
+          attributes: logAttributes(for: .warn, metadata: ["reason": "empty_key"])
+        )
+        return
+      }
+      
+      self.apiKey = trimmedKey
+      self.logger.log(
+        "[WebRTCEventHandler] Stored API key",
+        attributes: logAttributes(for: .debug, metadata: ["keyLength": trimmedKey.count])
       )
-      return
     }
-    
-    self.apiKey = trimmedKey
-    logger.log(
-      "[WebRTCEventHandler] Stored API key",
-      attributes: logAttributes(for: .debug, metadata: ["keyLength": trimmedKey.count])
-    )
+  }
+
+  /// Thread-safe synchronous read of apiKey via conversationQueue
+  private func getApiKey() -> String? {
+    return conversationQueue.sync {
+      return self.apiKey
+    }
   }
 
   func handle(event: [String: Any], context: ToolContext) {
@@ -1406,7 +1415,7 @@ final class WebRTCEventHandler {
     var urlRequest = URLRequest(url: url)
     urlRequest.httpMethod = "POST"
     
-    guard let apiKey = self.apiKey else {
+    guard let apiKey = self.getApiKey() else {
       throw NSError(
         domain: "OpenAI",
         code: -3,

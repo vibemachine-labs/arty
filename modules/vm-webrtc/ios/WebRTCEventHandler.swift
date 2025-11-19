@@ -154,7 +154,6 @@ final class WebRTCEventHandler {
   private var conversationTurnCount: Int = 0
   private var maxConversationTurns: Int?
   private var maxContentLength: Int = 10000  // Default max total content length before compaction
-  private var useCompactionStrategy: Bool = true  // Default to compaction strategy
   private var compactionInProgress: Bool = false  // Prevent duplicate compaction runs
   private let conversationQueue = DispatchQueue(label: "com.vibemachine.webrtc.conversation-tracker")
   private let idleQueue = DispatchQueue(label: "com.vibemachine.webrtc.idle-monitor")
@@ -766,28 +765,21 @@ final class WebRTCEventHandler {
                 // Build detailed turn list for debugging
                 let turnDetails = self.getTurnDetails()
 
-                let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
                 self.logger.log(
-                  "[WebRTCEventHandler] [ContentLimit] Triggering \(strategyName) after assistant transcript stored",
+                  "[WebRTCEventHandler] [ContentLimit] Triggering compaction after assistant transcript stored",
                   attributes: logAttributes(for: .info, metadata: [
                     "totalContentLength": totalContentLength,
                     "maxContentLength": self.maxContentLength,
                     "totalConversationItems": self.conversationItems.count,
                     "overage": totalContentLength - self.maxContentLength,
-                    "strategy": strategyName,
                     "allTurns": turnDetails,
                     "turnItemCount": turnDetails.count
                   ])
                 )
 
-                // Use compaction strategy (always compact entire history when limit exceeded)
-                if self.useCompactionStrategy {
-                  Task { @MainActor in
-                    await self.compactConversationItems(context: context)
-                  }
-                } else {
-                  // Fallback to pruning if compaction disabled (already on conversationQueue, use Locked variant)
-                  self.pruneOldestConversationItemsLocked(context: context, targetContentLength: self.maxContentLength)
+                // Trigger compaction (always compact entire history when limit exceeded)
+                Task {
+                  await self.compactConversationItems(context: context)
                 }
               }
             }
@@ -892,28 +884,21 @@ final class WebRTCEventHandler {
                 // Build detailed turn list for debugging
                 let turnDetails = self.getTurnDetails()
 
-                let strategyName = self.useCompactionStrategy ? "compaction" : "pruning"
                 self.logger.log(
-                  "[WebRTCEventHandler] [ContentLimit] Triggering \(strategyName) after user transcript stored",
+                  "[WebRTCEventHandler] [ContentLimit] Triggering compaction after user transcript stored",
                   attributes: logAttributes(for: .info, metadata: [
                     "totalContentLength": totalContentLength,
                     "maxContentLength": self.maxContentLength,
                     "totalConversationItems": self.conversationItems.count,
                     "overage": totalContentLength - self.maxContentLength,
-                    "strategy": strategyName,
                     "allTurns": turnDetails,
                     "turnItemCount": turnDetails.count
                   ])
                 )
 
-                // Use compaction strategy (always compact entire history when limit exceeded)
-                if self.useCompactionStrategy {
-                  Task { @MainActor in
-                    await self.compactConversationItems(context: context)
-                  }
-                } else {
-                  // Fallback to pruning if compaction disabled (already on conversationQueue, use Locked variant)
-                  self.pruneOldestConversationItemsLocked(context: context, targetContentLength: self.maxContentLength)
+                // Trigger compaction (always compact entire history when limit exceeded)
+                Task {
+                  await self.compactConversationItems(context: context)
                 }
               }
             }
@@ -1453,154 +1438,7 @@ final class WebRTCEventHandler {
     return textContent.text
   }
 
-  // MARK: - Conversation Pruning Strategies
-
-  /// Async wrapper for pruning - schedules work on conversationQueue
-  private func pruneOldestConversationItems(context: ToolContext, targetContentLength: Int) {
-    conversationQueue.async {
-      self.pruneOldestConversationItemsLocked(context: context, targetContentLength: targetContentLength)
-    }
-  }
-
-  /// Prune oldest conversation items - MUST be called while already on conversationQueue
-  private func pruneOldestConversationItemsLocked(context: ToolContext, targetContentLength: Int) {
-    // Already on conversationQueue, access properties directly
-    let currentContentLength = self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
-    let overage = currentContentLength - targetContentLength
-
-    guard overage > 0 else {
-      self.logger.log(
-        "[WebRTCEventHandler] [ContentLimit] No pruning needed",
-        attributes: logAttributes(for: .debug, metadata: [
-          "currentContentLength": currentContentLength,
-          "targetContentLength": targetContentLength
-        ])
-      )
-      return
-    }
-
-    let conversationItemsCount = self.conversationItems.count
-
-    self.logger.log(
-      "[WebRTCEventHandler] [ContentLimit] Starting to prune oldest conversation items",
-      attributes: logAttributes(for: .info, metadata: [
-        "currentContentLength": currentContentLength,
-        "targetContentLength": targetContentLength,
-        "overage": overage,
-        "totalConversationItems": conversationItemsCount
-      ])
-    )
-
-    var itemsToDelete: [(item: ConversationItem, position: Int)] = []
-    var contentRemoved = 0
-    let now = Date()
-    let formatter = ISO8601DateFormatter()
-
-    // Iterate from oldest (front of array) and collect items to delete until we're under limit
-    let conversationItemsSnapshot = self.conversationItems
-
-    for (index, item) in conversationItemsSnapshot.enumerated() {
-      let itemContentLength = item.fullContent?.count ?? 0
-      itemsToDelete.append((item, index))
-      contentRemoved += itemContentLength
-
-      let ageInSeconds = now.timeIntervalSince(item.createdAt)
-      var metadata: [String: Any] = [
-        "itemId": item.id,
-        "isTurn": item.isTurn,
-        "turnNumber": item.turnNumber as Any,
-        "role": item.role as Any,
-        "position": index,
-        "contentLength": itemContentLength,
-        "contentRemovedSoFar": contentRemoved,
-        "overageTarget": overage,
-        "ageSeconds": String(format: "%.2f", ageInSeconds),
-        "createdAt": formatter.string(from: item.createdAt)
-      ]
-      if let content = item.fullContent {
-        metadata["fullContent"] = content
-      }
-      
-      self.logger.log(
-        "[WebRTCEventHandler] [ContentLimit] Marking item for deletion",
-        attributes: logAttributes(for: .info, metadata: metadata)
-      )
-
-      // Stop once we've removed enough content to get under the limit
-      if contentRemoved >= overage {
-        break
-      }
-    }
-
-    self.logger.log(
-      "[WebRTCEventHandler] [ContentLimit] Identified items to prune",
-      attributes: logAttributes(for: .info, metadata: [
-        "itemsToDelete": itemsToDelete.count,
-        "contentRemoved": contentRemoved,
-        "overage": overage,
-        "oldestItemAge": itemsToDelete.first.map { String(format: "%.2f", now.timeIntervalSince($0.item.createdAt)) } as Any,
-        "newestPrunedItemAge": itemsToDelete.last.map { String(format: "%.2f", now.timeIntervalSince($0.item.createdAt)) } as Any
-      ])
-    )
-
-    // Send delete events for identified items
-    for (item, position) in itemsToDelete {
-      let deleteEvent: [String: Any] = [
-        "type": "conversation.item.delete",
-        "item_id": item.id
-      ]
-
-      let ageInSeconds = now.timeIntervalSince(item.createdAt)
-
-      var metadata: [String: Any] = [
-        "itemId": item.id,
-        "position": position,
-        "itemType": item.type as Any,
-        "itemRole": item.role as Any,
-        "isTurn": item.isTurn,
-        "turnNumber": item.turnNumber as Any,
-        "ageSeconds": String(format: "%.2f", ageInSeconds),
-        "createdAt": formatter.string(from: item.createdAt)
-      ]
-      if let content = item.fullContent {
-        metadata["contentLength"] = content.count
-        metadata["fullContent"] = content
-      }
-
-      // CRITICAL: Flag if this is a function call (contains call_id)
-      if item.type == "function_call" {
-        metadata["WARNING"] = "DELETING FUNCTION CALL - call_id will become invalid"
-        metadata["potentiallyOrphanedCallId"] = item.id
-
-        self.logger.log(
-          "🚨 [PRUNE_DELETE_FUNCTION_CALL] Deleting function_call item - call_id will be orphaned",
-          attributes: logAttributes(for: .warn, metadata: metadata)
-        )
-      } else {
-        self.logger.log(
-          "[ContentLimit] Sending prune delete event for item: \(item.id)",
-          attributes: logAttributes(for: .debug, metadata: metadata)
-        )
-      }
-
-      DispatchQueue.main.async {
-        context.sendDataChannelMessage(deleteEvent)
-      }
-    }
-
-    // Clear the compaction flag after pruning is complete (already on conversationQueue, safe to update directly)
-    self.compactionInProgress = false
-    
-    // Note: Turn count and items will be decremented as delete confirmations come in
-    self.logger.log(
-      "[WebRTCEventHandler] [ContentLimit] Prune delete events sent, awaiting confirmations",
-      attributes: logAttributes(for: .info, metadata: [
-        "itemsSent": itemsToDelete.count,
-        "contentRemoved": contentRemoved,
-        "compactionInProgress": self.compactionInProgress
-      ])
-    )
-  }
+  // MARK: - Conversation Compaction
 
   /// Compact the ENTIRE conversation history into a summarized system item.
   ///
@@ -1612,7 +1450,6 @@ final class WebRTCEventHandler {
   /// Assumptions:
   /// - `conversationItems` is ordered oldest → newest.
   /// - Compaction is triggered when total content length exceeds maxContentLength.
-  @MainActor
   func compactConversationItems(context: ToolContext) async {
     let totalContentLength = conversationQueue.sync {
       self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
@@ -1717,10 +1554,12 @@ final class WebRTCEventHandler {
       ])
     )
 
-    // Emit status update: starting compaction
-    context.emitModuleEvent("onVoiceSessionStatus", [
-      "status_update": "Compacting \(compactOnlyItems.count) items"
-    ])
+    // Emit status update: starting compaction (on main queue for UI updates)
+    await MainActor.run {
+      context.emitModuleEvent("onVoiceSessionStatus", [
+        "status_update": "Compacting \(compactOnlyItems.count) items"
+      ])
+    }
 
     // 2) Ask gpt-4o to summarize that older slice.
     let summaryText: String
@@ -1728,14 +1567,16 @@ final class WebRTCEventHandler {
       summaryText = try await summarizeConversationItems(compactOnlyItems)
     } catch {
       self.logger.log(
-        "[WebRTCEventHandler] [Compact] Summarization failed, falling back to raw prune",
+        "[WebRTCEventHandler] [Compact] Summarization failed, aborting compaction",
         attributes: logAttributes(for: .error, metadata: [
           "error": String(describing: error)
         ])
       )
 
-      // If summarization fails, fall back to your existing pruning strategy
-      pruneOldestConversationItems(context: context, targetContentLength: self.maxContentLength)
+      // Clear compaction flag on error
+      conversationQueue.async {
+        self.compactionInProgress = false
+      }
       return
     }
 
@@ -1775,7 +1616,9 @@ final class WebRTCEventHandler {
       ])
     )
 
-    context.sendDataChannelMessage(summaryEvent)
+    await MainActor.run {
+      context.sendDataChannelMessage(summaryEvent)
+    }
 
     // 4) Now delete the compacted items from the Realtime conversation.
     for (item, index) in itemsToCompact {
@@ -1816,7 +1659,9 @@ final class WebRTCEventHandler {
         )
       }
 
-      context.sendDataChannelMessage(deleteEvent)
+      await MainActor.run {
+        context.sendDataChannelMessage(deleteEvent)
+      }
     }
 
     // Build list of deleted item IDs for logging
@@ -1830,10 +1675,12 @@ final class WebRTCEventHandler {
       ])
     )
 
-    // Emit status update: compaction complete
-    context.emitModuleEvent("onVoiceSessionStatus", [
-      "status_update": "Compacted \(itemsToCompact.count) items"
-    ])
+    // Emit status update: compaction complete (on main queue for UI updates)
+    await MainActor.run {
+      context.emitModuleEvent("onVoiceSessionStatus", [
+        "status_update": "Compacted \(itemsToCompact.count) items"
+      ])
+    }
 
     // 5) Reset our local tracking immediately after compaction
     // Remove all the items we just deleted from our local tracking

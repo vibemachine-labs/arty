@@ -1588,7 +1588,7 @@ final class WebRTCEventHandler {
       }
     }
 
-    // Clear the compaction flag after pruning is complete
+    // Clear the compaction flag after pruning is complete (already on conversationQueue, safe to update directly)
     self.compactionInProgress = false
     
     // Note: Turn count and items will be decremented as delete confirmations come in

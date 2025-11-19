@@ -91,6 +91,7 @@ final class OpenAIWebRTCClient: NSObject {
   private let retentionRatioScale: Int = 2
   var transcriptionEnabled: Bool = false
   var isRecordingModeEnabled: Bool = false
+  private var currentAudioOutputPreference: AudioOutputPreference = .speakerphone
   let logger = VmWebrtcLogging.logger
 
   // Reference to the github connector tool delegate
@@ -312,14 +313,38 @@ final class OpenAIWebRTCClient: NSObject {
 
   @MainActor
   func setRecordingMode(_ enabled: Bool) {
+    let wasEnabled = isRecordingModeEnabled
     isRecordingModeEnabled = enabled
+
     self.logger.log(
       "[VmWebrtc] Recording mode \(enabled ? "enabled" : "disabled")",
       attributes: logAttributes(for: .info, metadata: [
         "enabled": enabled,
+        "wasEnabled": wasEnabled,
         "note": enabled ? "Using .default mode with .mixWithOthers for screen recording compatibility" : "Using .voiceChat mode for optimal WebRTC quality"
       ])
     )
+
+    // Reconfigure audio session if connection is active and mode actually changed
+    if wasEnabled != enabled && peerConnection != nil {
+      do {
+        try configureAudioSession(for: currentAudioOutputPreference)
+        self.logger.log(
+          "[VmWebrtc] Reconfigured audio session for recording mode change",
+          attributes: logAttributes(for: .info, metadata: [
+            "recordingMode": enabled,
+            "audioOutput": currentAudioOutputPreference.rawValue
+          ])
+        )
+      } catch {
+        self.logger.log(
+          "[VmWebrtc] Failed to reconfigure audio session for recording mode change",
+          attributes: logAttributes(for: .error, metadata: [
+            "error": error.localizedDescription
+          ])
+        )
+      }
+    }
   }
 
   func setToolDefinitions(_ definitions: [[String: Any]]) {
@@ -478,6 +503,9 @@ final class OpenAIWebRTCClient: NSObject {
 
     let endpointURL = try buildEndpointURL(baseURL: baseURL, model: model)
     self.logger.log("[VmWebrtc] " + "Resolved OpenAI endpoint", attributes: logAttributes(for: .debug, metadata: ["endpoint": endpointURL.absoluteString]))
+
+    // Store audio output preference for later reconfiguration
+    self.currentAudioOutputPreference = audioOutput
 
     try configureAudioSession(for: audioOutput)
     self.logger.log("[VmWebrtc] " + "Configured AVAudioSession for voice chat", attributes: logAttributes(for: .debug, metadata: [

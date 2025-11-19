@@ -45,11 +45,11 @@ extension OpenAIWebRTCClient {
 
   private func configureWebRTCAudioSession(for route: OutputRoute) {
     let configuration = RTCAudioSessionConfiguration.webRTC()
+    configuration.category = AVAudioSession.Category.playAndRecord.rawValue
     
     // Use recording-friendly settings when recording mode is enabled
     if isRecordingModeEnabled {
       configuration.mode = AVAudioSession.Mode.default.rawValue
-      configuration.category = AVAudioSession.Category.playAndRecord.rawValue
       
       var options: AVAudioSession.CategoryOptions = [.mixWithOthers, .defaultToSpeaker]
       configuration.categoryOptions = options
@@ -63,7 +63,6 @@ extension OpenAIWebRTCClient {
       ]))
     } else {
       configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
-      configuration.category = AVAudioSession.Category.playAndRecord.rawValue
 
       var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
       if route == .speaker {

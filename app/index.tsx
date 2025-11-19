@@ -1,45 +1,47 @@
 import { Camera } from "expo-camera";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Platform,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AdvancedConfigurationSheet } from "../components/settings/AdvancedConfigurationSheet";
 import { ConfigureChatMode, type ChatMode } from "../components/settings/ConfigureChatMode";
-import { ConfigureMainPromptModal } from "../components/settings/ConfigureMainPromptModal";
-import { ConfigureVoice } from "../components/settings/ConfigureVoice";
-import { ConfigureVad } from "../components/settings/ConfigureVad";
 import { ConfigureContextWindow } from "../components/settings/ConfigureContextWindow";
+import { ConfigureMainPromptModal } from "../components/settings/ConfigureMainPromptModal";
 import { ConfigureToolsSheet } from "../components/settings/ConfigureToolsSheet";
 import { ConfigureTranscription } from "../components/settings/ConfigureTranscription";
+import { ConfigureVad } from "../components/settings/ConfigureVad";
+import { ConfigureVoice } from "../components/settings/ConfigureVoice";
 import { ConnectorsConfig } from "../components/settings/ConnectorsConfig";
 import { DeveloperMode } from "../components/ui/DeveloperMode";
 import { HamburgerButton } from "../components/ui/HamburgerButton";
 import { HamburgerMenu, type MenuSection } from "../components/ui/HamburgerMenu";
+import {
+    DEFAULT_MAX_CONVERSATION_TURNS,
+    DEFAULT_RETENTION_RATIO,
+    loadContextWindowPreferences,
+    saveMaxConversationTurns,
+    saveRetentionRatio
+} from "../lib/contextWindowPreference";
+import { loadRecordingMode } from "../lib/developerSettings";
 import { log } from "../lib/logger";
+import { loadMainPromptAddition } from "../lib/mainPrompt";
+import { getApiKey } from "../lib/secure-storage";
+import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
 import { DEFAULT_VAD_MODE, loadVadPreference, saveVadPreference, type VadMode } from "../lib/vadPreference";
 import { DEFAULT_VOICE, loadVoicePreference, saveVoicePreference } from "../lib/voicePreference";
-import {
-  DEFAULT_RETENTION_RATIO,
-  DEFAULT_MAX_CONVERSATION_TURNS,
-  loadContextWindowPreferences,
-  saveRetentionRatio,
-  saveMaxConversationTurns
-} from "../lib/contextWindowPreference";
-import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
-import { getApiKey } from "../lib/secure-storage";
-import { loadMainPromptAddition } from "../lib/mainPrompt";
 import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
 import { OnboardingWizard } from "./OnboardingWizard";
 import TextChat from "./TextChat";
 import VoiceChat from "./VoiceChat";
 
 import { type BaseOpenAIConnectionOptions } from "../modules/vm-webrtc";
+import VmWebrtcModule from "../modules/vm-webrtc/src/VmWebrtcModule";
 
 const buildConnectionOptions = async (): Promise<BaseOpenAIConnectionOptions | null> => {
   // Try to get user-saved API key first
@@ -199,6 +201,28 @@ export default function Index() {
     };
 
     hydrateTranscriptionPreference();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateRecordingModePreference = async () => {
+      const stored = await loadRecordingMode();
+      if (!isMounted) {
+        return;
+      }
+      // Apply recording mode to native module if available
+      if (VmWebrtcModule?.setRecordingMode) {
+        VmWebrtcModule.setRecordingMode(stored);
+        log.info("Recording mode preference loaded and applied", {}, { recordingMode: stored });
+      }
+    };
+
+    hydrateRecordingModePreference();
 
     return () => {
       isMounted = false;

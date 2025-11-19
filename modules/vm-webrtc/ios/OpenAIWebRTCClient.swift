@@ -109,6 +109,7 @@ final class OpenAIWebRTCClient: NSObject {
   var retentionRatio: Double?
   private let retentionRatioScale: Int = 2
   var transcriptionEnabled: Bool = false
+  var isRecordingModeEnabled: Bool = false
   let logger = VmWebrtcLogging.logger
 
   // Reference to the github connector tool delegate
@@ -326,6 +327,18 @@ final class OpenAIWebRTCClient: NSObject {
         ])
       )
     }
+  }
+
+  @MainActor
+  func setRecordingMode(_ enabled: Bool) {
+    isRecordingModeEnabled = enabled
+    self.logger.log(
+      "[VmWebrtc] Recording mode \(enabled ? "enabled" : "disabled")",
+      attributes: logAttributes(for: .info, metadata: [
+        "enabled": enabled,
+        "note": enabled ? "Using .default mode with .mixWithOthers for screen recording compatibility" : "Using .voiceChat mode for optimal WebRTC quality"
+      ])
+    )
   }
 
   func setToolDefinitions(_ definitions: [[String: Any]]) {

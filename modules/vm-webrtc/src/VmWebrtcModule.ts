@@ -1,11 +1,12 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo';
 
 import { log } from '../../../lib/logger';
+import type { VadMode } from '../../../lib/vadPreference';
+import { gdriveConnectorDefinition } from './ToolGDriveConnector';
 import {
   createGithubConnectorTool,
   type GithubConnectorNativeModule,
 } from './ToolGithubConnector';
-import { gdriveConnectorDefinition } from './ToolGDriveConnector';
 import {
   createGPT5GDriveFixerTool,
   type GPT5GDriveFixerNativeModule,
@@ -18,14 +19,12 @@ import {
   createToolkitHelper,
   type ToolkitHelperNativeModule,
 } from './ToolkitHelper';
-import type { VadMode } from '../../../lib/vadPreference';
-import toolManager from './ToolManager';
-import {
-    OpenAIConnectionOptions,
-    OpenAIConnectionState,
-    VmWebrtcModuleEvents,
-} from './VmWebrtc.types';
 import { getToolkitDefinitions } from './ToolkitManager';
+import {
+  OpenAIConnectionOptions,
+  OpenAIConnectionState,
+  VmWebrtcModuleEvents,
+} from './VmWebrtc.types';
 
 const MODULE_NAME = 'VmWebrtc';
 
@@ -49,6 +48,7 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   sendGPT5WebSearchResponse(requestId: string, result: string): void;
   sendToolkitResponse(requestId: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
+  setRecordingMode(enabled: boolean): void;
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
   logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
 }

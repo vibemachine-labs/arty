@@ -318,5 +318,14 @@ public class VmWebrtcModule: Module {
       }
     }
 
+    Function("setRecordingMode") { (enabled: Bool) in
+      self.logger.log("setRecordingMode called", attributes: [
+        "enabled": enabled
+      ])
+      Task { @MainActor in
+        self.webrtcClient.setRecordingMode(enabled)
+      }
+    }
+
   }
 }

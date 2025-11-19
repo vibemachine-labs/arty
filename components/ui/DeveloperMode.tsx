@@ -1,34 +1,37 @@
+import * as Clipboard from "expo-clipboard";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
 
 import { OnboardingWizard } from "../../app/OnboardingWizard";
-import { RecordingScreen } from "./RecordingScreen";
 import {
-  loadLogRedactionDisabled,
-  loadShowRealtimeErrorAlerts,
-  saveShowRealtimeErrorAlerts,
+    loadLogRedactionDisabled,
+    loadRecordingMode,
+    loadShowRealtimeErrorAlerts,
+    saveRecordingMode,
+    saveShowRealtimeErrorAlerts,
 } from "../../lib/developerSettings";
-import {
-  getLogfireApiKey,
-  getLogfireEnabled,
-  saveLogfireApiKey,
-  saveLogfireEnabled,
-} from "../../lib/secure-storage";
 import { log } from "../../lib/logger";
+import {
+    getLogfireApiKey,
+    getLogfireEnabled,
+    saveLogfireApiKey,
+    saveLogfireEnabled,
+} from "../../lib/secure-storage";
+import VmWebrtcModule from "../../modules/vm-webrtc/src/VmWebrtcModule";
+import { RecordingScreen } from "./RecordingScreen";
 
 export interface DeveloperModeProps {
   visible: boolean;
@@ -205,6 +208,36 @@ const LogfireTracingSection: React.FC<{
   );
 };
 
+const RecordingModeSection: React.FC<{
+  recordingMode: boolean;
+  onToggle: (value: boolean) => void;
+}> = ({ recordingMode, onToggle }) => {
+  return (
+    <View style={styles.sectionCard}>
+      <View style={styles.settingRow}>
+        <View style={styles.settingTextContainer}>
+          <Text style={styles.sectionTitle}>Recording Mode</Text>
+          <Text style={styles.sectionSubtitle}>
+            Enable recording-compatible audio settings for QuickTime or iOS screen capture. Uses mixable audio mode (.default) instead of voice chat mode to avoid static in recordings.
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel="Toggle recording mode"
+          value={recordingMode}
+          onValueChange={onToggle}
+          ios_backgroundColor="#D1D1D6"
+          trackColor={{ false: "#D1D1D6", true: "#34C759" }}
+        />
+      </View>
+      {recordingMode && (
+        <Text style={styles.infoText}>
+          Audio session will use .default mode with .mixWithOthers and .defaultToSpeaker options for screen recording compatibility.
+        </Text>
+      )}
+    </View>
+  );
+};
+
 const LogRedactionSection: React.FC<{
   redactionDisabled: boolean;
   onToggle: (value: boolean) => void;
@@ -242,11 +275,13 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
   const [logfireEnabled, setLogfireEnabled] = useState(false);
   const [logfireApiKey, setLogfireApiKey] = useState("");
   const [logRedactionDisabled, setLogRedactionDisabled] = useState(false);
+  const [recordingMode, setRecordingMode] = useState(false);
   const [initialSettings, setInitialSettings] = useState<{
     showErrorAlerts: boolean;
     logfireEnabled: boolean;
     logfireApiKey: string;
     logRedactionDisabled: boolean;
+    recordingMode: boolean;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isReady = initialSettings !== null;
@@ -262,22 +297,25 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       return;
     }
     const loadSettings = async () => {
-      const [setting, enabled, apiKeyValue, redactionDisabled] = await Promise.all([
+      const [setting, enabled, apiKeyValue, redactionDisabled, recordingModeEnabled] = await Promise.all([
         loadShowRealtimeErrorAlerts(),
         getLogfireEnabled(),
         getLogfireApiKey(),
         loadLogRedactionDisabled(),
+        loadRecordingMode(),
       ]);
       const apiKey = apiKeyValue || "";
       setShowErrorAlerts(setting);
       setLogfireEnabled(enabled);
       setLogfireApiKey(apiKey);
       setLogRedactionDisabled(redactionDisabled);
+      setRecordingMode(recordingModeEnabled);
       setInitialSettings({
         showErrorAlerts: setting,
         logfireEnabled: enabled,
         logfireApiKey: apiKey,
         logRedactionDisabled: redactionDisabled,
+        recordingMode: recordingModeEnabled,
       });
     };
     void loadSettings();
@@ -297,6 +335,10 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
 
   const handleToggleLogRedactionDisabled = useCallback((value: boolean) => {
     setLogRedactionDisabled(value);
+  }, []);
+
+  const handleToggleRecordingMode = useCallback((value: boolean) => {
+    setRecordingMode(value);
   }, []);
 
   const handleLogfireApiKeyChange = useCallback((value: string) => {
@@ -321,11 +363,13 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       setLogfireEnabled(initialSettings.logfireEnabled);
       setLogfireApiKey(initialSettings.logfireApiKey);
       setLogRedactionDisabled(initialSettings.logRedactionDisabled);
+      setRecordingMode(initialSettings.recordingMode);
     } else {
       setShowErrorAlerts(false);
       setLogfireEnabled(false);
       setLogfireApiKey("");
       setLogRedactionDisabled(false);
+      setRecordingMode(false);
     }
     setRecordingManagerVisible(false);
   }, [initialSettings]);
@@ -340,6 +384,7 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       logfireEnabled: false,
       logfireApiKey: "",
       logRedactionDisabled: false,
+      recordingMode: false,
     };
     const trimmedApiKey = logfireApiKey.trim();
     try {
@@ -361,11 +406,19 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       if (logRedactionDisabled !== previous.logRedactionDisabled) {
         await log.setRedactionEnabled(!logRedactionDisabled, { persist: true });
       }
+      if (recordingMode !== previous.recordingMode) {
+        await saveRecordingMode(recordingMode);
+        // Apply recording mode to native module if available
+        if (VmWebrtcModule?.setRecordingMode) {
+          VmWebrtcModule.setRecordingMode(recordingMode);
+        }
+      }
       setInitialSettings({
         showErrorAlerts,
         logfireEnabled,
         logfireApiKey: trimmedApiKey,
         logRedactionDisabled,
+        recordingMode,
       });
       setLogfireApiKey(trimmedApiKey);
       setRecordingManagerVisible(false);
@@ -387,6 +440,7 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
     onClose,
     showErrorAlerts,
     logRedactionDisabled,
+    recordingMode,
   ]);
 
   const handleCancel = useCallback(() => {
@@ -436,6 +490,10 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
             <ErrorAlertsSection
               showErrorAlerts={showErrorAlerts}
               onToggle={handleToggleErrorAlerts}
+            />
+            <RecordingModeSection
+              recordingMode={recordingMode}
+              onToggle={handleToggleRecordingMode}
             />
             <LogRedactionSection
               redactionDisabled={logRedactionDisabled}
@@ -613,6 +671,12 @@ const styles = StyleSheet.create({
   warningText: {
     fontSize: 13,
     color: "#FF3B30",
+    marginTop: 12,
+    lineHeight: 18,
+  },
+  infoText: {
+    fontSize: 13,
+    color: "#34C759",
     marginTop: 12,
     lineHeight: 18,
   },

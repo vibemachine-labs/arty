@@ -45,22 +45,41 @@ extension OpenAIWebRTCClient {
 
   private func configureWebRTCAudioSession(for route: OutputRoute) {
     let configuration = RTCAudioSessionConfiguration.webRTC()
-    configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
-    configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+    
+    // Use recording-friendly settings when recording mode is enabled
+    if isRecordingModeEnabled {
+      configuration.mode = AVAudioSession.Mode.default.rawValue
+      configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+      
+      var options: AVAudioSession.CategoryOptions = [.mixWithOthers, .defaultToSpeaker]
+      configuration.categoryOptions = options
+      
+      self.logger.log("[VmWebrtc] " + "Applied RECORDING MODE audio session defaults", attributes: logAttributes(for: .info, metadata: [
+        "route": route == .speaker ? "speaker" : "receiver",
+        "mode": configuration.mode,
+        "category": configuration.category,
+        "options": describeCategoryOptions(options),
+        "note": "Using .default mode with .mixWithOthers for screen recording compatibility"
+      ]))
+    } else {
+      configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
+      configuration.category = AVAudioSession.Category.playAndRecord.rawValue
 
-    var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
-    if route == .speaker {
-      options.insert(.defaultToSpeaker)
+      var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+      if route == .speaker {
+        options.insert(.defaultToSpeaker)
+      }
+      configuration.categoryOptions = options
+      
+      self.logger.log("[VmWebrtc] " + "Applied WebRTC audio session defaults", attributes: logAttributes(for: .debug, metadata: [
+        "route": route == .speaker ? "speaker" : "receiver",
+        "mode": configuration.mode,
+        "category": configuration.category,
+        "options": describeCategoryOptions(options)
+      ]))
     }
-    configuration.categoryOptions = options
 
     RTCAudioSessionConfiguration.setWebRTC(configuration)
-    self.logger.log("[VmWebrtc] " + "Applied WebRTC audio session defaults", attributes: logAttributes(for: .debug, metadata: [
-      "route": route == .speaker ? "speaker" : "receiver",
-      "mode": configuration.mode,
-      "category": configuration.category,
-      "options": describeCategoryOptions(options)
-    ]))
   }
 
   private func setOutput(_ route: OutputRoute) {
@@ -73,22 +92,37 @@ extension OpenAIWebRTCClient {
     do {
       self.logger.log("[VmWebrtc] " + "Setting audio session category", attributes: logAttributes(for: .debug, metadata: [
         "route": route == .speaker ? "speaker" : "receiver",
+        "recordingMode": isRecordingModeEnabled,
         "previousCategory": session.category.rawValue,
         "previousMode": session.mode.rawValue,
         "previousOptions": describeCategoryOptions(session.categoryOptions),
         "previousOutputs": describeAudioOutputs(session.currentRoute)
       ]))
 
-      var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
-      if route == .speaker {
-        options.insert(.defaultToSpeaker)
+      if isRecordingModeEnabled {
+        // Recording mode: use .default mode with .mixWithOthers for screen recording compatibility
+        var options: AVAudioSession.CategoryOptions = [.mixWithOthers, .defaultToSpeaker]
+        try session.setCategory(.playAndRecord, mode: .default, options: options)
+        try session.setActive(true)
+        
+        self.logger.log("[VmWebrtc] " + "RECORDING MODE audio route configured", attributes: logAttributes(for: .info, metadata: [
+          "mode": "default",
+          "options": describeCategoryOptions(options),
+          "note": "Audio is now mixable with screen recording"
+        ]))
+      } else {
+        // Normal mode: use .voiceChat mode for optimal WebRTC quality
+        var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+        if route == .speaker {
+          options.insert(.defaultToSpeaker)
+        }
+
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
+        try session.setActive(true)
+
+        let overridePort: AVAudioSession.PortOverride = (route == .speaker) ? .speaker : .none
+        try session.overrideOutputAudioPort(overridePort)
       }
-
-      try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
-      try session.setActive(true)
-
-      let overridePort: AVAudioSession.PortOverride = (route == .speaker) ? .speaker : .none
-      try session.overrideOutputAudioPort(overridePort)
 
       self.logger.log("[VmWebrtc] " + "Audio route updated", attributes: logAttributes(for: .info, metadata: [
         "override": overridePort == .speaker ? "speaker" : "receiver",

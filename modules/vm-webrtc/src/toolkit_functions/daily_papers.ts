@@ -48,6 +48,61 @@ export interface GetCommentsForPaperParams {
 // MARK: - Helper Functions
 
 /**
+ * Postprocess the daily papers API response to reduce size.
+ * - Strips avatarUrl from submittedBy (top level)
+ * - Strips avatarUrl from paper.submittedOnDailyBy
+ * - Strips avatarUrl from paper.authors[].user
+ * - Keeps only the first author in authors array
+ * - Removes thumbnail URLs
+ */
+function postprocessDailyPapersResponse(data: any): any {
+  if (!Array.isArray(data)) {
+    return data;
+  }
+
+  return data.map((paper: any) => {
+    const processed = { ...paper };
+
+    // Strip avatarUrl from submittedBy (top level)
+    if (processed.submittedBy?.avatarUrl) {
+      const { avatarUrl, ...rest } = processed.submittedBy;
+      processed.submittedBy = rest;
+    }
+
+    // Process nested paper object
+    if (processed.paper) {
+      processed.paper = { ...processed.paper };
+
+      // Strip avatarUrl from paper.submittedOnDailyBy
+      if (processed.paper.submittedOnDailyBy?.avatarUrl) {
+        const { avatarUrl, ...rest } = processed.paper.submittedOnDailyBy;
+        processed.paper.submittedOnDailyBy = rest;
+      }
+
+      // Keep only first author and strip avatarUrl from author.user
+      if (Array.isArray(processed.paper.authors) && processed.paper.authors.length > 0) {
+        const firstAuthor = { ...processed.paper.authors[0] };
+        
+        // Strip avatarUrl from author.user if present
+        if (firstAuthor.user?.avatarUrl) {
+          const { avatarUrl, ...rest } = firstAuthor.user;
+          firstAuthor.user = rest;
+        }
+        
+        processed.paper.authors = [firstAuthor];
+      }
+    }
+
+    // Remove thumbnail (top level)
+    if (processed.thumbnail) {
+      delete processed.thumbnail;
+    }
+
+    return processed;
+  });
+}
+
+/**
  * Strips HTML tags from a string in a simple, memory-efficient way.
  */
 function stripHtmlTags(html: string): string {
@@ -214,11 +269,14 @@ export async function showDailyPapers(
 
     const data = await response.json();
 
+    // Postprocess to reduce response size
+    const processedData = postprocessDailyPapersResponse(data);
+
     const result = {
       success: true,
       filters: { date, week, month, submitter, sort },
       pagination: { page, limit },
-      papers: data,
+      papers: processedData,
       timestamp: new Date().toISOString()
     };
 

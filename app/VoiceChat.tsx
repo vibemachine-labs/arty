@@ -323,10 +323,8 @@ export function VoiceChat({
 
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
       
-      // Inject language preference into the prompt
-      const languageInstruction = selectedLanguage && selectedLanguage !== "English" 
-        ? `\n\nIMPORTANT: Please respond in ${selectedLanguage}. All your responses should be in ${selectedLanguage} unless the user explicitly requests otherwise.`
-        : "";
+      // Inject language preference into the prompt (always specify language, including English)
+      const languageInstruction = `\n\nIMPORTANT: Please respond in ${selectedLanguage || "English"}. All your responses should be in ${selectedLanguage || "English"} unless the user explicitly requests otherwise.`;
       const finalPrompt = resolvedPrompt + languageInstruction;
 
       // Load transcription preference from storage

@@ -17,7 +17,12 @@ import {
 } from './ToolGithubConnector';
 import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
-import { toolkitRegistry, type ToolSessionContext } from './toolkit_functions/toolkit_functions';
+import { toolkitRegistry } from './toolkit_functions/toolkit_functions';
+import {
+  isToolSessionContextEmpty,
+  summarizeToolSessionContext,
+  type ToolSessionContext,
+} from './toolkit_functions/types';
 import type { ToolDefinition } from './VmWebrtc.types';
 
 type ToolCallArguments = Record<string, any>;
@@ -148,6 +153,9 @@ class ToolManager {
   }
 
 
+  /**
+   * TODO: can this be DRY'd with ToolkitHelper.executeToolkitOperation()?
+   */
   private async executeGen2ToolCall(
     groupName: string,
     toolName: string,
@@ -180,14 +188,21 @@ class ToolManager {
       // Store the updated session context for this tool
       this.toolSessionContexts.set(toolKey, toolkitResult.updatedToolSessionContext);
 
+      // Append session context to result if non-empty
+      let finalResult = toolkitResult.result;
+      if (!isToolSessionContextEmpty(toolkitResult.updatedToolSessionContext)) {
+        const contextSummary = summarizeToolSessionContext(toolkitResult.updatedToolSessionContext);
+        finalResult = `${toolkitResult.result}\n\nTool session context: ${contextSummary}`;
+      }
+
       log.info('[ToolManager] Gen2 tool execution succeeded', {}, {
         groupName,
         toolName,
-        resultLength: toolkitResult.result.length,
-        result: toolkitResult.result,
+        resultLength: finalResult.length,
+        result: finalResult,
         sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
       });
-      return toolkitResult.result;
+      return finalResult;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       log.error('[ToolManager] Gen2 tool execution failed', {}, {

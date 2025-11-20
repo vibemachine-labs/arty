@@ -129,8 +129,13 @@
               },
               "limit": {
                 "type": "number",
-                "description": "The number of papers to retrieve.",
+                "description": "The number of papers to retrieve per page (max 100).",
                 "default": 5
+              },
+              "page": {
+                "type": "number",
+                "description": "Zero-based page index for pagination (e.g., 0 for first page, 1 for second page).",
+                "default": 0
               }
             },
             "required": []

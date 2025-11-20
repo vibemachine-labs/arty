@@ -5,6 +5,7 @@ import { log } from '../../../../lib/logger';
 export interface ShowDailyPapersParams {
   date?: string;
   limit?: number;
+  page?: number;
 }
 
 export interface GetPaperDetailsParams {
@@ -17,9 +18,9 @@ export interface GetPaperDetailsParams {
  * Retrieve a list of today's daily papers from major publications.
  */
 export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
-  const { date, limit = 5 } = params;
+  const { date, limit = 5, page = 0 } = params;
 
-  log.info('[daily_papers] showDailyPapers called', {}, { date, limit, allParams: params });
+  log.info('[daily_papers] showDailyPapers called', {}, { date, limit, page, allParams: params });
 
   try {
     // Build API URL
@@ -32,6 +33,9 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 
     // Add limit parameter (defaults to 5)
     url.searchParams.set('limit', limit.toString());
+
+    // Add page parameter (p is 0-based page index)
+    url.searchParams.set('p', page.toString());
 
     log.info('[daily_papers] Fetching from API', {}, { url: url.toString() });
 

@@ -125,7 +125,7 @@
             "properties": {
               "p": {
                 "type": "number",
-                "description": "Zero-based page index for pagination (e.g., 0 for first page, 1 for second page). Integer between 0 and 9007199254740991.",
+                "description": "Zero-based page index for pagination (e.g., 0 for first page, 1 for second page). If the user asks for more papers, the next batch, then increment this value from the last value in the tool session if available.",
                 "default": 0,
                 "minimum": 0,
                 "maximum": 9007199254740991

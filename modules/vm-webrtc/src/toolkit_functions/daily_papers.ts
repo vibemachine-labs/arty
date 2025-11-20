@@ -14,6 +14,23 @@ export interface ShowDailyPapersParams {
   sort?: 'publishedAt' | 'trending';
 }
 
+/**
+ * Helper function to export ShowDailyPapersParams as a dictionary for session context.
+ */
+function exportParamsToDict(params: ShowDailyPapersParams): Record<string, string> {
+  const dict: Record<string, string> = {};
+  
+  if (params.p !== undefined) dict.p = params.p.toString();
+  if (params.limit !== undefined) dict.limit = params.limit.toString();
+  if (params.date) dict.date = params.date;
+  if (params.week) dict.week = params.week;
+  if (params.month) dict.month = params.month;
+  if (params.submitter) dict.submitter = params.submitter;
+  if (params.sort) dict.sort = params.sort;
+  
+  return dict;
+}
+
 export interface SearchDailyPapersParams {
   q: string;
   limit?: number;
@@ -153,7 +170,7 @@ export async function showDailyPapers(
 ): Promise<ToolkitResult> {
   const { p = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
 
-  log.info('[daily_papers] showDailyPapers called', {}, { p, limit, date, week, month, submitter, sort, allParams: params });
+  log.info('[daily_papers] showDailyPapers called', {}, { p, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
 
   try {
     // Build API URL
@@ -204,7 +221,7 @@ export async function showDailyPapers(
 
     return {
       result: JSON.stringify(result),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: exportParamsToDict(params),
     };
   } catch (error) {
     log.error('[daily_papers] Error fetching daily papers', {}, { error });
@@ -214,7 +231,9 @@ export async function showDailyPapers(
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
     };
   }
 }

@@ -1,5 +1,5 @@
-import { fetch } from 'expo/fetch';
 import { log } from '../../../../lib/logger';
+import { fetchWithSsrfProtection } from './web';
 
 // MARK: - Types
 
@@ -41,153 +41,102 @@ function stripHtmlTags(html: string): string {
 async function getWebContentExtractComments(url: string): Promise<string[]> {
   log.info('[daily_papers] getWebContentExtractComments starting', {}, { url });
 
-  // Validate URL format and protocol
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(url);
-  } catch (error) {
-    throw new Error('Invalid URL format');
+  // Use shared SSRF-protected fetch helper with 15 second timeout
+  const response = await fetchWithSsrfProtection(url, 15000);
+
+  if (!response.body) {
+    throw new Error('Response body not available');
   }
 
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    throw new Error('Only HTTP and HTTPS protocols are supported');
-  }
-
-  // Block private IP ranges and localhost to prevent SSRF
-  const hostname = parsedUrl.hostname.toLowerCase();
-  const blockedPatterns = [
-    /^localhost$/i,
-    /^127\./,
-    /^10\./,
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
-    /^192\.168\./,
-    /^169\.254\./,
-    /^::1$/,
-    /^fc00:/,
-  ];
-
-  if (blockedPatterns.some(pattern => pattern.test(hostname))) {
-    throw new Error('Access to private/internal URLs is not allowed');
-  }
-
-  // Fetch with timeout
-  const abortController = new AbortController();
-  const timeoutId = setTimeout(() => abortController.abort(), 15000);
+  // Stream and scan for comment blocks
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const comments: string[] = [];
+  
+  let buffer = '';
+  const START_MARKER = '<!-- HTML_TAG_START -->';
+  const END_MARKER = '<!-- HTML_TAG_END -->';
+  const MAX_BUFFER_SIZE = 500000; // 500KB sliding window
+  const MAX_TOTAL_BYTES = 10000000; // 10MB hard limit
+  let totalBytesRead = 0;
+  let commentCount = 0;
 
   try {
-    const response = await fetch(url, { signal: abortController.signal });
-    clearTimeout(timeoutId);
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        log.info('[daily_papers] Stream complete', {}, { 
+          totalBytesRead, 
+          commentsFound: commentCount 
+        });
+        break;
+      }
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
+      totalBytesRead += value.length;
+      buffer += decoder.decode(value, { stream: true });
 
-    const contentType = response.headers.get('content-type') || '';
-    const allowedTypes = ['text/', 'application/json', 'application/xml', 'application/xhtml'];
-    if (!allowedTypes.some(type => contentType.toLowerCase().includes(type))) {
-      throw new Error(`Unsupported content type: ${contentType}`);
-    }
+      // Hard limit check
+      if (totalBytesRead >= MAX_TOTAL_BYTES) {
+        log.warn('[daily_papers] Reached max total bytes limit', {}, { totalBytesRead });
+        break;
+      }
 
-    if (!response.body) {
-      throw new Error('Response body not available');
-    }
-
-    // Stream and scan for comment blocks
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    const comments: string[] = [];
-    
-    let buffer = '';
-    const START_MARKER = '<!-- HTML_TAG_START -->';
-    const END_MARKER = '<!-- HTML_TAG_END -->';
-    const MAX_BUFFER_SIZE = 500000; // 500KB sliding window
-    const MAX_TOTAL_BYTES = 10000000; // 10MB hard limit
-    let totalBytesRead = 0;
-    let commentCount = 0;
-
-    try {
+      // Scan buffer for complete comment blocks
+      let startIdx = 0;
       while (true) {
-        const { done, value } = await reader.read();
+        const commentStart = buffer.indexOf(START_MARKER, startIdx);
+        if (commentStart === -1) break;
+
+        const commentEnd = buffer.indexOf(END_MARKER, commentStart + START_MARKER.length);
+        if (commentEnd === -1) {
+          // Incomplete block, keep in buffer
+          break;
+        }
+
+        // Extract and process the comment block
+        const commentHtml = buffer.substring(
+          commentStart + START_MARKER.length,
+          commentEnd
+        );
         
-        if (done) {
-          log.info('[daily_papers] Stream complete', {}, { 
-            totalBytesRead, 
-            commentsFound: commentCount 
-          });
-          break;
+        const commentText = stripHtmlTags(commentHtml);
+        if (commentText.length > 0) {
+          comments.push(commentText);
+          commentCount++;
         }
 
-        totalBytesRead += value.length;
-        buffer += decoder.decode(value, { stream: true });
-
-        // Hard limit check
-        if (totalBytesRead >= MAX_TOTAL_BYTES) {
-          log.warn('[daily_papers] Reached max total bytes limit', {}, { totalBytesRead });
-          break;
-        }
-
-        // Scan buffer for complete comment blocks
-        let startIdx = 0;
-        while (true) {
-          const commentStart = buffer.indexOf(START_MARKER, startIdx);
-          if (commentStart === -1) break;
-
-          const commentEnd = buffer.indexOf(END_MARKER, commentStart + START_MARKER.length);
-          if (commentEnd === -1) {
-            // Incomplete block, keep in buffer
-            break;
-          }
-
-          // Extract and process the comment block
-          const commentHtml = buffer.substring(
-            commentStart + START_MARKER.length,
-            commentEnd
-          );
-          
-          const commentText = stripHtmlTags(commentHtml);
-          if (commentText.length > 0) {
-            comments.push(commentText);
-            commentCount++;
-          }
-
-          // Move past this comment block
-          startIdx = commentEnd + END_MARKER.length;
-        }
-
-        // Trim processed content from buffer, keep unprocessed tail
-        if (startIdx > 0) {
-          buffer = buffer.substring(startIdx);
-        }
-
-        // If buffer grows too large without finding complete blocks, trim it
-        if (buffer.length > MAX_BUFFER_SIZE) {
-          // Keep last portion that might contain incomplete marker
-          const keepSize = Math.max(START_MARKER.length + END_MARKER.length + 10000, 50000);
-          buffer = buffer.substring(buffer.length - keepSize);
-          log.debug('[daily_papers] Buffer trimmed', {}, { newBufferSize: buffer.length });
-        }
+        // Move past this comment block
+        startIdx = commentEnd + END_MARKER.length;
       }
 
-      log.info('[daily_papers] Comment extraction complete', {}, { 
-        totalComments: comments.length,
-        totalBytesRead 
-      });
+      // Trim processed content from buffer, keep unprocessed tail
+      if (startIdx > 0) {
+        buffer = buffer.substring(startIdx);
+      }
 
-      return comments;
-
-    } finally {
-      try {
-        reader.releaseLock();
-      } catch (e) {
-        // Lock may already be released
+      // If buffer grows too large without finding complete blocks, trim it
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        // Keep last portion that might contain incomplete marker
+        const keepSize = Math.max(START_MARKER.length + END_MARKER.length + 10000, 50000);
+        buffer = buffer.substring(buffer.length - keepSize);
+        log.debug('[daily_papers] Buffer trimmed', {}, { newBufferSize: buffer.length });
       }
     }
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request timeout');
+
+    log.info('[daily_papers] Comment extraction complete', {}, { 
+      totalComments: comments.length,
+      totalBytesRead 
+    });
+
+    return comments;
+
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Lock may already be released
     }
-    throw error;
   }
 }
 

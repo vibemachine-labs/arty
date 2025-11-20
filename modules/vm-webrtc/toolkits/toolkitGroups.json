@@ -190,6 +190,24 @@
             },
             "required": ["q"]
           }
+        },
+        {
+          "type": "function",
+          "name": "getCommentsForPaper",
+          "group": "daily_papers",
+          "description": "Get the comments for a paper.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "arxiv_id": {
+                "type": "string",
+                "description": "The arxiv id of the paper to get comments for.  It looks like 2511.15661.  And is returned as the paper id in the daily papers tool."
+              }
+            },
+            "required": ["arxiv_id"]
+          }
         }
       ]
     },

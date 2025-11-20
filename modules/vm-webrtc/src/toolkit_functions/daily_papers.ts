@@ -22,6 +22,40 @@ export interface GetCommentsForPaperParams {
   arxiv_id: string;
 }
 
+// MARK: - Helper Functions
+
+/**
+ * Extracts comment texts from a Hugging Face paper page HTML.
+ * It looks for the <!-- HTML_TAG_START --> ... <!-- HTML_TAG_END --> blocks
+ * inside the comment content and strips tags from those chunks.
+ */
+export function extractHfPaperComments(html: string): string[] {
+  const comments: string[] = [];
+
+  // Find all comment HTML blocks between the special markers
+  const commentBlocks = [...html.matchAll(
+    /<!-- HTML_TAG_START -->([\s\S]*?)<!-- HTML_TAG_END -->/g
+  )];
+
+  for (const match of commentBlocks) {
+    const innerHtml = match[1] ?? '';
+
+    // Very simple tag stripper to avoid heavy deps / blocking libs
+    let text = innerHtml
+      // remove all tags
+      .replace(/<[^>]+>/g, ' ')
+      // collapse whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (text.length > 0) {
+      comments.push(text);
+    }
+  }
+
+  return comments;
+}
+
 // MARK: - Functions
 
 /**
@@ -154,14 +188,22 @@ export async function getCommentsForPaper(params: GetCommentsForPaperParams): Pr
 
     log.info('[daily_papers] Fetching paper comments from URL', {}, { url });
 
-    // Use the web.ts getContentsFromUrl function to fetch and extract content
-    const content = await getContentsFromUrl({ url });
+    // Use the web.ts getContentsFromUrl function with a large maxLength to get full HTML
+    // We need ~300K to capture all comments before filtering
+    const htmlContent = await getContentsFromUrl(
+      { url },
+      { maxLength: 300000, minHtmlForBody: 15000, maxRawBytes: 3000000 }
+    );
+
+    // Extract comments from the HTML
+    const comments = extractHfPaperComments(htmlContent);
 
     const result = {
       success: true,
       arxiv_id,
       url,
-      content,
+      commentsCount: comments.length,
+      comments: comments.length > 0 ? comments : ['No comments found'],
       timestamp: new Date().toISOString()
     };
 

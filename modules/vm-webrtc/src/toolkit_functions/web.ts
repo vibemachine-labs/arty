@@ -97,7 +97,7 @@ export async function getContentsFromUrl(
     const {
       maxLength = 1500,
       minHtmlForBody = 15000,
-      maxRawBytes = 3000000
+      maxRawBytes = 10000000
     } = context_params || {};
 
     if (!response.body) {

@@ -117,7 +117,7 @@
           "type": "function",
           "name": "showDailyPapers",
           "group": "daily_papers",
-          "description": "Retrieve a list of daily AI/LLM papers AK and the research community at Hugging Face.  Mention explicitly that this was retrieved from the Hugging Face Daily Papers tool. ",
+          "description": "Retrieve a list of daily AI/LLM papers AK and the research community at Hugging Face.  There are two methods of navigation: next paper, where the user wants to skip the current paper in the batch of papers returned, eg, usually 5 at a time.  Or the user might want to skip to the next page/batch of papers.  Mention explicitly that this was retrieved from the Hugging Face Daily Papers tool. ",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
@@ -125,7 +125,7 @@
             "properties": {
               "page": {
                 "type": "number",
-                "description": "Zero-based page index for pagination (e.g., 0 for first page, 1 for second page). If the user asks for more papers, the next batch, then increment this value from the last value in the tool session if available.",
+                "description": "Zero-based page index for pagination (e.g., 0 for first page, 1 for second page). If the user asks for more papers, the next batch, then increment this value from the last value in the tool session if available.  But if the user just wants to skip to the next paper, theres no reason to even call the tool again, you probably already have it in context.",
                 "default": 0,
                 "minimum": 0,
                 "maximum": 9007199254740991

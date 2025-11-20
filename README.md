@@ -7,7 +7,7 @@ An open-source voice assistant for mobile with real-time API integration. Think 
 
 Connects to your Google Drive, DeepWiki, Hacker News, Daily Hugging Face Top Papers, and the web. 
 
-It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source and privacy-first stack.  In order to achieve a fully private deployment, you would need to use the Azure OpenAI Private Endpoint.
+It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source and privacy-first stack. To keep all data within your cloud perimeter, Azure OpenAI Private Endpoint can be configured as an alternative deployment option.
 
 If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to help it grow.
 
@@ -150,7 +150,7 @@ This project offers a fully open alternative: local execution, no data monetizat
 
 > **Privacy status:** We're actively working toward a fully private, end-to-end local solution. Currently, the app uses OpenAI's API, which means user prompts and connector content are transmitted to OpenAI by design. Your credentials (API keys, OAuth tokens) never leave your device and are stored securely in iOS Keychain. Future updates will add support for self-hosted and fully local execution options.
 
-In order to achieve a fully private deployment, you would need to use the Azure OpenAI Private Endpoint.
+To keep all data within your cloud perimeter, Azure OpenAI Service with Private Link can be configured to ensure traffic remains within your virtual network infrastructure.
 
 **From a security perspective, the main risks are credential leakage or abuse**:
 

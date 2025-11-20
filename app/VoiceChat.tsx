@@ -34,6 +34,7 @@ import VmWebrtcModule, {
   type TranscriptEventPayload,
 } from "../modules/vm-webrtc";
 import toolManager from "../modules/vm-webrtc/src/ToolManager";
+import { getToolkitDefinitions } from "../modules/vm-webrtc/src/ToolkitManager";
 
 export type AudioOutput = "handset" | "speakerphone";
 
@@ -48,6 +49,7 @@ type VoiceChatProps = {
   mainPromptAddition: string;
   retentionRatio: number;
   maxConversationTurns: number;
+  selectedLanguage: string;
 };
 
 export function VoiceChat({
@@ -59,6 +61,7 @@ export function VoiceChat({
   mainPromptAddition,
   retentionRatio,
   maxConversationTurns,
+  selectedLanguage,
 }: VoiceChatProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -313,10 +316,16 @@ export function VoiceChat({
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
 
-      const canonicalToolDefinitions = toolManager.getCanonicalToolDefinitions();
-      const voiceToolNames = toolManager.getToolNames(canonicalToolDefinitions);
+      // Get Gen2 toolkit definitions (same source as TextChat for consistency)
+      // This includes dynamic MCP tools fetched from remote servers
+      const toolDefinitions = await getToolkitDefinitions();
+      const voiceToolNames = toolManager.getToolNames(toolDefinitions);
 
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
+      
+      // Inject language preference into the prompt (always specify language, including English)
+      const languageInstruction = `\n\nIMPORTANT: Please respond in ${selectedLanguage || "English"}. All your responses should be in ${selectedLanguage || "English"} unless the user explicitly requests otherwise.`;
+      const finalPrompt = resolvedPrompt + languageInstruction;
 
       // Load transcription preference from storage
       const transcriptionEnabled = await loadTranscriptionPreference();
@@ -326,10 +335,11 @@ export function VoiceChat({
         hasModel: Boolean(baseConnectionOptions.model),
         audioOutput,
         voice: selectedVoice,
-        hasInstructions: resolvedPrompt.trim().length > 0,
+        hasInstructions: finalPrompt.trim().length > 0,
         hasCustomAddition: mainPromptAddition.trim().length > 0,
         toolNames: voiceToolNames,
         transcriptionEnabled,
+        selectedLanguage,
       });
       setIsConnecting(true);
       setIsSessionActive(false);
@@ -338,14 +348,14 @@ export function VoiceChat({
         ...baseConnectionOptions,
         voice: selectedVoice,
         audioOutput,
-        instructions: resolvedPrompt,
+        instructions: finalPrompt,
         vadMode: selectedVadMode,
         audioSpeed: voiceSpeed,
         enableRecording: isRecordingEnabled,
         maxConversationTurns,
         retentionRatio,
         transcriptionEnabled,
-        toolDefinitions: canonicalToolDefinitions,
+        toolDefinitions,
       };
 
       // Retry logic with exponential backoff for 503 errors
@@ -425,6 +435,7 @@ export function VoiceChat({
     isRecordingEnabled,
     maxConversationTurns,
     retentionRatio,
+    selectedLanguage,
   ]);
 
   const handleStopVoiceSession = useCallback(async () => {

@@ -1318,7 +1318,7 @@ final class WebRTCEventHandler {
         
         self.logger.log(
           "[WebRTCEventHandler] [TurnLimit] Item deleted: \(itemId)",
-          attributes: logAttributes(for: .warn, metadata: [
+          attributes: logAttributes(for: .debug, metadata: [
             "itemId": itemId,
             "wasInUniqueIds": wasInUniqueIds,
             "remainingUniqueIds": self.conversationItemUniqueIds.count,

@@ -29,11 +29,11 @@ export const MENU_SECTIONS: MenuSection[] = [
   {
     id: "language",
     title: "Configure Language",
-    description: "Set native and target languages.",
+    description: "Choose your preferred language.",
     icon: "🌍",
     iconBackgroundColor: "#E7F0FF",
     backgroundColor: "#F6F8FF",
-    isDisabled: true,
+    isDisabled: false,
   },
   {
     id: "voice",

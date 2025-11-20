@@ -22,6 +22,12 @@ export interface RequestOptions {
 }
 
 /**
+ * Maximum characters allowed in MCP tool results to prevent context window overflow.
+ * Results larger than this will be truncated.
+ */
+const MAX_MCP_RESULT_LENGTH = 25000;
+
+/**
  * MCP Client for communicating with remote MCP servers via HTTP with session management
  * 
  * A bit of a hack to work around missing/unclear react native compatibility in 
@@ -410,6 +416,39 @@ export class MCPClient {
       options
     );
 
+    // Truncate result content if it exceeds max length
+    let resultLength = 0;
+    if (result.content && Array.isArray(result.content)) {
+      for (const contentItem of result.content) {
+        if (contentItem.type === 'text' && typeof contentItem.text === 'string') {
+          resultLength += contentItem.text.length;
+        }
+      }
+    }
+
+    if (resultLength > MAX_MCP_RESULT_LENGTH) {
+      log.warn('[MCPClient] MCP result exceeds max length, truncating', {}, {
+        endpoint: this.endpoint,
+        toolGroup: toolGroup || 'unknown',
+        toolName: params.name,
+        originalLength: resultLength,
+        maxLength: MAX_MCP_RESULT_LENGTH,
+      });
+
+      // Truncate the text content
+      let remainingChars = MAX_MCP_RESULT_LENGTH;
+      for (const contentItem of result.content) {
+        if (contentItem.type === 'text' && typeof contentItem.text === 'string') {
+          if (contentItem.text.length > remainingChars) {
+            contentItem.text = contentItem.text.substring(0, remainingChars);
+            remainingChars = 0;
+          } else {
+            remainingChars -= contentItem.text.length;
+          }
+        }
+      }
+    }
+
     const completionMessage = toolGroup
       ? `[MCPClient] Tool call completed on MCP server (${toolGroup})`
       : '[MCPClient] Tool call completed on MCP server';
@@ -420,6 +459,7 @@ export class MCPClient {
       toolName: params.name,
       isError: result.isError,
       contentLength: result.content?.length || 0,
+      resultLength: resultLength > MAX_MCP_RESULT_LENGTH ? MAX_MCP_RESULT_LENGTH : resultLength,
       result: result,
     });
 

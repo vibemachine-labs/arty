@@ -228,7 +228,11 @@ export async function showDailyPapers(
   context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
-  const { page = DEFAULT_PAGE, limit = DEFAULT_LIMIT, date, week, month, submitter, sort = 'trending' } = params;
+  // Handle page parameter: use provided value if it's a number, otherwise use default
+  // This handles the case where page might be false, null, undefined, etc.
+  const page = typeof params.page === 'number' ? params.page : DEFAULT_PAGE;
+  const limit = typeof params.limit === 'number' ? params.limit : DEFAULT_LIMIT;
+  const { date, week, month, submitter, sort = 'trending' } = params;
 
   log.info('[daily_papers] showDailyPapers called', {}, { page, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
 

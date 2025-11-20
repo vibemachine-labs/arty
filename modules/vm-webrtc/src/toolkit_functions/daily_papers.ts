@@ -228,6 +228,19 @@ export async function showDailyPapers(
   context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
+  // Check for unexpected parameters and warn
+  const expectedParams = new Set(['page', 'limit', 'date', 'week', 'month', 'submitter', 'sort']);
+  const receivedParams = Object.keys(params);
+  const unexpectedParams = receivedParams.filter(p => !expectedParams.has(p));
+
+  if (unexpectedParams.length > 0) {
+    log.warn('[daily_papers] Received unexpected parameters', {}, {
+      unexpectedParams,
+      receivedParams,
+      hint: 'Check toolkitGroups.json parameter names match TypeScript interface'
+    });
+  }
+
   // Handle page parameter: use provided value if it's a number, otherwise use default
   // This handles the case where page might be false, null, undefined, etc.
   const page = typeof params.page === 'number' ? params.page : DEFAULT_PAGE;

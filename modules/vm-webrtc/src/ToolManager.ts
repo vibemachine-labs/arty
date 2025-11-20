@@ -5,18 +5,14 @@ import { composePrompt } from '../../../lib/promptStorage';
 import { loadToolPromptAddition } from '../../../lib/toolPrompts';
 import {
   ToolGDriveConnector,
-  gdriveConnectorDefinition,
   type GDriveConnectorNativeModule,
   type GDriveConnectorParams,
 } from './ToolGDriveConnector';
 import {
   ToolGithubConnector,
-  githubConnectorDefinition,
   type GithubConnectorNativeModule,
   type GithubConnectorParams,
 } from './ToolGithubConnector';
-import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
-import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
 import { toolkitRegistry } from './toolkit_functions/toolkit_functions';
 import {
   isToolSessionContextEmpty,
@@ -68,12 +64,7 @@ const cloneDefinition = (definition: ToolDefinition): ToolDefinition => ({
 });
 
 class ToolManager {
-  private readonly defaultDefinitions: ToolDefinition[] = [
-    githubConnectorDefinition,
-    ...(ENABLE_LEGACY_GDRIVE ? [gdriveConnectorDefinition] : []),
-    gpt5GDriveFixerDefinition,
-    gpt5WebSearchDefinition,
-  ];
+  private readonly defaultDefinitions: ToolDefinition[] = [];
 
   private githubConnectorTool: ToolGithubConnector | null | undefined;
   private gdriveConnectorTool: ToolGDriveConnector | null | undefined;

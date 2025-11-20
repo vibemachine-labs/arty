@@ -1,10 +1,10 @@
 // MARK: - Toolkit Functions Registry
 
-import * as hackerNews from './hacker_news';
-import * as dailyPapers from './daily_papers';
-import * as web from './web';
-import * as googleDrive from './google_drive';
 import { log } from '../../../../lib/logger';
+import * as dailyPapers from './daily_papers';
+import * as googleDrive from './google_drive';
+import * as hackerNews from './hacker_news';
+import * as web from './web';
 
 // MARK: - Types
 
@@ -19,31 +19,34 @@ export interface ToolkitRegistry {
 // MARK: - Registry
 
 /**
+ * Map of toolkit group names to their module exports.
+ * Convention over configuration: All exported functions from each module
+ * are automatically registered as tools for that group.
+ */
+const toolkitModules = {
+  hacker_news: hackerNews,
+  daily_papers: dailyPapers,
+  web: web,
+  google_drive: googleDrive,
+};
+
+/**
  * Registry of all toolkit functions organized by group and tool name.
  * This registry is mutable and can be extended at runtime with MCP tools.
+ * Automatically populated from toolkit modules using convention over configuration.
  */
-export const toolkitRegistry: ToolkitRegistry = {
-  hacker_news: {
-    showTopStories: hackerNews.showTopStories,
-    searchStories: hackerNews.searchStories,
-    getStoryInfo: hackerNews.getStoryInfo,
-    getUserInfo: hackerNews.getUserInfo,
+export const toolkitRegistry: ToolkitRegistry = Object.entries(toolkitModules).reduce(
+  (registry, [groupName, module]) => {
+    registry[groupName] = Object.entries(module)
+      .filter(([_key, value]) => typeof value === 'function')
+      .reduce((tools, [toolName, toolFunction]) => {
+        tools[toolName] = toolFunction as ToolkitFunction;
+        return tools;
+      }, {} as { [toolName: string]: ToolkitFunction });
+    return registry;
   },
-  daily_papers: {
-    showDailyPapers: dailyPapers.showDailyPapers,
-    getPaperDetails: dailyPapers.getPaperDetails,
-  },
-  web: {
-    getContentsFromUrl: web.getContentsFromUrl,
-    web_search: web.web_search,
-  },
-  google_drive: {
-    keyword_search: googleDrive.keyword_search,
-    search_documents: googleDrive.search_documents,
-    list_drive_folder_children: googleDrive.list_drive_folder_children,
-    get_gdrive_file_content: googleDrive.get_gdrive_file_content,
-  }
-};
+  {} as ToolkitRegistry
+);
 
 /**
  * Register a runtime MCP tool function in the toolkit registry.
@@ -126,4 +129,5 @@ export async function executeToolkitFunction(
 
 // MARK: - Exports
 
-export { hackerNews, dailyPapers, web, googleDrive };
+export { dailyPapers, googleDrive, hackerNews, web };
+

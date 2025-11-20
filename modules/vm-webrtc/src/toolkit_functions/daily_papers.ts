@@ -1,37 +1,181 @@
 import { log } from '../../../../lib/logger';
+import { fetchWithSsrfProtection } from './web';
 
 // MARK: - Types
 
 export interface ShowDailyPapersParams {
+  p?: number;
+  limit?: number;
   date?: string;
+  week?: string;
+  month?: string;
+  submitter?: string;
+  sort?: 'publishedAt' | 'trending';
+}
+
+export interface SearchDailyPapersParams {
+  q: string;
   limit?: number;
 }
 
-export interface GetPaperDetailsParams {
-  arxivId: string;
+export interface GetCommentsForPaperParams {
+  arxiv_id: string;
+}
+
+// MARK: - Helper Functions
+
+/**
+ * Strips HTML tags from a string in a simple, memory-efficient way.
+ */
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Fetches web content and extracts Hugging Face paper comments in a memory-efficient streaming fashion.
+ * Scans HTML chunks for comment blocks between <!-- HTML_TAG_START --> and <!-- HTML_TAG_END --> markers.
+ */
+async function getWebContentExtractComments(url: string): Promise<string[]> {
+  log.info('[daily_papers] getWebContentExtractComments starting', {}, { url });
+
+  // Use shared SSRF-protected fetch helper with 15 second timeout
+  const response = await fetchWithSsrfProtection(url, 15000);
+
+  if (!response.body) {
+    throw new Error('Response body not available');
+  }
+
+  // Stream and scan for comment blocks
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const comments: string[] = [];
+  
+  let buffer = '';
+  const START_MARKER = '<!-- HTML_TAG_START -->';
+  const END_MARKER = '<!-- HTML_TAG_END -->';
+  const MAX_BUFFER_SIZE = 500000; // 500KB sliding window
+  const MAX_TOTAL_BYTES = 10000000; // 10MB hard limit
+  let totalBytesRead = 0;
+  let commentCount = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        log.info('[daily_papers] Stream complete', {}, { 
+          totalBytesRead, 
+          commentsFound: commentCount 
+        });
+        break;
+      }
+
+      totalBytesRead += value.length;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Hard limit check
+      if (totalBytesRead >= MAX_TOTAL_BYTES) {
+        log.warn('[daily_papers] Reached max total bytes limit', {}, { totalBytesRead });
+        break;
+      }
+
+      // Scan buffer for complete comment blocks
+      let startIdx = 0;
+      while (true) {
+        const commentStart = buffer.indexOf(START_MARKER, startIdx);
+        if (commentStart === -1) break;
+
+        const commentEnd = buffer.indexOf(END_MARKER, commentStart + START_MARKER.length);
+        if (commentEnd === -1) {
+          // Incomplete block, keep in buffer
+          break;
+        }
+
+        // Extract and process the comment block
+        const commentHtml = buffer.substring(
+          commentStart + START_MARKER.length,
+          commentEnd
+        );
+        
+        const commentText = stripHtmlTags(commentHtml);
+        if (commentText.length > 0) {
+          comments.push(commentText);
+          commentCount++;
+        }
+
+        // Move past this comment block
+        startIdx = commentEnd + END_MARKER.length;
+      }
+
+      // Trim processed content from buffer, keep unprocessed tail
+      if (startIdx > 0) {
+        buffer = buffer.substring(startIdx);
+      }
+
+      // If buffer grows too large without finding complete blocks, trim it
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        // Keep last portion that might contain incomplete marker
+        const keepSize = Math.max(START_MARKER.length + END_MARKER.length + 10000, 50000);
+        buffer = buffer.substring(buffer.length - keepSize);
+        log.debug('[daily_papers] Buffer trimmed', {}, { newBufferSize: buffer.length });
+      }
+    }
+
+    log.info('[daily_papers] Comment extraction complete', {}, { 
+      totalComments: comments.length,
+      totalBytesRead 
+    });
+
+    return comments;
+
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // Lock may already be released
+    }
+  }
 }
 
 // MARK: - Functions
 
 /**
- * Retrieve a list of today's daily papers from major publications.
+ * Retrieve a list of daily papers from Hugging Face.
  */
 export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
-  const { date, limit = 5 } = params;
+  const { p = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
 
-  log.info('[daily_papers] showDailyPapers called', {}, { date, limit, allParams: params });
+  log.info('[daily_papers] showDailyPapers called', {}, { p, limit, date, week, month, submitter, sort, allParams: params });
 
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/daily_papers');
 
-    // Add optional date parameter if provided
+    // Add pagination parameter (p is 0-based page index)
+    url.searchParams.set('p', p.toString());
+
+    // Add limit parameter (defaults to 5, max 100)
+    url.searchParams.set('limit', limit.toString());
+
+    // Add optional filter parameters
     if (date) {
       url.searchParams.set('date', date);
     }
+    if (week) {
+      url.searchParams.set('week', week);
+    }
+    if (month) {
+      url.searchParams.set('month', month);
+    }
+    if (submitter) {
+      url.searchParams.set('submitter', submitter);
+    }
 
-    // Add limit parameter (defaults to 5)
-    url.searchParams.set('limit', limit.toString());
+    // Add sort parameter
+    url.searchParams.set('sort', sort);
 
     log.info('[daily_papers] Fetching from API', {}, { url: url.toString() });
 
@@ -43,12 +187,17 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 
     const data = await response.json();
 
-    return JSON.stringify({
+    const result = {
       success: true,
-      date: date || 'today',
+      filters: { date, week, month, submitter, sort },
+      pagination: { p, limit },
       papers: data,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    log.debug('[daily_papers] showDailyPapers result', {}, result);
+
+    return JSON.stringify(result);
   } catch (error) {
     log.error('[daily_papers] Error fetching daily papers', {}, { error });
     return JSON.stringify({
@@ -60,20 +209,21 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 }
 
 /**
- * Get paper details including metadata like authors, summary, and discussion comments.
+ * Search daily papers using a query string with hybrid semantic/full-text search.
  */
-export async function getPaperDetails(params: GetPaperDetailsParams): Promise<string> {
-  const { arxivId } = params;
+export async function searchDailyPapers(params: SearchDailyPapersParams): Promise<string> {
+  const { q, limit = 5 } = params;
 
-  log.info('[daily_papers] getPaperDetails called', {}, { arxivId, allParams: params });
+  log.info('[daily_papers] searchDailyPapers called', {}, { q, limit, allParams: params });
 
   try {
     // Build API URL
-    const url = `https://huggingface.co/api/papers/${arxivId}`;
+    const url = new URL('https://huggingface.co/api/papers/search');
+    url.searchParams.set('q', q);
 
-    log.info('[daily_papers] Fetching paper details from API', {}, { url });
+    log.info('[daily_papers] Searching papers from API', {}, { url: url.toString() });
 
-    const response = await fetch(url);
+    const response = await fetch(url.toString());
 
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`);
@@ -81,17 +231,69 @@ export async function getPaperDetails(params: GetPaperDetailsParams): Promise<st
 
     const data = await response.json();
 
-    return JSON.stringify({
+    // API doesn't support limit, so we limit client-side to avoid overwhelming LLM
+    const limitedData = Array.isArray(data) ? data.slice(0, limit) : data;
+
+    const result = {
       success: true,
-      paper: data,
+      query: q,
+      limit,
+      totalResults: Array.isArray(data) ? data.length : 0,
+      returnedResults: Array.isArray(limitedData) ? limitedData.length : 0,
+      papers: limitedData,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    log.debug('[daily_papers] searchDailyPapers result', {}, result);
+
+    return JSON.stringify(result);
   } catch (error) {
-    log.error('[daily_papers] Error fetching paper details', {}, { error, arxivId });
+    log.error('[daily_papers] Error searching daily papers', {}, { error, query: q });
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      arxivId,
+      query: q,
+      timestamp: new Date().toISOString()
+    });
+  }
+}
+
+/**
+ * Get comments for a paper by fetching the HTML from the paper's Hugging Face page.
+ * Uses memory-efficient streaming to extract comments without loading entire HTML into memory.
+ */
+export async function getCommentsForPaper(params: GetCommentsForPaperParams): Promise<string> {
+  const { arxiv_id } = params;
+
+  log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params });
+
+  try {
+    // Construct the Hugging Face paper URL
+    const url = `https://huggingface.co/papers/${arxiv_id}`;
+
+    log.info('[daily_papers] Fetching paper comments from URL', {}, { url });
+
+    // Use memory-efficient streaming extraction
+    const comments = await getWebContentExtractComments(url);
+
+    const result = {
+      success: true,
+      arxiv_id,
+      url,
+      commentsCount: comments.length,
+      comments: comments.length > 0 ? comments : ['No comments found'],
+      timestamp: new Date().toISOString()
+    };
+
+    log.debug('[daily_papers] getCommentsForPaper result', {}, result);
+
+    return JSON.stringify(result);
+  } catch (error) {
+    log.error('[daily_papers] Error fetching paper comments', {}, { error, arxiv_id });
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      arxiv_id,
       timestamp: new Date().toISOString()
     });
   }

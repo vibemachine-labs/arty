@@ -131,6 +131,21 @@ export function VoiceChat({
     const subscription = VmWebrtcModule.addListener(
       "onRealtimeError",
       async (payload: RealtimeErrorEventPayload) => {
+        const errorCode = payload?.error?.code;
+        const isItemTruncateError = errorCode === "item_truncate_invalid_item_id";
+        
+        // Item truncate errors are non-breaking, just log as warning
+        if (isItemTruncateError) {
+          log.warn("Realtime voice session warning (non-breaking)", {}, {
+            errorType: payload?.error?.type,
+            errorCode: payload?.error?.code,
+            errorMessage: payload?.error?.message,
+            errorEventId: payload?.error?.event_id,
+            fullPayload: payload,
+          });
+          return; // Don't show alert for this benign error
+        }
+
         log.error("Realtime voice session error", {}, {
           errorType: payload?.error?.type,
           errorCode: payload?.error?.code,

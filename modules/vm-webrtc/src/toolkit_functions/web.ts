@@ -4,67 +4,67 @@ import { log } from '../../../../lib/logger';
 import { getApiKey } from '../../../../lib/secure-storage';
 
 /**
- * Fetches content from a URL, strips HTML tags, and truncates to approximately 1K characters.
+ * Fetches a URL with SSRF protection, timeout, and content-type validation.
+ * Performs URL parsing, protocol whitelist, private hostname blocking, and fetch with timeout.
+ * @param url - The URL to fetch
+ * @param timeoutMs - Request timeout in milliseconds (default: 10000)
+ * @returns Promise resolving to validated Response object
+ * @throws Error if validation fails or request times out
  */
-export async function getContentsFromUrl(
-  params: { url: string },
-  context_params?: { maxLength?: number; minHtmlForBody?: number; maxRawBytes?: number }
-): Promise<string> {
-  log.info('[web] getContentsFromUrl starting', {}, { url: params.url });
+export async function fetchWithSsrfProtection(
+  url: string,
+  timeoutMs: number = 10000
+): Promise<Response> {
+  // Validate URL format and protocol
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+    log.debug('[web] URL parsed successfully', {}, {
+      protocol: parsedUrl.protocol,
+      hostname: parsedUrl.hostname,
+      pathname: parsedUrl.pathname,
+    });
+  } catch (error) {
+    log.error('[web] Invalid URL format', {}, { url, error });
+    throw new Error('Invalid URL format');
+  }
+
+  // Only allow HTTP and HTTPS protocols
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    log.error('[web] Unsupported protocol', {}, { protocol: parsedUrl.protocol });
+    throw new Error('Only HTTP and HTTPS protocols are supported');
+  }
+
+  // Block private IP ranges and localhost to prevent SSRF
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const blockedPatterns = [
+    /^localhost$/i,
+    /^127\./,
+    /^10\./,
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+    /^192\.168\./,
+    /^169\.254\./, // Cloud metadata endpoint
+    /^::1$/, // IPv6 localhost
+    /^fc00:/, // IPv6 private
+  ];
+
+  if (blockedPatterns.some(pattern => pattern.test(hostname))) {
+    log.error('[web] Blocked private/internal URL', {}, { hostname });
+    throw new Error('Access to private/internal URLs is not allowed');
+  }
+
+  // Fetch with timeout
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    log.warn('[web] Timeout reached, aborting fetch', {}, { url, timeoutMs });
+    abortController.abort();
+  }, timeoutMs);
 
   try {
-    const { url } = params;
-
-    // Validate URL format and protocol
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-      log.info('[web] URL parsed successfully', {}, {
-        protocol: parsedUrl.protocol,
-        hostname: parsedUrl.hostname,
-        pathname: parsedUrl.pathname,
-      });
-    } catch (error) {
-      log.error('[web] Invalid URL format', {}, { url, error });
-      return 'Error: Invalid URL format';
-    }
-
-    // Only allow HTTP and HTTPS protocols
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      log.error('[web] Unsupported protocol', {}, { protocol: parsedUrl.protocol });
-      return 'Error: Only HTTP and HTTPS protocols are supported';
-    }
-    log.info('[web] Protocol allowed', {}, { protocol: parsedUrl.protocol });
-
-    // Block private IP ranges and localhost to prevent SSRF
-    const hostname = parsedUrl.hostname.toLowerCase();
-    const blockedPatterns = [
-      /^localhost$/i,
-      /^127\./,
-      /^10\./,
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
-      /^192\.168\./,
-      /^169\.254\./, // Cloud metadata endpoint
-      /^::1$/, // IPv6 localhost
-      /^fc00:/, // IPv6 private
-    ];
-
-    if (blockedPatterns.some(pattern => pattern.test(hostname))) {
-      log.error('[web] Blocked private/internal URL', {}, { hostname });
-      return 'Error: Access to private/internal URLs is not allowed';
-    }
-    log.info('[web] Hostname allowed', {}, { hostname });
-
-    // Fetch with 10 second timeout
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => {
-      log.warn('[web] Timeout reached, aborting fetch', {}, { url });
-      abortController.abort();
-    }, 10000);
-
-    log.info('[web] Starting fetch request', {}, { url });
+    log.info('[web] Starting fetch request', {}, { url, timeoutMs });
     const response = await fetch(url, { signal: abortController.signal });
     clearTimeout(timeoutId);
+    
     log.info('[web] Fetch completed', {}, {
       status: response.status,
       statusText: response.statusText,
@@ -77,18 +77,43 @@ export async function getContentsFromUrl(
         status: response.status,
         statusText: response.statusText,
       });
-      return `Error fetching URL: ${response.status} ${response.statusText}`;
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     // Validate Content-Type
     const contentType = response.headers.get('content-type') || '';
-    log.info('[web] Checking content type', {}, { contentType });
+    log.debug('[web] Checking content type', {}, { contentType });
     const allowedTypes = ['text/', 'application/json', 'application/xml', 'application/xhtml'];
 
     if (!allowedTypes.some(type => contentType.toLowerCase().includes(type))) {
       log.error('[web] Unsupported content type', {}, { contentType });
-      return `Error: Unsupported content type '${contentType}'. Only text-based content is supported.`;
+      throw new Error(`Unsupported content type: ${contentType}`);
     }
+
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetches content from a URL, strips HTML tags, and truncates to approximately 1K characters.
+ */
+export async function getContentsFromUrl(
+  params: { url: string },
+  context_params?: { maxLength?: number; minHtmlForBody?: number; maxRawBytes?: number }
+): Promise<string> {
+  log.info('[web] getContentsFromUrl starting', {}, { url: params.url });
+
+  try {
+    const { url } = params;
+
+    // Use shared SSRF-protected fetch helper
+    const response = await fetchWithSsrfProtection(url, 10000);
 
     // Fetch content in chunks until we have enough stripped text
     log.info('[web] Starting chunked content reading', {}, {});
@@ -97,7 +122,7 @@ export async function getContentsFromUrl(
     const {
       maxLength = 1500,
       minHtmlForBody = 15000,
-      maxRawBytes = 3000000
+      maxRawBytes = 10000000
     } = context_params || {};
 
     if (!response.body) {
@@ -246,7 +271,7 @@ export async function getContentsFromUrl(
       try {
         log.debug('[web] Releasing reader lock', {}, {});
         reader.releaseLock();
-      } catch (releaseError) {
+      } catch {
         // Lock may already be released, which is fine
         log.info('[web] Reader lock already released', {}, {});
       }

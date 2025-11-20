@@ -3,11 +3,11 @@
 [![TestFlight](https://img.shields.io/badge/TestFlight-available-blue)](https://testflight.apple.com/join/DyK83gVd) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vibemachine-labs/arty) [![Snyk](https://snyk.io/test/github/vibemachine-labs/arty/badge.svg)](https://snyk.io/test/github/vibemachine-labs/arty)
 [![OSSF Scorecard](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml/badge.svg)](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/vibemachine-labs/arty?utm_source=oss&utm_medium=github&utm_campaign=vibemachine-labs%2Farty&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-An open-source, privacy-first voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."
+An open-source voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."
 
-Connects to your Google Drive, Github, Hacker News, and the web. 
+Connects to your Google Drive, DeepWiki, Hacker News, Daily Hugging Face Top Papers, and the web. 
 
-It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source stack.
+It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source and privacy-first stack.  In order to achieve a fully private deployment, you would need to use the Azure OpenAI Private Endpoint.
 
 If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to help it grow.
 
@@ -119,44 +119,43 @@ This project offers a fully open alternative: local execution, no data monetizat
 <details>
   <summary>How to get the most out of it</summary>
 
-- Connect your GitHub account: open the Hamburger Menu → Configure Connectors → GitHub and add a Personal Access Token. When creating the PAT, the recommended scopes are <code>gist</code>, <code>read:org</code>, and <code>repo</code>.
 - Personalize Arty: adjust the system prompt, voice, VAD mode, and tool configuration from the Advanced settings sheets to match your workflow.
 - Try out text chat mode when you can't use voice.  Under settings, configure it to use text chat mode.  Note, there's no streaming token support yet, so it feels pretty slow.
+- Explore the connectors: Enable DeepWiki for documentation search, Hacker News for tech news, and Daily Hugging Face Top Papers for the latest AI research.
 
 </details>
 
 ## ✨ Features
 
-1. **Supports several connectors: Google Drive, Github, Hacker News, and Web Search** - Voice assistant that can summarize content in Google Drive, interact with Github, browse Hacker News, and search the web
-3. **Extensible** - Adding connectors is fairly easy.  File an issue to request the connector you'd want to see.
-4. **Customizable prompts** - Edit system and tool prompts directly from the UI
-5. **Multi-mode audio** - Works with speaker, handset, or Bluetooth headphones
-6. **Background noise handling** - Mute yourself in loud environments
-7. **Session recording** - Optional conversation recording and sharing
-8. **Voice and text modes** - Switch between input methods seamlessly
-9. **Observability** - Optional Logfire integration for debugging (disabled by default)
-10. **Privacy-first** - No server except connected services—your data stays yours
+1. **Supports several connectors: Google Drive, DeepWiki, Hacker News, Daily Hugging Face Top Papers, and Web Search** - Voice assistant that can summarize content in Google Drive, search documentation with DeepWiki, browse Hacker News, discover the latest AI research papers, and search the web
+2. **Extensible** - Adding connectors is fairly easy.  File an issue to request the connector you'd want to see.
+3. **Customizable prompts** - Edit system and tool prompts directly from the UI
+4. **Multi-mode audio** - Works with speaker, handset, or Bluetooth headphones
+5. **Background noise handling** - Mute yourself in loud environments
+6. **Session recording** - Optional conversation recording and sharing
+7. **Voice and text modes** - Switch between input methods seamlessly
+8. **Observability** - Optional Logfire integration for debugging (disabled by default)
+9. **Privacy-focused** - Working toward a fully private solution with local execution options
 
 
 ## 🚧 Limitations
 
-1. **Cost** - High OpenAI API costs due to poor context window management and fallback strategies
-1. **Text Mode is limited** - The Text mode does not support streaming tokens yet.  It has a very basic and limited UX.
-1. **Platform** - iOS only, no Android support yet due to currently using native WebRTC library, despite using React Native via Expo.  
-1. **Performance** - Codegen is slow and unreliable. Most functionality should be moved to static tools
-1. **UX** - No progress indicators during operations
-1. **Security** - Dynamic codegen poses risks. Mitigation: use read-only access for connected services
-1. **Recording** - Optional call recording implementation doesn't work very reliably since it regenerates the conversation based on a text transcript
+1. **Cost** - OpenAI API costs can add up with extended usage due to context window management
+2. **Text Mode is limited** - The Text mode does not support streaming tokens yet.  It has a very basic and limited UX.
+3. **Platform** - iOS only, no Android support yet due to currently using native WebRTC library, despite using React Native via Expo.
+4. **UX** - No progress indicators during operations
+5. **Recording** - Optional call recording implementation doesn't work very reliably since it regenerates the conversation based on a text transcript
 
 ## 🔐 Security + Privacy
 
-> **Important note:** Although tokens never leave the device, some user prompts and connector content are transmitted to the OpenAI Realtime API by design. If you require strict local-only execution, do not use this app. Watch for future updates that support fully self-contained usage or privately hosted models instead.
+> **Privacy status:** We're actively working toward a fully private, end-to-end local solution. Currently, the app uses OpenAI's API, which means user prompts and connector content are transmitted to OpenAI by design. Your credentials (API keys, OAuth tokens) never leave your device and are stored securely in iOS Keychain. Future updates will add support for self-hosted and fully local execution options.
+
+In order to achieve a fully private deployment, you would need to use the Azure OpenAI Private Endpoint.
 
 **From a security perspective, the main risks are credential leakage or abuse**:
 
 1. OpenAI API Key
-1. Google Drive Auth Token
-1. GitHub PAT
+2. Google Drive Auth Token
 
 **Mitigation:** All credentials remain on-device, stored only in memory or secure storage (iOS Keychain). Audit the source code to verify that no credentials are transmitted externally.
 
@@ -165,14 +164,12 @@ This project offers a fully open alternative: local execution, no data monetizat
 
 - All token storage in memory and secure storage happens in `lib/secure-storage.ts`
 - The actual saving/retrieval of tokens is delegated to the Expo library `expo-secure-store`
-- Transport security: All outbound requests to OpenAI, Google, GitHub, and Logfire use HTTPS with TLS handled by each provider. This project does not introduce custom proxies or MITM layers.
-- Prompt-injection and mis-issuance: The app does not currently detect or prevent malicious model output from executing unexpected write actions. Use read-only scopes wherever possible.
+- Transport security: All outbound requests to OpenAI, Google, and optional Logfire use HTTPS with TLS handled by each provider. This project does not introduce custom proxies or MITM layers.
 - OAuth tokens and API keys are stored via `expo-secure-store`, which maps to the iOS Keychain using the `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` accessibility level. Tokens are never written to plaintext disk.
 - Recording is off by default, and conversation transcripts are not saved. Optional recordings remain on-device and rely on standard iOS filesystem encryption.
-- No third-party endpoints beyond OpenAI, Google, GitHub, and optional Logfire are contacted at runtime. The app does not embed analytics, crash reporting SDKs, or ad networks.
+- No third-party endpoints beyond OpenAI, Google, and optional Logfire are contacted at runtime. The app does not embed analytics, crash reporting SDKs, or ad networks.
 
 - The Google Drive OAuth scope used by the default Client ID in the TestFlight build is read-only—it can create or edit files that the app created, but cannot edit or delete files that originated elsewhere. For tighter control, register your own Google Drive app, supply its Client ID, and grant the permissions you deem appropriate.
-- When creating a GitHub Personal Access Token, choose scopes based on your comfort level. Enable write scopes (for example, issue creation) explicitly—they are not required for basic usage.
 - Assume that connector operations which retrieve file contents may send that content to the LLM for summarization unless you have deliberately disabled that behavior.
 
 Observability logs are disabled by default. Note that these should be automatically scrubbed of API tokens by Logfire itself. Only enable Logfire after you have audited the code and feel comfortable—this is mainly a developer feature and not recommended for casual usage or testing.
@@ -314,11 +311,9 @@ bunx expo run:ios
 
 React Native WebRTC libraries did not reliably support speakerphone mode during prototyping. The native Swift implementation resolves this issue but adds complexity and delays Android support.
 
-### Codegen vs Static Tools
+### Connector Architecture
 
-Dynamic code generation currently powers some connector operations (Google Drive, GitHub), enabling rapid prototyping. However, the Hacker News tool demonstrates the preferred approach: statically defined tools that don't rely on codegen.
-
-**Migration in progress:** Google Drive and GitHub tools will be converted from the codegen approach to static tools, improving reliability and performance. Long-term, codegen will remain available as a fallback option for rapid prototyping of new connectors.
+All connectors use statically defined tools with explicit function definitions, providing reliability and predictable behavior. Examples include Google Drive file operations, DeepWiki documentation search, Hacker News browsing, and Daily Hugging Face Top Papers discovery.
 
 ### MCP Support
 

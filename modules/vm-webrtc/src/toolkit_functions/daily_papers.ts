@@ -1,4 +1,5 @@
 import { log } from '../../../../lib/logger';
+import type { ToolSessionContext, ToolkitResult } from './types';
 import { fetchWithSsrfProtection } from './web';
 
 // MARK: - Types
@@ -145,7 +146,11 @@ async function getWebContentExtractComments(url: string): Promise<string[]> {
 /**
  * Retrieve a list of daily papers from Hugging Face.
  */
-export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
+export async function showDailyPapers(
+  params: ShowDailyPapersParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { p = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
 
   log.info('[daily_papers] showDailyPapers called', {}, { p, limit, date, week, month, submitter, sort, allParams: params });
@@ -197,21 +202,31 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 
     log.debug('[daily_papers] showDailyPapers result', {}, result);
 
-    return JSON.stringify(result);
+    return {
+      result: JSON.stringify(result),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     log.error('[daily_papers] Error fetching daily papers', {}, { error });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
 /**
  * Search daily papers using a query string with hybrid semantic/full-text search.
  */
-export async function searchDailyPapers(params: SearchDailyPapersParams): Promise<string> {
+export async function searchDailyPapers(
+  params: SearchDailyPapersParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { q, limit = 5 } = params;
 
   log.info('[daily_papers] searchDailyPapers called', {}, { q, limit, allParams: params });
@@ -246,15 +261,21 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
 
     log.debug('[daily_papers] searchDailyPapers result', {}, result);
 
-    return JSON.stringify(result);
+    return {
+      result: JSON.stringify(result),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     log.error('[daily_papers] Error searching daily papers', {}, { error, query: q });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      query: q,
-      timestamp: new Date().toISOString()
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        query: q,
+        timestamp: new Date().toISOString()
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -262,7 +283,11 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
  * Get comments for a paper by fetching the HTML from the paper's Hugging Face page.
  * Uses memory-efficient streaming to extract comments without loading entire HTML into memory.
  */
-export async function getCommentsForPaper(params: GetCommentsForPaperParams): Promise<string> {
+export async function getCommentsForPaper(
+  params: GetCommentsForPaperParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { arxiv_id } = params;
 
   log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params });
@@ -287,14 +312,20 @@ export async function getCommentsForPaper(params: GetCommentsForPaperParams): Pr
 
     log.debug('[daily_papers] getCommentsForPaper result', {}, result);
 
-    return JSON.stringify(result);
+    return {
+      result: JSON.stringify(result),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     log.error('[daily_papers] Error fetching paper comments', {}, { error, arxiv_id });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      arxiv_id,
-      timestamp: new Date().toISOString()
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        arxiv_id,
+        timestamp: new Date().toISOString()
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }

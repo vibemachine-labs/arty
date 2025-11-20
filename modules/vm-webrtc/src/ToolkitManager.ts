@@ -16,7 +16,7 @@ import type {
 import { exportToolDefinition } from './VmWebrtc.types';
 import { MCPClient, type RequestOptions } from './mcp_client/client';
 import type { Tool } from './mcp_client/types';
-import { registerMcpTool } from './toolkit_functions/toolkit_functions';
+import { registerMcpTool, type ToolSessionContext } from './toolkit_functions/toolkit_functions';
 
 // Event emitted when connector settings change
 export const CONNECTOR_SETTINGS_CHANGED_EVENT = 'connector_settings_changed';
@@ -523,11 +523,12 @@ function registerMcpToolsForServer(
   discoveryOptions: RequestOptions
 ): void {
   for (const tool of tools) {
-    registerMcpTool(toolkitGroup, tool.name, async (args: any) => {
+    registerMcpTool(toolkitGroup, tool.name, async (args: any, context_params?: any, toolSessionContext?: ToolSessionContext) => {
       log.info('[ToolkitManager] Executing cached MCP tool', {}, {
         group: toolkitGroup,
         toolName: tool.name,
         serverUrl,
+        sessionContextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
       });
 
       const result = await client.callTool({
@@ -535,7 +536,11 @@ function registerMcpToolsForServer(
         arguments: args,
       }, discoveryOptions, toolkitGroup);
 
-      return JSON.stringify(result, null, 2);
+      // MCP tools don't yet support session context, so return empty context for now
+      return {
+        result: JSON.stringify(result, null, 2),
+        updatedToolSessionContext: {},
+      };
     });
   }
 }

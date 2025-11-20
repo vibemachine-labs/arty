@@ -1,12 +1,11 @@
 import { log } from '../../../../lib/logger';
 import {
-  getGDriveAccessToken,
-  getGDriveClientId,
-  getGDriveRefreshToken,
-  setGDriveAccessToken,
+    getGDriveAccessToken,
+    getGDriveClientId,
+    getGDriveRefreshToken,
+    setGDriveAccessToken,
 } from '../../../../lib/secure-storage';
-
-// MARK: - Constants
+import type { ToolSessionContext, ToolkitResult } from './types'; // MARK: - Constants
 
 const DRIVE_API_BASE_URL = 'https://www.googleapis.com/drive/v3';
 const DEFAULT_PAGE_SIZE = 5;
@@ -87,7 +86,11 @@ interface FormattedFile {
  *
  * @param params.query - The search keyword to find in file names
  */
-export async function keyword_search(params: KeywordSearchParams): Promise<string> {
+export async function keyword_search(
+  params: KeywordSearchParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { query } = params;
 
   const safeKeyword = String(query || '').trim();
@@ -95,13 +98,16 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
   if (!safeKeyword) {
     const errorMessage = 'Missing search keyword';
     log.error('[google_drive] keyword_search validation failed', {}, { query });
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: 'keyword_search',
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'keyword_search',
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   // Escape single quotes in the search keyword
@@ -173,14 +179,17 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
       url,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'google_drive',
-      tool: 'keyword_search',
-      query: safeKeyword,
-      files,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'google_drive',
+        tool: 'keyword_search',
+        query: safeKeyword,
+        files,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[google_drive] keyword_search failed', {}, {
@@ -190,14 +199,17 @@ export async function keyword_search(params: KeywordSearchParams): Promise<strin
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: 'keyword_search',
-      error: errorMessage,
-      query: safeKeyword,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'keyword_search',
+        error: errorMessage,
+        query: safeKeyword,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -510,7 +522,11 @@ function parseOrderBy(orderByStrings?: string[]): OrderBy[] {
 /**
  * Search for documents in the user's Google Drive.
  */
-export async function search_documents(params: SearchDocumentsParams): Promise<string> {
+export async function search_documents(
+  params: SearchDocumentsParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const {
     document_contains,
     document_not_contains,
@@ -591,14 +607,17 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
       count: files.length,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'google_drive',
-      tool: 'search_documents',
-      documents_count: files.length,
-      documents: files,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'google_drive',
+        tool: 'search_documents',
+        documents_count: files.length,
+        documents: files,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[google_drive] search_documents failed', {}, {
@@ -606,13 +625,16 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: 'search_documents',
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'search_documents',
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -623,7 +645,11 @@ export async function search_documents(params: SearchDocumentsParams): Promise<s
  * @param params.page_size - Number of files to return per page (default: 5)
  * @param params.page_token - Pagination token to continue a previous request
  */
-export async function list_drive_folder_children(params: ListDriveFolderChildrenParams): Promise<string> {
+export async function list_drive_folder_children(
+  params: ListDriveFolderChildrenParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const {
     folder_id,
     page_size = DEFAULT_PAGE_SIZE,
@@ -711,15 +737,18 @@ export async function list_drive_folder_children(params: ListDriveFolderChildren
       hasNextPage: !!nextPageToken,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'google_drive',
-      tool: 'list_drive_folder_children',
-      folder_id: folder_id || 'root',
-      files,
-      next_page_token: nextPageToken,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'google_drive',
+        tool: 'list_drive_folder_children',
+        folder_id: folder_id || 'root',
+        files,
+        next_page_token: nextPageToken,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[google_drive] list_drive_folder_children failed', {}, {
@@ -728,14 +757,17 @@ export async function list_drive_folder_children(params: ListDriveFolderChildren
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: 'list_drive_folder_children',
-      error: errorMessage,
-      folder_id: folder_id || 'root',
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'list_drive_folder_children',
+        error: errorMessage,
+        folder_id: folder_id || 'root',
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -747,7 +779,11 @@ export async function list_drive_folder_children(params: ListDriveFolderChildren
  * @param params.file_name - Optional file name (for logging/output)
  * @param params.mime_type - Optional mime type (if not provided, will be fetched)
  */
-export async function get_gdrive_file_content(params: GetGDriveFileContentParams): Promise<string> {
+export async function get_gdrive_file_content(
+  params: GetGDriveFileContentParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { file_id, file_name, mime_type } = params;
 
   const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB limit
@@ -829,16 +865,19 @@ export async function get_gdrive_file_content(params: GetGDriveFileContentParams
         textLength: text.length,
       });
 
-      return JSON.stringify({
-        success: true,
-        group: 'google_drive',
-        tool: 'get_gdrive_file_content',
-        file_id,
-        name: actualFileName || null,
-        mime_type: actualMimeType,
-        content: text,
-        timestamp: new Date().toISOString(),
-      });
+      return {
+        result: JSON.stringify({
+          success: true,
+          group: 'google_drive',
+          tool: 'get_gdrive_file_content',
+          file_id,
+          name: actualFileName || null,
+          mime_type: actualMimeType,
+          content: text,
+          timestamp: new Date().toISOString(),
+        }),
+        updatedToolSessionContext: {},
+      };
 
     } else if (actualMimeType === 'application/pdf') {
       // Handle PDF - convert to temp Google Doc, export as text, delete temp doc
@@ -898,17 +937,20 @@ export async function get_gdrive_file_content(params: GetGDriveFileContentParams
             });
           });
 
-        return JSON.stringify({
-          success: true,
-          group: 'google_drive',
-          tool: 'get_gdrive_file_content',
-          file_id,
-          name: actualFileName || null,
-          mime_type: actualMimeType,
-          bytes: fileSize,
-          content: text,
-          timestamp: new Date().toISOString(),
-        });
+        return {
+          result: JSON.stringify({
+            success: true,
+            group: 'google_drive',
+            tool: 'get_gdrive_file_content',
+            file_id,
+            name: actualFileName || null,
+            mime_type: actualMimeType,
+            bytes: fileSize,
+            content: text,
+            timestamp: new Date().toISOString(),
+          }),
+          updatedToolSessionContext: {},
+        };
 
       } catch (error) {
         // Cleanup on error - delete temp doc
@@ -948,16 +990,19 @@ export async function get_gdrive_file_content(params: GetGDriveFileContentParams
         textLength: text.length,
       });
 
-      return JSON.stringify({
-        success: true,
-        group: 'google_drive',
-        tool: 'get_gdrive_file_content',
-        file_id,
-        name: actualFileName || null,
-        mime_type: actualMimeType,
-        content: text,
-        timestamp: new Date().toISOString(),
-      });
+      return {
+        result: JSON.stringify({
+          success: true,
+          group: 'google_drive',
+          tool: 'get_gdrive_file_content',
+          file_id,
+          name: actualFileName || null,
+          mime_type: actualMimeType,
+          content: text,
+          timestamp: new Date().toISOString(),
+        }),
+        updatedToolSessionContext: {},
+      };
 
     } else {
       // Unsupported file type
@@ -968,16 +1013,19 @@ export async function get_gdrive_file_content(params: GetGDriveFileContentParams
         mimeType: actualMimeType,
       });
 
-      return JSON.stringify({
-        success: false,
-        group: 'google_drive',
-        tool: 'get_gdrive_file_content',
-        error: errorMessage,
-        file_id,
-        name: actualFileName || null,
-        mime_type: actualMimeType,
-        timestamp: new Date().toISOString(),
-      });
+      return {
+        result: JSON.stringify({
+          success: false,
+          group: 'google_drive',
+          tool: 'get_gdrive_file_content',
+          error: errorMessage,
+          file_id,
+          name: actualFileName || null,
+          mime_type: actualMimeType,
+          timestamp: new Date().toISOString(),
+        }),
+        updatedToolSessionContext: {},
+      };
     }
 
   } catch (error) {
@@ -988,14 +1036,17 @@ export async function get_gdrive_file_content(params: GetGDriveFileContentParams
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: 'get_gdrive_file_content',
-      error: errorMessage,
-      file_id,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: 'get_gdrive_file_content',
+        error: errorMessage,
+        file_id,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 

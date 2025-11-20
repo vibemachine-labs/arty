@@ -1,6 +1,11 @@
 import { log } from '../../../lib/logger';
 import { type ToolNativeModule } from './ToolHelper';
-import { executeToolkitFunction } from './toolkit_functions';
+import { executeToolkitFunction } from './toolkit_functions/toolkit_functions';
+import {
+  type ToolSessionContext,
+  isToolSessionContextEmpty,
+  summarizeToolSessionContext,
+} from './toolkit_functions/types';
 
 // MARK: - Types
 
@@ -22,11 +27,13 @@ export interface ToolkitHelperNativeModule extends ToolNativeModule {
 /**
  * Manages Gen2 toolkit tool calls between JavaScript and native Swift code.
  * Uses a mux/demux approach to handle all toolkit tools through a single delegate.
+ * Also maintains per-tool session context for stateful tool interactions.
  */
 export class ToolkitHelper {
   private readonly toolName = 'ToolkitHelper';
   private readonly requestEventName = 'onToolkitRequest';
   private readonly module: ToolkitHelperNativeModule | null;
+  private readonly toolSessionContexts: Map<string, ToolSessionContext> = new Map();
 
   constructor(nativeModule: ToolkitHelperNativeModule | null) {
     this.module = nativeModule;
@@ -121,6 +128,8 @@ export class ToolkitHelper {
 
   /**
    * Execute a toolkit operation by routing to the appropriate toolkit function.
+   * Handles per-tool session context round-tripping.
+   * TODO: can this be DRY'd with ToolManager.executeGen2ToolCall()?
    */
   private async executeToolkitOperation(
     groupName: string,
@@ -150,19 +159,40 @@ export class ToolkitHelper {
         };
       }
 
+      // Get the current session context for this tool
+      const toolKey = `${groupName}__${toolName}`;
+      const currentSessionContext = this.toolSessionContexts.get(toolKey) || {};
+
       // Route to the appropriate toolkit function
-      const result = await executeToolkitFunction(groupName, toolName, args, context_params);
+      const toolkitResult = await executeToolkitFunction(
+        groupName,
+        toolName,
+        args,
+        context_params,
+        currentSessionContext
+      );
+
+      // Store the updated session context for this tool
+      this.toolSessionContexts.set(toolKey, toolkitResult.updatedToolSessionContext);
+
+      // Append session context to result if non-empty
+      let finalResult = toolkitResult.result;
+      if (!isToolSessionContextEmpty(toolkitResult.updatedToolSessionContext)) {
+        const contextSummary = summarizeToolSessionContext(toolkitResult.updatedToolSessionContext);
+        finalResult = `${toolkitResult.result}\n\nTool session context: ${contextSummary}`;
+      }
 
       log.info(`[${this.toolName}] ✅ Toolkit function executed successfully`, {}, {
         groupName,
         toolName,
         requestId,
         callId,
-        resultLength: result.length,
-        result: result,
+        resultLength: finalResult.length,
+        result: finalResult,
+        sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
       });
 
-      return result;
+      return finalResult;
     } catch (error) {
       log.error(`[${this.toolName}] ❌ Toolkit function execution failed`, {}, {
         groupName,

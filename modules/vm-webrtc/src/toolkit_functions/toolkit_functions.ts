@@ -8,7 +8,12 @@ import * as web from './web';
 
 // MARK: - Types
 
-export type ToolkitFunction = (params: any, context_params?: any) => Promise<string>;
+import type { ToolSessionContext, ToolkitResult } from './types';
+
+// Re-export types for convenience
+export type { ToolSessionContext, ToolkitResult };
+
+export type ToolkitFunction = (params: any, context_params?: any, toolSessionContext?: ToolSessionContext) => Promise<ToolkitResult>;
 
 export interface ToolkitRegistry {
   [groupName: string]: {
@@ -72,14 +77,16 @@ export function registerMcpTool(groupName: string, toolName: string, toolFunctio
  * @param toolName - The tool name (e.g., "showTopStories")
  * @param params - Parameters to pass to the tool function
  * @param context_params - Optional context parameters for toolkit functions
- * @returns Promise resolving to the JSON string result
+ * @param toolSessionContext - Optional session context for the tool
+ * @returns Promise resolving to the ToolkitResult with result and updated session context
  */
 export async function executeToolkitFunction(
   groupName: string,
   toolName: string,
   params: any,
-  context_params?: any
-): Promise<string> {
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   log.info('[ToolkitRegistry] Executing toolkit function', {}, {
     groupName,
     toolName,
@@ -108,14 +115,15 @@ export async function executeToolkitFunction(
 
   // Execute the tool function
   try {
-    const result = await toolFunction(params, context_params);
+    const toolkitResult = await toolFunction(params, context_params, toolSessionContext || {});
     log.info('[ToolkitRegistry] Tool execution successful', {}, {
       groupName,
       toolName,
-      resultLength: result.length,
-      result: result,
+      resultLength: toolkitResult.result.length,
+      result: toolkitResult.result,
+      sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
     });
-    return result;
+    return toolkitResult;
   } catch (error) {
     log.error('[ToolkitRegistry] Tool execution failed', {}, {
       groupName,
@@ -130,4 +138,3 @@ export async function executeToolkitFunction(
 // MARK: - Exports
 
 export { dailyPapers, googleDrive, hackerNews, web };
-

@@ -14,20 +14,21 @@ describe('web.ts - getContentsFromUrl', () => {
       { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
     );
 
-    console.log('Result length:', result.length);
-    console.log('Result preview (first 500 chars):', result.substring(0, 500));
-    console.log('Result type:', typeof result);
+    const resultStr = result.result;
+    console.log('Result length:', resultStr.length);
+    console.log('Result preview (first 500 chars):', resultStr.substring(0, 500));
+    console.log('Result type:', typeof resultStr);
 
     // Verify result is non-empty
-    expect(result).toBeTruthy();
-    expect(result.length).toBeGreaterThan(0);
-    expect(typeof result).toBe('string');
+    expect(resultStr).toBeTruthy();
+    expect(resultStr.length).toBeGreaterThan(0);
+    expect(typeof resultStr).toBe('string');
 
     // Should not be an error message
-    expect(result).not.toMatch(/^Error:/);
+    expect(resultStr).not.toMatch(/^Error:/);
 
     // Should contain some actual text content (not just whitespace)
-    expect(result.trim().length).toBeGreaterThan(0);
+    expect(resultStr.trim().length).toBeGreaterThan(0);
 
     console.log('✅ Test passed - content extracted successfully');
   });
@@ -38,7 +39,7 @@ describe('web.ts - getContentsFromUrl', () => {
       { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
     );
 
-    expect(result).toMatch(/Error:/);
+    expect(result.result).toMatch(/Error:/);
     console.log('✅ Test passed - invalid URL handled correctly');
   });
 
@@ -48,7 +49,7 @@ describe('web.ts - getContentsFromUrl', () => {
       { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
     );
 
-    expect(result).toMatch(/Error.*private/i);
+    expect(result.result).toMatch(/Error.*private/i);
     console.log('✅ Test passed - private URL blocked correctly');
   });
 });

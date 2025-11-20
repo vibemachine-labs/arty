@@ -1,16 +1,39 @@
 import { log } from '../../../../lib/logger';
+import type { ToolSessionContext, ToolkitResult } from './types';
 import { fetchWithSsrfProtection } from './web';
 
 // MARK: - Types
 
+// Constants for default values
+const DEFAULT_PAGE = 0;
+const DEFAULT_LIMIT = 5;
+
 export interface ShowDailyPapersParams {
-  p?: number;
+  page?: number;
   limit?: number;
   date?: string;
   week?: string;
   month?: string;
   submitter?: string;
   sort?: 'publishedAt' | 'trending';
+}
+
+/**
+ * Helper function to export ShowDailyPapersParams as a dictionary for session context.
+ */
+function exportParamsToDict(params: ShowDailyPapersParams): Record<string, string> {
+  const dict: Record<string, string> = {};
+  
+  // Use defaults if not provided
+  dict.page = (params.page !== undefined ? params.page : DEFAULT_PAGE).toString();
+  dict.limit = (params.limit !== undefined ? params.limit : DEFAULT_LIMIT).toString();
+  if (params.date) dict.date = params.date;
+  if (params.week) dict.week = params.week;
+  if (params.month) dict.month = params.month;
+  if (params.submitter) dict.submitter = params.submitter;
+  if (params.sort) dict.sort = params.sort;
+  
+  return dict;
 }
 
 export interface SearchDailyPapersParams {
@@ -23,6 +46,61 @@ export interface GetCommentsForPaperParams {
 }
 
 // MARK: - Helper Functions
+
+/**
+ * Postprocess the daily papers API response to reduce size.
+ * - Strips avatarUrl from submittedBy (top level)
+ * - Strips avatarUrl from paper.submittedOnDailyBy
+ * - Strips avatarUrl from paper.authors[].user
+ * - Keeps only the first author in authors array
+ * - Removes thumbnail URLs
+ */
+function postprocessDailyPapersResponse(data: any): any {
+  if (!Array.isArray(data)) {
+    return data;
+  }
+
+  return data.map((paper: any) => {
+    const processed = { ...paper };
+
+    // Strip avatarUrl from submittedBy (top level)
+    if (processed.submittedBy?.avatarUrl) {
+      const { avatarUrl, ...rest } = processed.submittedBy;
+      processed.submittedBy = rest;
+    }
+
+    // Process nested paper object
+    if (processed.paper) {
+      processed.paper = { ...processed.paper };
+
+      // Strip avatarUrl from paper.submittedOnDailyBy
+      if (processed.paper.submittedOnDailyBy?.avatarUrl) {
+        const { avatarUrl, ...rest } = processed.paper.submittedOnDailyBy;
+        processed.paper.submittedOnDailyBy = rest;
+      }
+
+      // Keep only first author and strip avatarUrl from author.user
+      if (Array.isArray(processed.paper.authors) && processed.paper.authors.length > 0) {
+        const firstAuthor = { ...processed.paper.authors[0] };
+        
+        // Strip avatarUrl from author.user if present
+        if (firstAuthor.user?.avatarUrl) {
+          const { avatarUrl, ...rest } = firstAuthor.user;
+          firstAuthor.user = rest;
+        }
+        
+        processed.paper.authors = [firstAuthor];
+      }
+    }
+
+    // Remove thumbnail (top level)
+    if (processed.thumbnail) {
+      delete processed.thumbnail;
+    }
+
+    return processed;
+  });
+}
 
 /**
  * Strips HTML tags from a string in a simple, memory-efficient way.
@@ -145,17 +223,38 @@ async function getWebContentExtractComments(url: string): Promise<string[]> {
 /**
  * Retrieve a list of daily papers from Hugging Face.
  */
-export async function showDailyPapers(params: ShowDailyPapersParams): Promise<string> {
-  const { p = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
+export async function showDailyPapers(
+  params: ShowDailyPapersParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
+  // Check for unexpected parameters and warn
+  const expectedParams = new Set(['page', 'limit', 'date', 'week', 'month', 'submitter', 'sort']);
+  const receivedParams = Object.keys(params);
+  const unexpectedParams = receivedParams.filter(p => !expectedParams.has(p));
 
-  log.info('[daily_papers] showDailyPapers called', {}, { p, limit, date, week, month, submitter, sort, allParams: params });
+  if (unexpectedParams.length > 0) {
+    log.warn('[daily_papers] Received unexpected parameters', {}, {
+      unexpectedParams,
+      receivedParams,
+      hint: 'Check toolkitGroups.json parameter names match TypeScript interface'
+    });
+  }
+
+  // Handle page parameter: use provided value if it's a number, otherwise use default
+  // This handles the case where page might be false, null, undefined, etc.
+  const page = typeof params.page === 'number' ? params.page : DEFAULT_PAGE;
+  const limit = typeof params.limit === 'number' ? params.limit : DEFAULT_LIMIT;
+  const { date, week, month, submitter, sort = 'trending' } = params;
+
+  log.info('[daily_papers] showDailyPapers called', {}, { page, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
 
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/daily_papers');
 
     // Add pagination parameter (p is 0-based page index)
-    url.searchParams.set('p', p.toString());
+    url.searchParams.set('p', page.toString());
 
     // Add limit parameter (defaults to 5, max 100)
     url.searchParams.set('limit', limit.toString());
@@ -187,31 +286,46 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
 
     const data = await response.json();
 
+    // Postprocess to reduce response size
+    const processedData = postprocessDailyPapersResponse(data);
+
     const result = {
       success: true,
       filters: { date, week, month, submitter, sort },
-      pagination: { p, limit },
-      papers: data,
+      pagination: { page, limit },
+      papers: processedData,
       timestamp: new Date().toISOString()
     };
 
     log.debug('[daily_papers] showDailyPapers result', {}, result);
 
-    return JSON.stringify(result);
+    return {
+      result: JSON.stringify(result),
+      updatedToolSessionContext: exportParamsToDict(params),
+    };
   } catch (error) {
     log.error('[daily_papers] Error fetching daily papers', {}, { error });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }),
+      updatedToolSessionContext: {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+    };
   }
 }
 
 /**
  * Search daily papers using a query string with hybrid semantic/full-text search.
  */
-export async function searchDailyPapers(params: SearchDailyPapersParams): Promise<string> {
+export async function searchDailyPapers(
+  params: SearchDailyPapersParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { q, limit = 5 } = params;
 
   log.info('[daily_papers] searchDailyPapers called', {}, { q, limit, allParams: params });
@@ -246,15 +360,21 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
 
     log.debug('[daily_papers] searchDailyPapers result', {}, result);
 
-    return JSON.stringify(result);
+    return {
+      result: JSON.stringify(result),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     log.error('[daily_papers] Error searching daily papers', {}, { error, query: q });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      query: q,
-      timestamp: new Date().toISOString()
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        query: q,
+        timestamp: new Date().toISOString()
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -262,7 +382,11 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
  * Get comments for a paper by fetching the HTML from the paper's Hugging Face page.
  * Uses memory-efficient streaming to extract comments without loading entire HTML into memory.
  */
-export async function getCommentsForPaper(params: GetCommentsForPaperParams): Promise<string> {
+export async function getCommentsForPaper(
+  params: GetCommentsForPaperParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { arxiv_id } = params;
 
   log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params });
@@ -287,14 +411,20 @@ export async function getCommentsForPaper(params: GetCommentsForPaperParams): Pr
 
     log.debug('[daily_papers] getCommentsForPaper result', {}, result);
 
-    return JSON.stringify(result);
+    return {
+      result: JSON.stringify(result),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     log.error('[daily_papers] Error fetching paper comments', {}, { error, arxiv_id });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      arxiv_id,
-      timestamp: new Date().toISOString()
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        arxiv_id,
+        timestamp: new Date().toISOString()
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }

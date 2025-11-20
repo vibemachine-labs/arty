@@ -2,6 +2,7 @@ import { fetch } from 'expo/fetch';
 import striptags from 'striptags';
 import { log } from '../../../../lib/logger';
 import { getApiKey } from '../../../../lib/secure-storage';
+import type { ToolSessionContext, ToolkitResult } from './types';
 
 /**
  * Fetches a URL with SSRF protection, timeout, and content-type validation.
@@ -105,8 +106,9 @@ export async function fetchWithSsrfProtection(
  */
 export async function getContentsFromUrl(
   params: { url: string },
-  context_params?: { maxLength?: number; minHtmlForBody?: number; maxRawBytes?: number }
-): Promise<string> {
+  context_params?: { maxLength?: number; minHtmlForBody?: number; maxRawBytes?: number },
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   log.info('[web] getContentsFromUrl starting', {}, { url: params.url });
 
   try {
@@ -127,7 +129,10 @@ export async function getContentsFromUrl(
 
     if (!response.body) {
       log.error('[web] Response body not available', {}, { url });
-      return 'Error: Response body is not available';
+      return {
+        result: 'Error: Response body is not available',
+        updatedToolSessionContext: {},
+      };
     }
 
     const reader = response.body.getReader();
@@ -243,7 +248,10 @@ export async function getContentsFromUrl(
           htmlLength: rawHtml.length,
           cleanedLength: cleaned.length,
         });
-        return 'Error: No readable content found on page';
+        return {
+          result: 'Error: No readable content found on page',
+          updatedToolSessionContext: {},
+        };
       }
 
       // Truncate if necessary
@@ -253,11 +261,17 @@ export async function getContentsFromUrl(
           originalLength: cleanedText.length,
           truncatedLength: truncated.length,
         });
-        return truncated;
+        return {
+          result: truncated,
+          updatedToolSessionContext: {},
+        };
       }
 
       log.info('[web] Returning full content', {}, { length: cleanedText.length });
-      return cleanedText;
+      return {
+        result: cleanedText,
+        updatedToolSessionContext: {},
+      };
     } catch (streamError) {
       // Handle streaming errors
       log.error('[web] Stream error', {}, {
@@ -279,7 +293,10 @@ export async function getContentsFromUrl(
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       log.error('[web] Request timeout', {}, { url: params.url });
-      return 'Error fetching URL: Request timeout';
+      return {
+        result: 'Error fetching URL: Request timeout',
+        updatedToolSessionContext: {},
+      };
     }
     if (error instanceof Error) {
       log.error('[web] Error occurred', {}, {
@@ -288,10 +305,16 @@ export async function getContentsFromUrl(
         message: error.message,
         stack: error.stack,
       });
-      return `Error fetching URL: ${error.message}`;
+      return {
+        result: `Error fetching URL: ${error.message}`,
+        updatedToolSessionContext: {},
+      };
     }
     log.error('[web] Unknown error', {}, { url: params.url, error });
-    return 'Error fetching URL: Unknown error';
+    return {
+      result: 'Error fetching URL: Unknown error',
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -339,22 +362,32 @@ const tryParseJson = <T>(value: string): T | null => {
 /**
  * Search the web using GPT-5 with web search enabled.
  */
-export async function web_search(params: { query: string }): Promise<string> {
+export async function web_search(
+  params: { query: string },
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const query = params.query.trim();
   log.info('[web] web_search starting', {}, { query: query });
 
   if (!query) {
-    return JSON.stringify({ error: 'Web search requires a non-empty query.' });
+    return {
+      result: JSON.stringify({ error: 'Web search requires a non-empty query.' }),
+      updatedToolSessionContext: {},
+    };
   }
 
   // Get API key from secure-storage
   const apiKey = await getApiKey({ forceSecureStore: true });
   if (!apiKey) {
     log.info('[web] OpenAI API key not configured', {});
-    return JSON.stringify({
-      query,
-      error: 'OpenAI API key not configured',
-    });
+    return {
+      result: JSON.stringify({
+        query,
+        error: 'OpenAI API key not configured',
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   const payload = {
@@ -393,7 +426,10 @@ export async function web_search(params: { query: string }): Promise<string> {
     });
   } catch (networkError) {
     log.info('[web] Network error calling OpenAI Responses API', {}, networkError);
-    return JSON.stringify({ error: 'Failed to reach OpenAI Responses API for web search.' });
+    return {
+      result: JSON.stringify({ error: 'Failed to reach OpenAI Responses API for web search.' }),
+      updatedToolSessionContext: {},
+    };
   }
 
   const rawText = await response.text();
@@ -404,17 +440,26 @@ export async function web_search(params: { query: string }): Promise<string> {
   });
 
   if (!response.ok) {
-    return JSON.stringify({ error: `OpenAI Responses API error ${response.status}`, rawText: rawText});
+    return {
+      result: JSON.stringify({ error: `OpenAI Responses API error ${response.status}`, rawText: rawText}),
+      updatedToolSessionContext: {},
+    };
   }
 
   const parsed = tryParseJson<OpenAIResponse>(rawText);
   if (!parsed) {
-    return JSON.stringify({ error: 'Failed to parse OpenAI response JSON' });
+    return {
+      result: JSON.stringify({ error: 'Failed to parse OpenAI response JSON' }),
+      updatedToolSessionContext: {},
+    };
   }
 
   const answer = extractOutputText(parsed).trim();
   if (!answer) {
-    return JSON.stringify({ error: 'OpenAI response did not include any text output' });
+    return {
+      result: JSON.stringify({ error: 'OpenAI response did not include any text output' }),
+      updatedToolSessionContext: {},
+    };
   }
 
   const result = JSON.stringify({
@@ -427,5 +472,8 @@ export async function web_search(params: { query: string }): Promise<string> {
     answer: answer,
   });
 
-  return result;
+  return {
+    result,
+    updatedToolSessionContext: {},
+  };
 }

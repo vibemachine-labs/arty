@@ -1,4 +1,5 @@
 import { log } from '../../../../lib/logger';
+import type { ToolSessionContext, ToolkitResult } from './types';
 
 // MARK: - Constants
 
@@ -143,8 +144,14 @@ function deriveStoryId(story: HNStory): number {
  *
  * @param params.story_type - Category of stories: "top" (front page), "new" (recent), "ask_hn", "show_hn"
  * @param params.num_stories - Number of stories to return (default: 10)
+ * @param context_params - Optional context parameters
+ * @param toolSessionContext - Optional session context for the tool
  */
-export async function showTopStories(params: ShowTopStoriesParams): Promise<string> {
+export async function showTopStories(
+  params: ShowTopStoriesParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const { story_type, num_stories = DEFAULT_NUM_STORIES } = params;
 
   log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories });
@@ -156,12 +163,15 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
   if (!validTypes.includes(normalizedType)) {
     const error = `story_type must be one of: ${validTypes.join(', ')}`;
     log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes });
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'showTopStories',
-      error,
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'showTopStories',
+        error,
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   // Map story type to appropriate API parameters
@@ -195,14 +205,17 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
       stories,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'hacker_news',
-      tool: 'showTopStories',
-      story_type: normalizedType,
-      stories,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'hacker_news',
+        tool: 'showTopStories',
+        story_type: normalizedType,
+        stories,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -213,21 +226,28 @@ export async function showTopStories(params: ShowTopStoriesParams): Promise<stri
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'showTopStories',
-      error: errorMessage,
-      story_type: normalizedType,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'showTopStories',
+        error: errorMessage,
+        story_type: normalizedType,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
 /**
  * Search Hacker News stories using a free-form query.
  */
-export async function searchStories(params: SearchStoriesParams): Promise<string> {
+export async function searchStories(
+  params: SearchStoriesParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const {
     query,
     num_results = DEFAULT_NUM_STORIES,
@@ -239,13 +259,16 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
   if (!normalizedQuery) {
     const errorMessage = 'query must be a non-empty string';
     log.error('[hacker_news] searchStories validation failed', {}, { query });
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'searchStories',
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'searchStories',
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   const endpoint = search_by_date ? 'search_by_date' : 'search';
@@ -277,15 +300,18 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
       url,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'hacker_news',
-      tool: 'searchStories',
-      query: normalizedQuery,
-      search_by_date,
-      stories,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'hacker_news',
+        tool: 'searchStories',
+        query: normalizedQuery,
+        search_by_date,
+        stories,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] searchStories failed', {}, {
@@ -295,21 +321,28 @@ export async function searchStories(params: SearchStoriesParams): Promise<string
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'searchStories',
-      error: errorMessage,
-      query: normalizedQuery,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'searchStories',
+        error: errorMessage,
+        query: normalizedQuery,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
 /**
  * Fetch a single Hacker News story including its comments.
  */
-export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> {
+export async function getStoryInfo(
+  params: GetStoryInfoParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const {
     story_id,
     comment_depth = DEFAULT_COMMENT_DEPTH,
@@ -339,13 +372,16 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
       hasComments: Array.isArray(formattedStory.comments) && formattedStory.comments.length > 0,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'hacker_news',
-      tool: 'getStoryInfo',
-      story: formattedStory,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'hacker_news',
+        tool: 'getStoryInfo',
+        story: formattedStory,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
@@ -358,14 +394,17 @@ export async function getStoryInfo(params: GetStoryInfoParams): Promise<string> 
       stack: errorStack,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'getStoryInfo',
-      error: errorMessage,
-      story_id,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'getStoryInfo',
+        error: errorMessage,
+        story_id,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 
@@ -408,7 +447,11 @@ async function getUserStoriesInternal(user_name: string, num_stories: number): P
 /**
  * Fetch Hacker News user metadata plus their recent submissions.
  */
-export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
+export async function getUserInfo(
+  params: GetUserInfoParams,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext
+): Promise<ToolkitResult> {
   const {
     user_name,
     num_stories = DEFAULT_NUM_STORIES,
@@ -419,13 +462,16 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
   if (!normalizedUserName) {
     const errorMessage = 'user_name must be a non-empty string';
     log.error('[hacker_news] getUserInfo validation failed', {}, { user_name });
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'getUserInfo',
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'getUserInfo',
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   const url = `${BASE_API_URL}/users/${encodeURIComponent(normalizedUserName)}`;
@@ -460,16 +506,19 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
       story_count: stories.length,
     });
 
-    return JSON.stringify({
-      success: true,
-      group: 'hacker_news',
-      tool: 'getUserInfo',
-      user: {
-        ...userData,
-        stories,
-      },
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: true,
+        group: 'hacker_news',
+        tool: 'getUserInfo',
+        user: {
+          ...userData,
+          stories,
+        },
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] getUserInfo failed', {}, {
@@ -479,14 +528,17 @@ export async function getUserInfo(params: GetUserInfoParams): Promise<string> {
       stack: error instanceof Error ? error.stack : undefined,
     }, error);
 
-    return JSON.stringify({
-      success: false,
-      group: 'hacker_news',
-      tool: 'getUserInfo',
-      error: errorMessage,
-      user_name: normalizedUserName,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'hacker_news',
+        tool: 'getUserInfo',
+        error: errorMessage,
+        user_name: normalizedUserName,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 }
 

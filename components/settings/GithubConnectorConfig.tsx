@@ -1,26 +1,26 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    Alert,
-    Keyboard,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableWithoutFeedback,
-    View,
+  Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { log } from "../../lib/logger";
 import {
-    deleteGithubToken,
-    getGithubToken,
-    saveGithubToken,
+  deleteGithubToken,
+  getGithubToken,
+  saveGithubToken,
 } from "../../lib/secure-storage";
 
 export interface GithubConnectorConfigProps {
@@ -142,6 +142,15 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
   }, []);
 
   const handleToggleEnabled = useCallback(async (value: boolean) => {
+    if (value) {
+      // Show alert when trying to enable
+      Alert.alert(
+        "GitHub Connector Unavailable",
+        "The GitHub connector is temporarily disabled and not currently working. We're working on bringing it back in a future update.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
     setIsEnabled(value);
     try {
       await AsyncStorage.setItem("github_connector_enabled", value.toString());

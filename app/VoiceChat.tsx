@@ -34,6 +34,7 @@ import VmWebrtcModule, {
   type TranscriptEventPayload,
 } from "../modules/vm-webrtc";
 import toolManager from "../modules/vm-webrtc/src/ToolManager";
+import { getToolkitDefinitions } from "../modules/vm-webrtc/src/ToolkitManager";
 
 export type AudioOutput = "handset" | "speakerphone";
 
@@ -315,8 +316,10 @@ export function VoiceChat({
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
 
-      const canonicalToolDefinitions = toolManager.getCanonicalToolDefinitions();
-      const voiceToolNames = toolManager.getToolNames(canonicalToolDefinitions);
+      // Get Gen2 toolkit definitions (same source as TextChat for consistency)
+      // This includes dynamic MCP tools fetched from remote servers
+      const toolDefinitions = await getToolkitDefinitions();
+      const voiceToolNames = toolManager.getToolNames(toolDefinitions);
 
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
       
@@ -354,7 +357,7 @@ export function VoiceChat({
         maxConversationTurns,
         retentionRatio,
         transcriptionEnabled,
-        toolDefinitions: canonicalToolDefinitions,
+        toolDefinitions,
       };
 
       // Retry logic with exponential backoff for 503 errors

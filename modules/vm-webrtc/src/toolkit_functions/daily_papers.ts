@@ -1,5 +1,5 @@
+import { fetch } from 'expo/fetch';
 import { log } from '../../../../lib/logger';
-import { getContentsFromUrl } from './web';
 
 // MARK: - Types
 
@@ -25,35 +25,170 @@ export interface GetCommentsForPaperParams {
 // MARK: - Helper Functions
 
 /**
- * Extracts comment texts from a Hugging Face paper page HTML.
- * It looks for the <!-- HTML_TAG_START --> ... <!-- HTML_TAG_END --> blocks
- * inside the comment content and strips tags from those chunks.
+ * Strips HTML tags from a string in a simple, memory-efficient way.
  */
-export function extractHfPaperComments(html: string): string[] {
-  const comments: string[] = [];
+function stripHtmlTags(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  // Find all comment HTML blocks between the special markers
-  const commentBlocks = [...html.matchAll(
-    /<!-- HTML_TAG_START -->([\s\S]*?)<!-- HTML_TAG_END -->/g
-  )];
+/**
+ * Fetches web content and extracts Hugging Face paper comments in a memory-efficient streaming fashion.
+ * Scans HTML chunks for comment blocks between <!-- HTML_TAG_START --> and <!-- HTML_TAG_END --> markers.
+ */
+async function getWebContentExtractComments(url: string): Promise<string[]> {
+  log.info('[daily_papers] getWebContentExtractComments starting', {}, { url });
 
-  for (const match of commentBlocks) {
-    const innerHtml = match[1] ?? '';
-
-    // Very simple tag stripper to avoid heavy deps / blocking libs
-    let text = innerHtml
-      // remove all tags
-      .replace(/<[^>]+>/g, ' ')
-      // collapse whitespace
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (text.length > 0) {
-      comments.push(text);
-    }
+  // Validate URL format and protocol
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch (error) {
+    throw new Error('Invalid URL format');
   }
 
-  return comments;
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new Error('Only HTTP and HTTPS protocols are supported');
+  }
+
+  // Block private IP ranges and localhost to prevent SSRF
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const blockedPatterns = [
+    /^localhost$/i,
+    /^127\./,
+    /^10\./,
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+    /^192\.168\./,
+    /^169\.254\./,
+    /^::1$/,
+    /^fc00:/,
+  ];
+
+  if (blockedPatterns.some(pattern => pattern.test(hostname))) {
+    throw new Error('Access to private/internal URLs is not allowed');
+  }
+
+  // Fetch with timeout
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), 15000);
+
+  try {
+    const response = await fetch(url, { signal: abortController.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    const allowedTypes = ['text/', 'application/json', 'application/xml', 'application/xhtml'];
+    if (!allowedTypes.some(type => contentType.toLowerCase().includes(type))) {
+      throw new Error(`Unsupported content type: ${contentType}`);
+    }
+
+    if (!response.body) {
+      throw new Error('Response body not available');
+    }
+
+    // Stream and scan for comment blocks
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const comments: string[] = [];
+    
+    let buffer = '';
+    const START_MARKER = '<!-- HTML_TAG_START -->';
+    const END_MARKER = '<!-- HTML_TAG_END -->';
+    const MAX_BUFFER_SIZE = 500000; // 500KB sliding window
+    const MAX_TOTAL_BYTES = 10000000; // 10MB hard limit
+    let totalBytesRead = 0;
+    let commentCount = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          log.info('[daily_papers] Stream complete', {}, { 
+            totalBytesRead, 
+            commentsFound: commentCount 
+          });
+          break;
+        }
+
+        totalBytesRead += value.length;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Hard limit check
+        if (totalBytesRead >= MAX_TOTAL_BYTES) {
+          log.warn('[daily_papers] Reached max total bytes limit', {}, { totalBytesRead });
+          break;
+        }
+
+        // Scan buffer for complete comment blocks
+        let startIdx = 0;
+        while (true) {
+          const commentStart = buffer.indexOf(START_MARKER, startIdx);
+          if (commentStart === -1) break;
+
+          const commentEnd = buffer.indexOf(END_MARKER, commentStart + START_MARKER.length);
+          if (commentEnd === -1) {
+            // Incomplete block, keep in buffer
+            break;
+          }
+
+          // Extract and process the comment block
+          const commentHtml = buffer.substring(
+            commentStart + START_MARKER.length,
+            commentEnd
+          );
+          
+          const commentText = stripHtmlTags(commentHtml);
+          if (commentText.length > 0) {
+            comments.push(commentText);
+            commentCount++;
+          }
+
+          // Move past this comment block
+          startIdx = commentEnd + END_MARKER.length;
+        }
+
+        // Trim processed content from buffer, keep unprocessed tail
+        if (startIdx > 0) {
+          buffer = buffer.substring(startIdx);
+        }
+
+        // If buffer grows too large without finding complete blocks, trim it
+        if (buffer.length > MAX_BUFFER_SIZE) {
+          // Keep last portion that might contain incomplete marker
+          const keepSize = Math.max(START_MARKER.length + END_MARKER.length + 10000, 50000);
+          buffer = buffer.substring(buffer.length - keepSize);
+          log.debug('[daily_papers] Buffer trimmed', {}, { newBufferSize: buffer.length });
+        }
+      }
+
+      log.info('[daily_papers] Comment extraction complete', {}, { 
+        totalComments: comments.length,
+        totalBytesRead 
+      });
+
+      return comments;
+
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch (e) {
+        // Lock may already be released
+      }
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout');
+    }
+    throw error;
+  }
 }
 
 // MARK: - Functions
@@ -176,6 +311,7 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
 
 /**
  * Get comments for a paper by fetching the HTML from the paper's Hugging Face page.
+ * Uses memory-efficient streaming to extract comments without loading entire HTML into memory.
  */
 export async function getCommentsForPaper(params: GetCommentsForPaperParams): Promise<string> {
   const { arxiv_id } = params;
@@ -188,15 +324,8 @@ export async function getCommentsForPaper(params: GetCommentsForPaperParams): Pr
 
     log.info('[daily_papers] Fetching paper comments from URL', {}, { url });
 
-    // Use the web.ts getContentsFromUrl function with a large maxLength to get full HTML
-    // We need ~300K to capture all comments before filtering
-    const htmlContent = await getContentsFromUrl(
-      { url },
-      { maxLength: 300000, minHtmlForBody: 15000, maxRawBytes: 3000000 }
-    );
-
-    // Extract comments from the HTML
-    const comments = extractHfPaperComments(htmlContent);
+    // Use memory-efficient streaming extraction
+    const comments = await getWebContentExtractComments(url);
 
     const result = {
       success: true,

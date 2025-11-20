@@ -17,10 +17,6 @@ export interface SearchDailyPapersParams {
   limit?: number;
 }
 
-export interface GetPaperDetailsParams {
-  arxivId: string;
-}
-
 // MARK: - Functions
 
 /**
@@ -134,44 +130,6 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
       query: q,
-      timestamp: new Date().toISOString()
-    });
-  }
-}
-
-/**
- * Get paper details including metadata like authors, summary, and discussion comments.
- */
-export async function getPaperDetails(params: GetPaperDetailsParams): Promise<string> {
-  const { arxivId } = params;
-
-  log.info('[daily_papers] getPaperDetails called', {}, { arxivId, allParams: params });
-
-  try {
-    // Build API URL
-    const url = `https://huggingface.co/api/papers/${arxivId}`;
-
-    log.info('[daily_papers] Fetching paper details from API', {}, { url });
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    return JSON.stringify({
-      success: true,
-      paper: data,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    log.error('[daily_papers] Error fetching paper details', {}, { error, arxivId });
-    return JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      arxivId,
       timestamp: new Date().toISOString()
     });
   }

@@ -219,7 +219,7 @@ export async function keyword_search(
  * Validate that we have the necessary auth prerequisites.
  * Returns an error response if validation fails, or null if everything is good.
  */
-async function validateAuthPrerequisites(toolName: string): Promise<string | null> {
+async function validateAuthPrerequisites(toolName: string): Promise<ToolkitResult | null> {
   // Check for client ID first - without this, auth/refresh will fail
   const clientId = await getGDriveClientId();
   if (!clientId) {
@@ -228,13 +228,16 @@ async function validateAuthPrerequisites(toolName: string): Promise<string | nul
       hasClientId: false,
       errorMessage,
     });
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: toolName,
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: toolName,
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   // Check for access token
@@ -246,13 +249,16 @@ async function validateAuthPrerequisites(toolName: string): Promise<string | nul
       clientIdLength: clientId.length,
       hasAccessToken: false,
     });
-    return JSON.stringify({
-      success: false,
-      group: 'google_drive',
-      tool: toolName,
-      error: errorMessage,
-      timestamp: new Date().toISOString(),
-    });
+    return {
+      result: JSON.stringify({
+        success: false,
+        group: 'google_drive',
+        tool: toolName,
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      updatedToolSessionContext: {},
+    };
   }
 
   // All good - log that we have everything we need

@@ -14,29 +14,30 @@ async function runTests() {
       { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
     );
 
+    const resultStr = result.result;
     console.log('✅ Request completed');
     console.log('📊 Result stats:');
-    console.log('  - Length:', result.length);
-    console.log('  - Type:', typeof result);
-    console.log('  - Is empty?:', result.length === 0);
-    console.log('  - Starts with "Error"?:', result.startsWith('Error'));
+    console.log('  - Length:', resultStr.length);
+    console.log('  - Type:', typeof resultStr);
+    console.log('  - Is empty?:', resultStr.length === 0);
+    console.log('  - Starts with "Error"?:', resultStr.startsWith('Error'));
     console.log('\n📄 Content preview (first 500 chars):');
     console.log('---');
-    console.log(result.substring(0, 500));
+    console.log(resultStr.substring(0, 500));
     console.log('---\n');
 
     // Assertions
-    if (result.length === 0) {
+    if (resultStr.length === 0) {
       console.error('❌ FAIL: Result is empty');
       process.exit(1);
     }
 
-    if (result.startsWith('Error')) {
-      console.error('❌ FAIL: Result is an error message:', result);
+    if (resultStr.startsWith('Error')) {
+      console.error('❌ FAIL: Result is an error message:', resultStr);
       process.exit(1);
     }
 
-    if (result.trim().length === 0) {
+    if (resultStr.trim().length === 0) {
       console.error('❌ FAIL: Result contains only whitespace');
       process.exit(1);
     }
@@ -56,8 +57,8 @@ async function runTests() {
       { url: 'not-a-valid-url' },
       { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
     );
-    if (result.includes('Error')) {
-      console.log('✅ PASS: Invalid URL handled correctly:', result);
+    if (result.result.includes('Error')) {
+      console.log('✅ PASS: Invalid URL handled correctly:', result.result);
     } else {
       console.error('❌ FAIL: Should return error for invalid URL');
       process.exit(1);
@@ -74,8 +75,8 @@ async function runTests() {
       { url: 'http://localhost:3000' },
       { maxLength: 15000, minHtmlForBody: 150000, maxRawBytes: 3000000 }
     );
-    if (result.includes('Error') && result.toLowerCase().includes('private')) {
-      console.log('✅ PASS: Private URL blocked correctly:', result);
+    if (result.result.includes('Error') && result.result.toLowerCase().includes('private')) {
+      console.log('✅ PASS: Private URL blocked correctly:', result.result);
     } else {
       console.error('❌ FAIL: Should block private URLs');
       process.exit(1);

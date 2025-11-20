@@ -11,29 +11,31 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AdvancedConfigurationSheet } from "../components/settings/AdvancedConfigurationSheet";
 import { ConfigureChatMode, type ChatMode } from "../components/settings/ConfigureChatMode";
-import { ConfigureMainPromptModal } from "../components/settings/ConfigureMainPromptModal";
-import { ConfigureVoice } from "../components/settings/ConfigureVoice";
-import { ConfigureVad } from "../components/settings/ConfigureVad";
 import { ConfigureContextWindow } from "../components/settings/ConfigureContextWindow";
+import { ConfigureLanguage } from "../components/settings/ConfigureLanguage";
+import { ConfigureMainPromptModal } from "../components/settings/ConfigureMainPromptModal";
 import { ConfigureToolsSheet } from "../components/settings/ConfigureToolsSheet";
 import { ConfigureTranscription } from "../components/settings/ConfigureTranscription";
+import { ConfigureVad } from "../components/settings/ConfigureVad";
+import { ConfigureVoice } from "../components/settings/ConfigureVoice";
 import { ConnectorsConfig } from "../components/settings/ConnectorsConfig";
 import { DeveloperMode } from "../components/ui/DeveloperMode";
 import { HamburgerButton } from "../components/ui/HamburgerButton";
 import { HamburgerMenu, type MenuSection } from "../components/ui/HamburgerMenu";
+import {
+  DEFAULT_MAX_CONVERSATION_TURNS,
+  DEFAULT_RETENTION_RATIO,
+  loadContextWindowPreferences,
+  saveMaxConversationTurns,
+  saveRetentionRatio
+} from "../lib/contextWindowPreference";
+import { DEFAULT_LANGUAGE, loadLanguagePreference, saveLanguagePreference } from "../lib/languagePreference";
 import { log } from "../lib/logger";
+import { loadMainPromptAddition } from "../lib/mainPrompt";
+import { getApiKey } from "../lib/secure-storage";
+import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
 import { DEFAULT_VAD_MODE, loadVadPreference, saveVadPreference, type VadMode } from "../lib/vadPreference";
 import { DEFAULT_VOICE, loadVoicePreference, saveVoicePreference } from "../lib/voicePreference";
-import {
-  DEFAULT_RETENTION_RATIO,
-  DEFAULT_MAX_CONVERSATION_TURNS,
-  loadContextWindowPreferences,
-  saveRetentionRatio,
-  saveMaxConversationTurns
-} from "../lib/contextWindowPreference";
-import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
-import { getApiKey } from "../lib/secure-storage";
-import { loadMainPromptAddition } from "../lib/mainPrompt";
 import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
 import { OnboardingWizard } from "./OnboardingWizard";
 import TextChat from "./TextChat";
@@ -86,6 +88,8 @@ export default function Index() {
   const [vadSheetVisible, setVadSheetVisible] = useState(false);
   const [selectedChatMode, setSelectedChatMode] = useState<ChatMode>("voice");
   const [chatModeSheetVisible, setChatModeSheetVisible] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState(DEFAULT_LANGUAGE);
+  const [languageSheetVisible, setLanguageSheetVisible] = useState(false);
   const [mainPromptModalVisible, setMainPromptModalVisible] = useState(false);
   const [mainPromptDraft, setMainPromptDraft] = useState("");
   const [mainPromptAddition, setMainPromptAddition] = useState("");
@@ -206,6 +210,25 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const hydrateLanguagePreference = async () => {
+      const stored = await loadLanguagePreference();
+      if (!isMounted) {
+        return;
+      }
+      setSelectedLanguage(stored);
+      log.info("Language preference loaded from storage", {}, { language: stored });
+    };
+
+    hydrateLanguagePreference();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     let isActive = true;
 
     const evaluateOnboardingStatus = async () => {
@@ -272,6 +295,16 @@ export default function Index() {
     []
   );
 
+  const handleSelectLanguage = useCallback(
+    (language: string) => {
+      setSelectedLanguage(language);
+      void saveLanguagePreference(language);
+      log.info("Language preference updated and saved", {}, { language });
+      setLanguageSheetVisible(false);
+    },
+    []
+  );
+
   const handleMaxConversationTurnsChange = useCallback(
     (value: number) => {
       // Enforce range 1-20
@@ -310,6 +343,11 @@ export default function Index() {
 
       if (section.id === "chatMode") {
         setChatModeSheetVisible(true);
+        return;
+      }
+
+      if (section.id === "language") {
+        setLanguageSheetVisible(true);
         return;
       }
 
@@ -413,6 +451,7 @@ export default function Index() {
         mainPromptAddition={mainPromptAddition}
         retentionRatio={retentionRatio}
         maxConversationTurns={maxConversationTurns}
+        selectedLanguage={selectedLanguage}
       />
     ) : (
       <TextChat mainPromptAddition={mainPromptAddition} />
@@ -450,6 +489,12 @@ export default function Index() {
         selectedMode={selectedChatMode}
         onSelectMode={handleSelectChatMode}
         onClose={() => setChatModeSheetVisible(false)}
+      />
+      <ConfigureLanguage
+        visible={languageSheetVisible}
+        selectedLanguage={selectedLanguage}
+        onSelectLanguage={handleSelectLanguage}
+        onClose={() => setLanguageSheetVisible(false)}
       />
       <AdvancedConfigurationSheet
         visible={advancedConfigVisible}

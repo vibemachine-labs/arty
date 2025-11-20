@@ -1,9 +1,9 @@
 import { log } from '../../../../lib/logger';
 import {
-    getGDriveAccessToken,
-    getGDriveClientId,
-    getGDriveRefreshToken,
-    setGDriveAccessToken,
+  getGDriveAccessToken,
+  getGDriveClientId,
+  getGDriveRefreshToken,
+  setGDriveAccessToken,
 } from '../../../../lib/secure-storage';
 import type { ToolSessionContext, ToolkitResult } from './types'; // MARK: - Constants
 
@@ -726,12 +726,12 @@ export async function list_drive_folder_children(
 
     const data = await response.json() as {
       nextPageToken?: string;
-      files?: Array<{
+      files?: {
         id: string;
         name: string;
         mimeType?: string;
         parents?: string[];
-      }>;
+      }[];
     };
 
     const files = data.files ?? [];

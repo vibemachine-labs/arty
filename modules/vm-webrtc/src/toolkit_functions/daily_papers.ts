@@ -12,6 +12,11 @@ export interface ShowDailyPapersParams {
   sort?: 'publishedAt' | 'trending';
 }
 
+export interface SearchDailyPapersParams {
+  q: string;
+  limit?: number;
+}
+
 export interface GetPaperDetailsParams {
   arxivId: string;
 }
@@ -79,6 +84,56 @@ export async function showDailyPapers(params: ShowDailyPapersParams): Promise<st
     return JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    });
+  }
+}
+
+/**
+ * Search daily papers using a query string with hybrid semantic/full-text search.
+ */
+export async function searchDailyPapers(params: SearchDailyPapersParams): Promise<string> {
+  const { q, limit = 5 } = params;
+
+  log.info('[daily_papers] searchDailyPapers called', {}, { q, limit, allParams: params });
+
+  try {
+    // Build API URL
+    const url = new URL('https://huggingface.co/api/papers/search');
+    url.searchParams.set('q', q);
+
+    log.info('[daily_papers] Searching papers from API', {}, { url: url.toString() });
+
+    const response = await fetch(url.toString());
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // API doesn't support limit, so we limit client-side to avoid overwhelming LLM
+    const limitedData = Array.isArray(data) ? data.slice(0, limit) : data;
+
+    const result = {
+      success: true,
+      query: q,
+      limit,
+      totalResults: Array.isArray(data) ? data.length : 0,
+      returnedResults: Array.isArray(limitedData) ? limitedData.length : 0,
+      papers: limitedData,
+      timestamp: new Date().toISOString()
+    };
+
+    log.debug('[daily_papers] searchDailyPapers result', {}, result);
+
+    return JSON.stringify(result);
+  } catch (error) {
+    log.error('[daily_papers] Error searching daily papers', {}, { error, query: q });
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      query: q,
       timestamp: new Date().toISOString()
     });
   }

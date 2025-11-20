@@ -4,6 +4,10 @@ import { fetchWithSsrfProtection } from './web';
 
 // MARK: - Types
 
+// Constants for default values
+const DEFAULT_PAGE = 0;
+const DEFAULT_LIMIT = 5;
+
 export interface ShowDailyPapersParams {
   page?: number;
   limit?: number;
@@ -20,8 +24,9 @@ export interface ShowDailyPapersParams {
 function exportParamsToDict(params: ShowDailyPapersParams): Record<string, string> {
   const dict: Record<string, string> = {};
   
-  if (params.page !== undefined) dict.page = params.page.toString();
-  if (params.limit !== undefined) dict.limit = params.limit.toString();
+  // Use defaults if not provided
+  dict.page = (params.page !== undefined ? params.page : DEFAULT_PAGE).toString();
+  dict.limit = (params.limit !== undefined ? params.limit : DEFAULT_LIMIT).toString();
   if (params.date) dict.date = params.date;
   if (params.week) dict.week = params.week;
   if (params.month) dict.month = params.month;
@@ -168,7 +173,7 @@ export async function showDailyPapers(
   context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
-  const { page = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
+  const { page = DEFAULT_PAGE, limit = DEFAULT_LIMIT, date, week, month, submitter, sort = 'trending' } = params;
 
   log.info('[daily_papers] showDailyPapers called', {}, { page, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
 

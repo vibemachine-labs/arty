@@ -16,7 +16,7 @@ import type {
 import { exportToolDefinition } from './VmWebrtc.types';
 import { MCPClient, type RequestOptions } from './mcp_client/client';
 import type { Tool } from './mcp_client/types';
-import { registerMcpTool } from './toolkit_functions/index';
+import { registerMcpTool } from './toolkit_functions/toolkit_functions';
 
 // Event emitted when connector settings change
 export const CONNECTOR_SETTINGS_CHANGED_EVENT = 'connector_settings_changed';

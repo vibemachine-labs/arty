@@ -17,7 +17,7 @@ import {
 } from './ToolGithubConnector';
 import { gpt5GDriveFixerDefinition } from './ToolGPT5GDriveFixer';
 import { gpt5WebSearchDefinition } from './ToolGPT5WebSearch';
-import { toolkitRegistry } from './toolkit_functions/index';
+import { toolkitRegistry } from './toolkit_functions/toolkit_functions';
 import type { ToolDefinition } from './VmWebrtc.types';
 
 type ToolCallArguments = Record<string, any>;

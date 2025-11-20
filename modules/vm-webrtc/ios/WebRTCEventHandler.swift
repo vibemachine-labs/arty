@@ -1356,6 +1356,9 @@ final class WebRTCEventHandler {
     that were returned by the tool (like a list of retrieved files, documents, or other 
     resources).
 
+    Try to preserve any navigation related metadata that could be related to tool
+    state, for example which page of results the tool is currently on.
+
     Conversation:
     \(transcript)
     """

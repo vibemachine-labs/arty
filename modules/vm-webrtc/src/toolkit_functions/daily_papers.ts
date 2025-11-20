@@ -5,7 +5,7 @@ import { fetchWithSsrfProtection } from './web';
 // MARK: - Types
 
 export interface ShowDailyPapersParams {
-  p?: number;
+  page?: number;
   limit?: number;
   date?: string;
   week?: string;
@@ -20,7 +20,7 @@ export interface ShowDailyPapersParams {
 function exportParamsToDict(params: ShowDailyPapersParams): Record<string, string> {
   const dict: Record<string, string> = {};
   
-  if (params.p !== undefined) dict.p = params.p.toString();
+  if (params.page !== undefined) dict.page = params.page.toString();
   if (params.limit !== undefined) dict.limit = params.limit.toString();
   if (params.date) dict.date = params.date;
   if (params.week) dict.week = params.week;
@@ -168,16 +168,16 @@ export async function showDailyPapers(
   context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
-  const { p = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
+  const { page = 0, limit = 5, date, week, month, submitter, sort = 'trending' } = params;
 
-  log.info('[daily_papers] showDailyPapers called', {}, { p, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
+  log.info('[daily_papers] showDailyPapers called', {}, { page, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
 
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/daily_papers');
 
     // Add pagination parameter (p is 0-based page index)
-    url.searchParams.set('p', p.toString());
+    url.searchParams.set('p', page.toString());
 
     // Add limit parameter (defaults to 5, max 100)
     url.searchParams.set('limit', limit.toString());
@@ -212,7 +212,7 @@ export async function showDailyPapers(
     const result = {
       success: true,
       filters: { date, week, month, submitter, sort },
-      pagination: { p, limit },
+      pagination: { page, limit },
       papers: data,
       timestamp: new Date().toISOString()
     };

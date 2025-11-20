@@ -1,10 +1,10 @@
 // MARK: - Toolkit Functions Registry
 
-import * as hackerNews from './hacker_news';
-import * as dailyPapers from './daily_papers';
-import * as web from './web';
-import * as googleDrive from './google_drive';
 import { log } from '../../../../lib/logger';
+import * as dailyPapers from './daily_papers';
+import * as googleDrive from './google_drive';
+import * as hackerNews from './hacker_news';
+import * as web from './web';
 
 // MARK: - Types
 
@@ -31,7 +31,8 @@ export const toolkitRegistry: ToolkitRegistry = {
   },
   daily_papers: {
     showDailyPapers: dailyPapers.showDailyPapers,
-    getPaperDetails: dailyPapers.getPaperDetails,
+    searchDailyPapers: dailyPapers.searchDailyPapers,
+    getCommentsForPaper: dailyPapers.getCommentsForPaper,
   },
   web: {
     getContentsFromUrl: web.getContentsFromUrl,
@@ -126,4 +127,5 @@ export async function executeToolkitFunction(
 
 // MARK: - Exports
 
-export { hackerNews, dailyPapers, web, googleDrive };
+export { dailyPapers, googleDrive, hackerNews, web };
+

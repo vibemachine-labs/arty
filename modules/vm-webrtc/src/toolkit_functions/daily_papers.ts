@@ -1,4 +1,5 @@
 import { log } from '../../../../lib/logger';
+import { getContentsFromUrl } from './web';
 
 // MARK: - Types
 
@@ -15,6 +16,10 @@ export interface ShowDailyPapersParams {
 export interface SearchDailyPapersParams {
   q: string;
   limit?: number;
+}
+
+export interface GetCommentsForPaperParams {
+  arxiv_id: string;
 }
 
 // MARK: - Functions
@@ -130,6 +135,45 @@ export async function searchDailyPapers(params: SearchDailyPapersParams): Promis
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
       query: q,
+      timestamp: new Date().toISOString()
+    });
+  }
+}
+
+/**
+ * Get comments for a paper by fetching the HTML from the paper's Hugging Face page.
+ */
+export async function getCommentsForPaper(params: GetCommentsForPaperParams): Promise<string> {
+  const { arxiv_id } = params;
+
+  log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params });
+
+  try {
+    // Construct the Hugging Face paper URL
+    const url = `https://huggingface.co/papers/${arxiv_id}`;
+
+    log.info('[daily_papers] Fetching paper comments from URL', {}, { url });
+
+    // Use the web.ts getContentsFromUrl function to fetch and extract content
+    const content = await getContentsFromUrl({ url });
+
+    const result = {
+      success: true,
+      arxiv_id,
+      url,
+      content,
+      timestamp: new Date().toISOString()
+    };
+
+    log.debug('[daily_papers] getCommentsForPaper result', {}, result);
+
+    return JSON.stringify(result);
+  } catch (error) {
+    log.error('[daily_papers] Error fetching paper comments', {}, { error, arxiv_id });
+    return JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      arxiv_id,
       timestamp: new Date().toISOString()
     });
   }

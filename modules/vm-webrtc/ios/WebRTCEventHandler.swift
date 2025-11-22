@@ -169,6 +169,61 @@ final class WebRTCEventHandler {
   // Map of item IDs to their complete transcripts
   private var itemTranscripts: [String: String] = [:]
 
+  // MARK: - Response State Machine
+  // Track whether a response is currently in progress to detect "conversation_already_has_active_response" errors
+  private let responseStateQueue = DispatchQueue(label: "com.vibemachine.webrtc.response-state")
+  private var responseInProgress: Bool = false
+  private var currentResponseId: String?
+
+  /// Check if a response is currently in progress and log a warning if attempting to create a new one.
+  /// Call this BEFORE sending response.create to detect potential "conversation_already_has_active_response" errors.
+  /// Returns true if it's safe to send, false if a response is already in progress (warning will be logged).
+  func willSendResponseCreate(trigger: String) -> Bool {
+    return responseStateQueue.sync {
+      if responseInProgress {
+        logger.log(
+          "⚠️ [ResponseStateMachine] Attempting to send response.create while response already in progress",
+          attributes: logAttributes(for: .warn, metadata: [
+            "trigger": trigger,
+            "currentResponseId": currentResponseId as Any,
+            "responseInProgress": responseInProgress,
+            "recommendation": "Wait for response.done before sending another response.create",
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+        return false
+      }
+      return true
+    }
+  }
+
+  /// Mark that a response.create was sent. Called after successfully sending response.create.
+  func didSendResponseCreate(trigger: String) {
+    responseStateQueue.async {
+      self.responseInProgress = true
+      self.logger.log(
+        "[ResponseStateMachine] Response create sent, marking response in progress",
+        attributes: logAttributes(for: .debug, metadata: [
+          "trigger": trigger,
+          "responseInProgress": true,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+  }
+
+  /// Reset response state machine. Call when connection closes or session ends.
+  func resetResponseState() {
+    responseStateQueue.async {
+      self.responseInProgress = false
+      self.currentResponseId = nil
+      self.logger.log(
+        "[ResponseStateMachine] Response state reset",
+        attributes: logAttributes(for: .debug)
+      )
+    }
+  }
+
   func setApiKey(_ apiKey: String) {
     let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     conversationQueue.async {
@@ -225,12 +280,16 @@ final class WebRTCEventHandler {
     switch eventType {
     case "error":
       handleErrorEvent(event, context: context)
+    case "response.created":
+      handleResponseCreatedEvent(event, context: context)
     case "response.function_call_arguments.done":
       handleToolCallEvent(event, context: context)
     case "response.usage":
       handleTokenUsageEvent(event, context: context)
     case "response.done":
       handleResponseDoneEvent(event, context: context)
+    case "response.cancelled":
+      handleResponseCancelledEvent(event, context: context)
     case "response.audio_transcript.delta":
       handleTranscriptDeltaEvent(event, context: context, type: "audio_transcript")
     case "response.audio_transcript.done":
@@ -593,6 +652,42 @@ final class WebRTCEventHandler {
     emitTokenUsage(usage: usage, responseId: responseId, context: context)
   }
 
+  private func handleResponseCreatedEvent(_ event: [String: Any], context: ToolContext) {
+    guard let response = event["response"] as? [String: Any] else {
+      logger.log(
+        "[WebRTCEventHandler] response.created event missing response field",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
+      )
+      return
+    }
+
+    let responseId = response["id"] as? String
+    let status = response["status"] as? String
+
+    // Update response state machine
+    responseStateQueue.async {
+      self.responseInProgress = true
+      self.currentResponseId = responseId
+      self.logger.log(
+        "[ResponseStateMachine] Response created, now in progress",
+        attributes: logAttributes(for: .debug, metadata: [
+          "responseId": responseId as Any,
+          "status": status as Any,
+          "responseInProgress": true,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+
+    logger.log(
+      "[WebRTCEventHandler] Response created",
+      attributes: logAttributes(for: .debug, metadata: [
+        "responseId": responseId as Any,
+        "status": status as Any
+      ])
+    )
+  }
+
   private func handleResponseDoneEvent(_ event: [String: Any], context: ToolContext) {
     guard let response = event["response"] as? [String: Any] else {
       logger.log(
@@ -604,6 +699,23 @@ final class WebRTCEventHandler {
 
     let responseId = response["id"] as? String
     let status = response["status"] as? String
+
+    // Update response state machine - response is complete
+    responseStateQueue.async {
+      let wasInProgress = self.responseInProgress
+      self.responseInProgress = false
+      self.currentResponseId = nil
+      self.logger.log(
+        "[ResponseStateMachine] Response done, no longer in progress",
+        attributes: logAttributes(for: .debug, metadata: [
+          "responseId": responseId as Any,
+          "status": status as Any,
+          "wasInProgress": wasInProgress,
+          "responseInProgress": false,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
 
     logger.log(
       "[WebRTCEventHandler] Response done",
@@ -623,6 +735,33 @@ final class WebRTCEventHandler {
       )
       emitTokenUsage(usage: usage, responseId: responseId, context: context)
     }
+  }
+
+  private func handleResponseCancelledEvent(_ event: [String: Any], context: ToolContext) {
+    let responseId = event["response_id"] as? String
+
+    // Update response state machine - response was cancelled
+    responseStateQueue.async {
+      let wasInProgress = self.responseInProgress
+      self.responseInProgress = false
+      self.currentResponseId = nil
+      self.logger.log(
+        "[ResponseStateMachine] Response cancelled, no longer in progress",
+        attributes: logAttributes(for: .info, metadata: [
+          "responseId": responseId as Any,
+          "wasInProgress": wasInProgress,
+          "responseInProgress": false,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+
+    logger.log(
+      "[WebRTCEventHandler] Response cancelled",
+      attributes: logAttributes(for: .info, metadata: [
+        "responseId": responseId as Any
+      ])
+    )
   }
 
   private func emitTokenUsage(usage: [String: Any], responseId: String?, context: ToolContext) {
@@ -957,6 +1096,34 @@ final class WebRTCEventHandler {
     let errorMessage = errorDetails?["message"] as? String
     let errorParam = errorDetails?["param"] as? String
 
+    // Check for conversation_already_has_active_response error
+    let isActiveResponseError = errorCode == "conversation_already_has_active_response"
+    if isActiveResponseError {
+      // Get current response state for debugging
+      let (inProgress, currentId) = responseStateQueue.sync {
+        (self.responseInProgress, self.currentResponseId)
+      }
+
+      logger.log(
+        "🚨 [ResponseStateMachine] DETECTED: conversation_already_has_active_response error",
+        attributes: logAttributes(for: .error, metadata: [
+          "eventId": eventId as Any,
+          "errorType": errorType as Any,
+          "errorCode": errorCode as Any,
+          "errorMessage": errorMessage as Any,
+          "stateMachine_responseInProgress": inProgress,
+          "stateMachine_currentResponseId": currentId as Any,
+          "analysis": "response.create was sent while another response was still in progress",
+          "recommendation": "Check logs for '[ResponseStateMachine] Attempting to send response.create' warnings",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+
+      // Also emit to module for visibility
+      context.emitModuleEvent("onRealtimeError", event)
+      return
+    }
+
     // item_truncate_invalid_item_id errors are non-breaking - log as warning
     let isItemTruncateError = errorCode == "item_truncate_invalid_item_id"
     let logLevel: OpenAIWebRTCClient.NativeLogLevel = isItemTruncateError ? .warn : .error
@@ -1135,6 +1302,8 @@ final class WebRTCEventHandler {
         ])
       )
     }
+    // Also reset response state machine
+    resetResponseState()
   }
 
   private func handleConversationItemCreated(_ event: [String: Any], context: ToolContext) {

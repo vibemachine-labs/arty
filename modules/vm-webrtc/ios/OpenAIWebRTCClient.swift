@@ -709,9 +709,14 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         ])
       )
 
+      // Check state machine before sending response.create
+      let _ = eventHandler.willSendResponseCreate(trigger: "tool_call_result:\(callId)")
+
       let responseCreateSent = sendEvent(["type": "response.create"])
 
-      if !responseCreateSent {
+      if responseCreateSent {
+        eventHandler.didSendResponseCreate(trigger: "tool_call_result:\(callId)")
+      } else {
         self.logger.log(
           "❌ [RESPONSE_CREATE_FAILED] Failed to send response.create",
           attributes: logAttributes(for: .error, metadata: [
@@ -803,7 +808,13 @@ extension OpenAIWebRTCClient: ToolCallResponder {
       ])
     )
 
-    sendEvent(["type": "response.create"])
+    // Check state machine before sending response.create
+    let _ = eventHandler.willSendResponseCreate(trigger: "tool_call_error:\(callId)")
+
+    let responseCreateSent = sendEvent(["type": "response.create"])
+    if responseCreateSent {
+      eventHandler.didSendResponseCreate(trigger: "tool_call_error:\(callId)")
+    }
     eventHandler.recordExternalActivity(reason: "tool_call_error")
   }
 }

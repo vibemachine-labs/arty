@@ -4,7 +4,7 @@ import type { ToolSessionContext, ToolkitResult } from './types';
 // MARK: - Constants
 
 const BASE_API_URL = 'https://hn.algolia.com/api/v1';
-const DEFAULT_NUM_STORIES = 10;
+const DEFAULT_NUM_STORIES = 5;
 const DEFAULT_COMMENT_DEPTH = 2;
 const DEFAULT_NUM_COMMENTS = 10;
 
@@ -13,12 +13,14 @@ const DEFAULT_NUM_COMMENTS = 10;
 export interface ShowTopStoriesParams {
   story_type: 'top' | 'new' | 'ask_hn' | 'show_hn';
   num_stories?: number;
+  page?: number;
 }
 
 export interface SearchStoriesParams {
   query: string;
   num_results?: number;
   search_by_date?: boolean;
+  page?: number;
 }
 
 export interface GetStoryInfoParams {
@@ -152,9 +154,9 @@ export async function showTopStories(
   context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
-  const { story_type, num_stories = DEFAULT_NUM_STORIES } = params;
+  const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
 
-  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories });
+  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page });
 
   // Validate story_type
   const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
@@ -183,7 +185,7 @@ export async function showTopStories(
   };
 
   const params_config = apiParams[normalizedType];
-  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}`;
+  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${page}`;
 
   try {
     log.info('[hacker_news] Fetching stories from API', {}, { url });
@@ -212,6 +214,12 @@ export async function showTopStories(
         tool: 'showTopStories',
         story_type: normalizedType,
         stories,
+        pagination: {
+          page: data.page,
+          hitsPerPage: data.hitsPerPage,
+          nbPages: data.nbPages,
+          nbHits: data.nbHits,
+        },
         timestamp: new Date().toISOString(),
       }),
       updatedToolSessionContext: {},
@@ -252,6 +260,7 @@ export async function searchStories(
     query,
     num_results = DEFAULT_NUM_STORIES,
     search_by_date = false,
+    page = 0,
   } = params;
 
   const normalizedQuery = query?.trim();
@@ -272,12 +281,13 @@ export async function searchStories(
   }
 
   const endpoint = search_by_date ? 'search_by_date' : 'search';
-  const url = `${BASE_API_URL}/${endpoint}?query=${encodeURIComponent(normalizedQuery)}&hitsPerPage=${num_results}&tags=story`;
+  const url = `${BASE_API_URL}/${endpoint}?query=${encodeURIComponent(normalizedQuery)}&hitsPerPage=${num_results}&page=${page}&tags=story`;
 
   log.info('[hacker_news] searchStories called', {}, {
     query: normalizedQuery,
     num_results,
     search_by_date,
+    page,
     endpoint,
     url,
   });
@@ -297,6 +307,7 @@ export async function searchStories(
       query: normalizedQuery,
       count: stories.length,
       search_by_date,
+      page,
       url,
     });
 
@@ -308,6 +319,12 @@ export async function searchStories(
         query: normalizedQuery,
         search_by_date,
         stories,
+        pagination: {
+          page: data.page,
+          hitsPerPage: data.hitsPerPage,
+          nbPages: data.nbPages,
+          nbHits: data.nbHits,
+        },
         timestamp: new Date().toISOString(),
       }),
       updatedToolSessionContext: {},

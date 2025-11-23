@@ -187,9 +187,13 @@ export async function showTopStories(
   const params_config = apiParams[normalizedType];
   const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${page}`;
 
-  // Extract previous story IDs from toolSessionContext
-  const previousNewStoryIds: number[] = (toolSessionContext?.new_story_ids as number[]) || [];
-  const previousSeenStoryIds: number[] = (toolSessionContext?.seen_story_ids as number[]) || [];
+  // Extract previous story IDs from toolSessionContext (stored as JSON strings)
+  const previousNewStoryIds: number[] = toolSessionContext?.new_story_ids
+    ? JSON.parse(toolSessionContext.new_story_ids)
+    : [];
+  const previousSeenStoryIds: number[] = toolSessionContext?.seen_story_ids
+    ? JSON.parse(toolSessionContext.seen_story_ids)
+    : [];
 
   // Merge previous new_story_ids into seen_story_ids (they are now "old")
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
@@ -236,8 +240,8 @@ export async function showTopStories(
         timestamp: new Date().toISOString(),
       }),
       updatedToolSessionContext: {
-        new_story_ids: newStoryIds,
-        seen_story_ids: Array.from(seenStoryIdsSet),
+        new_story_ids: JSON.stringify(newStoryIds),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
       },
     };
 
@@ -261,8 +265,8 @@ export async function showTopStories(
       }),
       // On error, preserve existing context state (move new to seen, no new IDs)
       updatedToolSessionContext: {
-        new_story_ids: [],
-        seen_story_ids: Array.from(seenStoryIdsSet),
+        new_story_ids: JSON.stringify([]),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
       },
     };
   }
@@ -312,9 +316,13 @@ export async function searchStories(
     url,
   });
 
-  // Extract previous story IDs from toolSessionContext
-  const previousNewStoryIds: number[] = (toolSessionContext?.new_story_ids as number[]) || [];
-  const previousSeenStoryIds: number[] = (toolSessionContext?.seen_story_ids as number[]) || [];
+  // Extract previous story IDs from toolSessionContext (stored as JSON strings)
+  const previousNewStoryIds: number[] = toolSessionContext?.new_story_ids
+    ? JSON.parse(toolSessionContext.new_story_ids)
+    : [];
+  const previousSeenStoryIds: number[] = toolSessionContext?.seen_story_ids
+    ? JSON.parse(toolSessionContext.seen_story_ids)
+    : [];
 
   // Merge previous new_story_ids into seen_story_ids (they are now "old")
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
@@ -360,8 +368,8 @@ export async function searchStories(
         timestamp: new Date().toISOString(),
       }),
       updatedToolSessionContext: {
-        new_story_ids: newStoryIds,
-        seen_story_ids: Array.from(seenStoryIdsSet),
+        new_story_ids: JSON.stringify(newStoryIds),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
       },
     };
   } catch (error) {
@@ -384,8 +392,8 @@ export async function searchStories(
       }),
       // On error, preserve existing context state (move new to seen, no new IDs)
       updatedToolSessionContext: {
-        new_story_ids: [],
-        seen_story_ids: Array.from(seenStoryIdsSet),
+        new_story_ids: JSON.stringify([]),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
       },
     };
   }

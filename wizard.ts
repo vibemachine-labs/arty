@@ -72,7 +72,45 @@ async function patchHeaders(): Promise<number> {
   }
 }
 
+async function startExpoServer(): Promise<number> {
+  console.log('\n🔍 Running TypeScript check...\n');
+
+  const tscProc = spawn({
+    cmd: ["sh", "-c", "bunx tsc --noEmit"],
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "inherit",
+  });
+
+  const tscExitCode = await tscProc.exited;
+
+  if (tscExitCode !== 0) {
+    console.error('\n❌ TypeScript check failed. Fix errors before starting Expo.');
+    return tscExitCode;
+  }
+
+  console.log('\n✅ TypeScript check passed!\n');
+  console.log('🚀 Starting Expo server...\n');
+
+  const expoProc = spawn({
+    cmd: ["sh", "-c", "npx expo start"],
+    stdout: "inherit",
+    stderr: "inherit",
+    stdin: "inherit",
+  });
+
+  const expoExitCode = await expoProc.exited;
+  return expoExitCode;
+}
+
 const BUILD_OPTIONS: BuildOption[] = [
+  {
+    name: "Start Expo Server",
+    flag: "start-expo",
+    command: "",
+    description: "Run TypeScript check, then start Expo server",
+    customHandler: startExpoServer,
+  },
   {
     name: "Patch WebRTC Headers",
     flag: "patch-webrtc",

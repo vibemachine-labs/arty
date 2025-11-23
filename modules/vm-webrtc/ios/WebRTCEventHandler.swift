@@ -643,8 +643,7 @@ final class WebRTCEventHandler {
     }
 
     // Play audio feedback when tool is called (mixing with WebRTC audio)
-    // Uses audio.mp3 or audio.wav - file will be added later
-    context.audioMixPlayer?.playAudio(filename: "audio")
+    context.audioMixPlayer?.playAudio(filename: "audio2")
 
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }

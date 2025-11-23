@@ -115,7 +115,7 @@ final class AudioMixPlayer: NSObject {
       player.stop()
       logger.log(
         "[AudioMixPlayer] Stopped audio playback",
-        attributes: logAttributes(for: .debug)
+        attributes: logAttributes(for: .info)
       )
     }
     audioPlayer = nil
@@ -143,7 +143,7 @@ extension AudioMixPlayer: AVAudioPlayerDelegate {
   func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
     logger.log(
       "[AudioMixPlayer] Playback finished",
-      attributes: logAttributes(for: .debug, metadata: [
+      attributes: logAttributes(for: .info, metadata: [
         "success": flag
       ])
     )

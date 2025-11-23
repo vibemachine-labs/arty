@@ -534,7 +534,7 @@ export async function getStoryInfo(
         story: formattedStory,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -558,7 +558,7 @@ export async function getStoryInfo(
         story_id,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   }
 }
@@ -625,7 +625,7 @@ export async function getUserInfo(
         error: errorMessage,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   }
 
@@ -674,7 +674,7 @@ export async function getUserInfo(
         },
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -695,7 +695,7 @@ export async function getUserInfo(
         user_name: normalizedUserName,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   }
 }

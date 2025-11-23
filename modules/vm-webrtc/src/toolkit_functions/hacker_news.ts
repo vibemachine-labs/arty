@@ -156,6 +156,21 @@ export async function showTopStories(
 ): Promise<ToolkitResult> {
   const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
 
+  // Get suggested page from context (soft hint for callers)
+  const contextPage: number = toolSessionContext?.current_page
+    ? parseInt(toolSessionContext.current_page, 10)
+    : 0;
+
+  // Check for divergence between params and context
+  if (toolSessionContext?.current_page && page !== contextPage) {
+    log.warn('[hacker_news] Page divergence detected: params.page differs from toolSessionContext.current_page', {}, {
+      paramsPage: page,
+      contextPage,
+      recommendation: 'Consider using the current_page from toolSessionContext for better de-duplication',
+      toolSessionContext,
+    });
+  }
+
   log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page, toolSessionContext });
 
   // Validate story_type
@@ -185,7 +200,6 @@ export async function showTopStories(
   };
 
   const params_config = apiParams[normalizedType];
-  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${page}`;
 
   // Extract previous story IDs from toolSessionContext (stored as JSON strings)
   const previousNewStoryIds: number[] = toolSessionContext?.new_story_ids
@@ -195,31 +209,97 @@ export async function showTopStories(
     ? JSON.parse(toolSessionContext.seen_story_ids)
     : [];
 
+  // Use page from params as source of truth
+  let currentPage: number = page;
+
   // Merge previous new_story_ids into seen_story_ids (they are now "old")
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
 
+  // De-duplication loop: keep fetching until we have num_stories unseen stories
+  const MAX_ATTEMPTS = 5;
+  const collectedStories: FormattedStory[] = [];
+  let attempts = 0;
+  let lastData: any = null;
+
   try {
-    log.info('[hacker_news] Fetching stories from API', {}, { url, toolSessionContext });
+    while (collectedStories.length < num_stories && attempts < MAX_ATTEMPTS) {
+      attempts++;
 
-    const response = await fetch(url);
+      const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${currentPage}`;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${errorText}`);
+      log.info('[hacker_news] Fetching stories from API', {}, {
+        url,
+        currentPage,
+        attempt: attempts,
+        collectedSoFar: collectedStories.length,
+        targetCount: num_stories,
+        toolSessionContext,
+      });
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      lastData = data;
+
+      // Defensive access: Algolia API guarantees these fields on success, but use fallbacks for safety
+      const allStories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
+
+      // Filter out already seen stories
+      const unseenStories = allStories.filter((story: FormattedStory) => !seenStoryIdsSet.has(story.id));
+
+      log.info('[hacker_news] Filtering stories', {}, {
+        fetchedCount: allStories.length,
+        unseenCount: unseenStories.length,
+        currentPage,
+        attempt: attempts,
+        seenStoryIdsCount: seenStoryIdsSet.size,
+        toolSessionContext,
+      });
+
+      // Add unseen stories to collection (up to the target)
+      for (const story of unseenStories) {
+        if (collectedStories.length >= num_stories) break;
+        collectedStories.push(story);
+        seenStoryIdsSet.add(story.id); // Mark as seen immediately to avoid duplicates within same call
+      }
+
+      // Move to next page for potential next iteration
+      currentPage++;
+
+      // If we got no unseen stories from this page, we might have exhausted available stories
+      if (unseenStories.length === 0 && allStories.length > 0) {
+        log.info('[hacker_news] All stories on page were already seen, continuing to next page', {}, {
+          currentPage,
+          attempt: attempts,
+          toolSessionContext,
+        });
+      }
+
+      // If API returned fewer stories than requested, we've likely reached the end
+      if (allStories.length < num_stories) {
+        log.info('[hacker_news] Reached end of available stories', {}, {
+          fetchedCount: allStories.length,
+          requestedCount: num_stories,
+          toolSessionContext,
+        });
+        break;
+      }
     }
 
-    const data = await response.json();
-    // Defensive access: Algolia API guarantees these fields on success, but use fallbacks for safety
-    const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
-
-    // Get the new story IDs from this fetch
-    const newStoryIds: number[] = stories.map((s: FormattedStory) => s.id);
+    // Get the new story IDs from collected stories
+    const newStoryIds: number[] = collectedStories.map((s: FormattedStory) => s.id);
 
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
-      count: stories.length,
-      url,
-      stories,
+      count: collectedStories.length,
+      attempts,
+      finalPage: currentPage,
+      stories: collectedStories,
       newStoryIds,
       seenStoryIds: Array.from(seenStoryIdsSet),
       toolSessionContext,
@@ -231,18 +311,20 @@ export async function showTopStories(
         group: 'hacker_news',
         tool: 'showTopStories',
         story_type: normalizedType,
-        stories,
+        stories: collectedStories,
         pagination: {
-          page: data.page ?? 0,
-          hitsPerPage: data.hitsPerPage ?? num_stories,
-          nbPages: data.nbPages ?? 0,
-          nbHits: data.nbHits ?? 0,
+          page: currentPage - 1, // Report the last page we fetched from
+          hitsPerPage: lastData?.hitsPerPage ?? num_stories,
+          nbPages: lastData?.nbPages ?? 0,
+          nbHits: lastData?.nbHits ?? 0,
         },
+        attempts,
         timestamp: new Date().toISOString(),
       }),
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify(newStoryIds),
         seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        current_page: String(currentPage),
       },
     };
 
@@ -250,7 +332,8 @@ export async function showTopStories(
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] Failed to fetch stories', {}, {
       story_type: normalizedType,
-      url,
+      currentPage,
+      attempts,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
       toolSessionContext,
@@ -269,6 +352,7 @@ export async function showTopStories(
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify([]),
         seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        current_page: String(currentPage),
       },
     };
   }

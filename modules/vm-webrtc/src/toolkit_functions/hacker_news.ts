@@ -156,7 +156,7 @@ export async function showTopStories(
 ): Promise<ToolkitResult> {
   const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
 
-  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page });
+  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page, toolSessionContext });
 
   // Validate story_type
   const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
@@ -164,7 +164,7 @@ export async function showTopStories(
 
   if (!validTypes.includes(normalizedType)) {
     const error = `story_type must be one of: ${validTypes.join(', ')}`;
-    log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes });
+    log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes, toolSessionContext });
     return {
       result: JSON.stringify({
         success: false,
@@ -199,7 +199,7 @@ export async function showTopStories(
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
 
   try {
-    log.info('[hacker_news] Fetching stories from API', {}, { url });
+    log.info('[hacker_news] Fetching stories from API', {}, { url, toolSessionContext });
 
     const response = await fetch(url);
 
@@ -222,6 +222,7 @@ export async function showTopStories(
       stories,
       newStoryIds,
       seenStoryIds: Array.from(seenStoryIdsSet),
+      toolSessionContext,
     });
 
     return {
@@ -252,6 +253,7 @@ export async function showTopStories(
       url,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      toolSessionContext,
     }, error);
 
     return {
@@ -291,7 +293,7 @@ export async function searchStories(
 
   if (!normalizedQuery) {
     const errorMessage = 'query must be a non-empty string';
-    log.error('[hacker_news] searchStories validation failed', {}, { query });
+    log.error('[hacker_news] searchStories validation failed', {}, { query, toolSessionContext });
     return {
       result: JSON.stringify({
         success: false,
@@ -314,6 +316,7 @@ export async function searchStories(
     page,
     endpoint,
     url,
+    toolSessionContext,
   });
 
   // Extract previous story IDs from toolSessionContext (stored as JSON strings)
@@ -348,7 +351,8 @@ export async function searchStories(
       page,
       url,
       newStoryIds,
-      seenStoryIdsCount: seenStoryIdsSet.size,
+      seenStoryIds: Array.from(seenStoryIdsSet),
+      toolSessionContext,
     });
 
     return {
@@ -379,6 +383,7 @@ export async function searchStories(
       url,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      toolSessionContext,
     }, error);
 
     return {
@@ -420,6 +425,7 @@ export async function getStoryInfo(
     comment_depth,
     comments_per_level,
     url,
+    toolSessionContext,
   });
 
   try {
@@ -434,6 +440,7 @@ export async function getStoryInfo(
       story_id,
       url,
       hasComments: Array.isArray(formattedStory.comments) && formattedStory.comments.length > 0,
+      toolSessionContext,
     });
 
     return {
@@ -456,6 +463,7 @@ export async function getStoryInfo(
       url,
       error: errorMessage,
       stack: errorStack,
+      toolSessionContext,
     }, error);
 
     return {
@@ -525,7 +533,7 @@ export async function getUserInfo(
 
   if (!normalizedUserName) {
     const errorMessage = 'user_name must be a non-empty string';
-    log.error('[hacker_news] getUserInfo validation failed', {}, { user_name });
+    log.error('[hacker_news] getUserInfo validation failed', {}, { user_name, toolSessionContext });
     return {
       result: JSON.stringify({
         success: false,
@@ -544,6 +552,7 @@ export async function getUserInfo(
     user_name: normalizedUserName,
     num_stories,
     url,
+    toolSessionContext,
   });
 
   try {
@@ -557,6 +566,7 @@ export async function getUserInfo(
         status: response.status,
         statusText: response.statusText,
         errorText,
+        toolSessionContext,
       });
       throw new Error(`User request failed: ${response.status} ${errorText}`);
     }
@@ -568,6 +578,7 @@ export async function getUserInfo(
       user_name: normalizedUserName,
       url,
       story_count: stories.length,
+      toolSessionContext,
     });
 
     return {
@@ -590,6 +601,7 @@ export async function getUserInfo(
       url,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      toolSessionContext,
     }, error);
 
     return {

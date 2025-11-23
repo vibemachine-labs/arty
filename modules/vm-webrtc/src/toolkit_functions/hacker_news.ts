@@ -151,12 +151,27 @@ function deriveStoryId(story: HNStory): number {
  */
 export async function showTopStories(
   params: ShowTopStoriesParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
 
-  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page });
+  // Get suggested page from context (soft hint for callers)
+  const contextPage: number = toolSessionContext?.current_page
+    ? parseInt(toolSessionContext.current_page, 10)
+    : 0;
+
+  // Check for divergence between params and context
+  if (toolSessionContext?.current_page && page !== contextPage) {
+    log.warn('[hacker_news] Page divergence detected: params.page differs from toolSessionContext.current_page', {}, {
+      paramsPage: page,
+      contextPage,
+      recommendation: 'Consider using the current_page from toolSessionContext for better de-duplication',
+      toolSessionContext,
+    });
+  }
+
+  log.info('[hacker_news] showTopStories called', {}, { params, context_params, toolSessionContext });
 
   // Validate story_type
   const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
@@ -164,7 +179,7 @@ export async function showTopStories(
 
   if (!validTypes.includes(normalizedType)) {
     const error = `story_type must be one of: ${validTypes.join(', ')}`;
-    log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes });
+    log.error('[hacker_news] Invalid story_type', {}, { story_type, validTypes, toolSessionContext });
     return {
       result: JSON.stringify({
         success: false,
@@ -185,7 +200,6 @@ export async function showTopStories(
   };
 
   const params_config = apiParams[normalizedType];
-  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${page}`;
 
   // Extract previous story IDs from toolSessionContext (stored as JSON strings)
   const previousNewStoryIds: number[] = toolSessionContext?.new_story_ids
@@ -195,33 +209,105 @@ export async function showTopStories(
     ? JSON.parse(toolSessionContext.seen_story_ids)
     : [];
 
+  // Use page from params as source of truth
+  let currentPage: number = page;
+
   // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  // This is the baseline of all previously seen stories
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
 
+  // Keep a separate copy for the final seen_story_ids return value
+  // This should only include stories seen BEFORE this call, not the new ones we're about to fetch
+  const baselineSeenStoryIds = Array.from(seenStoryIdsSet);
+
+  // De-duplication loop: keep fetching until we have num_stories unseen stories
+  const MAX_ATTEMPTS = 5;
+  const collectedStories: FormattedStory[] = [];
+  let attempts = 0;
+  let lastData: any = null;
+
   try {
-    log.info('[hacker_news] Fetching stories from API', {}, { url });
+    while (collectedStories.length < num_stories && attempts < MAX_ATTEMPTS) {
+      attempts++;
 
-    const response = await fetch(url);
+      const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${currentPage}`;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${errorText}`);
+      log.info('[hacker_news] Fetching stories from API', {}, {
+        url,
+        pageBeingFetched: currentPage,
+        attemptNumber: attempts,
+        storiesCollectedSoFar: collectedStories.length,
+        storiesTargetCount: num_stories,
+        toolSessionContext,
+      });
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      lastData = data;
+
+      // Defensive access: Algolia API guarantees these fields on success, but use fallbacks for safety
+      const allStories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
+
+      // Filter out already seen stories
+      const unseenStories = allStories.filter((story: FormattedStory) => !seenStoryIdsSet.has(story.id));
+
+      log.info('[hacker_news] Filtering stories', {}, {
+        fetchedCount: allStories.length,
+        unseenCount: unseenStories.length,
+        pageBeingFetched: currentPage,
+        attemptNumber: attempts,
+        seenStoryIdsCount: seenStoryIdsSet.size,
+        toolSessionContext,
+      });
+
+      // Add unseen stories to collection (up to the target)
+      for (const story of unseenStories) {
+        if (collectedStories.length >= num_stories) break;
+        collectedStories.push(story);
+        seenStoryIdsSet.add(story.id); // Mark as seen immediately to avoid duplicates within same call
+      }
+
+      // Move to next page for potential next iteration
+      currentPage++;
+
+      // If we got no unseen stories from this page, we might have exhausted available stories
+      if (unseenStories.length === 0 && allStories.length > 0) {
+        log.info('[hacker_news] All stories on page were already seen, continuing to next page', {}, {
+          nextPageToFetch: currentPage,
+          attemptNumber: attempts,
+          toolSessionContext,
+        });
+      }
+
+      // If API returned fewer stories than requested, we've likely reached the end
+      if (allStories.length < num_stories) {
+        log.info('[hacker_news] Reached end of available stories', {}, {
+          fetchedCount: allStories.length,
+          requestedCount: num_stories,
+          toolSessionContext,
+        });
+        break;
+      }
     }
 
-    const data = await response.json();
-    // Defensive access: Algolia API guarantees these fields on success, but use fallbacks for safety
-    const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
-
-    // Get the new story IDs from this fetch
-    const newStoryIds: number[] = stories.map((s: FormattedStory) => s.id);
+    // Get the new story IDs from collected stories
+    const newStoryIds: number[] = collectedStories.map((s: FormattedStory) => s.id);
 
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
-      count: stories.length,
-      url,
-      stories,
-      newStoryIds,
-      seenStoryIds: Array.from(seenStoryIdsSet),
+      count: collectedStories.length,
+      totalAttempts: attempts,
+      nextPageForFutureCalls: currentPage,
+      stories: collectedStories,
+      newStoryIds: [...newStoryIds],
+      baselineSeenStoryIds: [...baselineSeenStoryIds],
+      toolSessionContext,
     });
 
     return {
@@ -230,18 +316,20 @@ export async function showTopStories(
         group: 'hacker_news',
         tool: 'showTopStories',
         story_type: normalizedType,
-        stories,
+        stories: collectedStories,
         pagination: {
-          page: data.page ?? 0,
-          hitsPerPage: data.hitsPerPage ?? num_stories,
-          nbPages: data.nbPages ?? 0,
-          nbHits: data.nbHits ?? 0,
+          page: currentPage - 1, // Report the last page we fetched from
+          hitsPerPage: lastData?.hitsPerPage ?? num_stories,
+          nbPages: lastData?.nbPages ?? 0,
+          nbHits: lastData?.nbHits ?? 0,
         },
+        attempts,
         timestamp: new Date().toISOString(),
       }),
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify(newStoryIds),
-        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        seen_story_ids: JSON.stringify(baselineSeenStoryIds),
+        current_page: String(currentPage),
       },
     };
 
@@ -249,9 +337,11 @@ export async function showTopStories(
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] Failed to fetch stories', {}, {
       story_type: normalizedType,
-      url,
+      pageAtFailure: currentPage,
+      totalAttempts: attempts,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      toolSessionContext,
     }, error);
 
     return {
@@ -266,7 +356,8 @@ export async function showTopStories(
       // On error, preserve existing context state (move new to seen, no new IDs)
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify([]),
-        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        seen_story_ids: JSON.stringify(baselineSeenStoryIds),
+        current_page: String(currentPage),
       },
     };
   }
@@ -277,7 +368,7 @@ export async function showTopStories(
  */
 export async function searchStories(
   params: SearchStoriesParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -291,7 +382,7 @@ export async function searchStories(
 
   if (!normalizedQuery) {
     const errorMessage = 'query must be a non-empty string';
-    log.error('[hacker_news] searchStories validation failed', {}, { query });
+    log.error('[hacker_news] searchStories validation failed', {}, { query, toolSessionContext });
     return {
       result: JSON.stringify({
         success: false,
@@ -308,12 +399,9 @@ export async function searchStories(
   const url = `${BASE_API_URL}/${endpoint}?query=${encodeURIComponent(normalizedQuery)}&hitsPerPage=${num_results}&page=${page}&tags=story`;
 
   log.info('[hacker_news] searchStories called', {}, {
-    query: normalizedQuery,
-    num_results,
-    search_by_date,
-    page,
-    endpoint,
-    url,
+    params,
+    context_params,
+    toolSessionContext,
   });
 
   // Extract previous story IDs from toolSessionContext (stored as JSON strings)
@@ -348,7 +436,8 @@ export async function searchStories(
       page,
       url,
       newStoryIds,
-      seenStoryIdsCount: seenStoryIdsSet.size,
+      seenStoryIds: Array.from(seenStoryIdsSet),
+      toolSessionContext,
     });
 
     return {
@@ -379,6 +468,7 @@ export async function searchStories(
       url,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      toolSessionContext,
     }, error);
 
     return {
@@ -404,7 +494,7 @@ export async function searchStories(
  */
 export async function getStoryInfo(
   params: GetStoryInfoParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -416,10 +506,9 @@ export async function getStoryInfo(
   const url = `${BASE_API_URL}/items/${story_id}`;
 
   log.info('[hacker_news] getStoryInfo called', {}, {
-    story_id,
-    comment_depth,
-    comments_per_level,
-    url,
+    params,
+    context_params,
+    toolSessionContext,
   });
 
   try {
@@ -434,6 +523,7 @@ export async function getStoryInfo(
       story_id,
       url,
       hasComments: Array.isArray(formattedStory.comments) && formattedStory.comments.length > 0,
+      toolSessionContext,
     });
 
     return {
@@ -444,7 +534,7 @@ export async function getStoryInfo(
         story: formattedStory,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -456,6 +546,7 @@ export async function getStoryInfo(
       url,
       error: errorMessage,
       stack: errorStack,
+      toolSessionContext,
     }, error);
 
     return {
@@ -467,7 +558,7 @@ export async function getStoryInfo(
         story_id,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   }
 }
@@ -513,7 +604,7 @@ async function getUserStoriesInternal(user_name: string, num_stories: number): P
  */
 export async function getUserInfo(
   params: GetUserInfoParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -525,7 +616,7 @@ export async function getUserInfo(
 
   if (!normalizedUserName) {
     const errorMessage = 'user_name must be a non-empty string';
-    log.error('[hacker_news] getUserInfo validation failed', {}, { user_name });
+    log.error('[hacker_news] getUserInfo validation failed', {}, { user_name, toolSessionContext });
     return {
       result: JSON.stringify({
         success: false,
@@ -534,16 +625,16 @@ export async function getUserInfo(
         error: errorMessage,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   }
 
   const url = `${BASE_API_URL}/users/${encodeURIComponent(normalizedUserName)}`;
 
   log.info('[hacker_news] getUserInfo called', {}, {
-    user_name: normalizedUserName,
-    num_stories,
-    url,
+    params,
+    context_params,
+    toolSessionContext,
   });
 
   try {
@@ -557,6 +648,7 @@ export async function getUserInfo(
         status: response.status,
         statusText: response.statusText,
         errorText,
+        toolSessionContext,
       });
       throw new Error(`User request failed: ${response.status} ${errorText}`);
     }
@@ -568,6 +660,7 @@ export async function getUserInfo(
       user_name: normalizedUserName,
       url,
       story_count: stories.length,
+      toolSessionContext,
     });
 
     return {
@@ -581,7 +674,7 @@ export async function getUserInfo(
         },
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -590,6 +683,7 @@ export async function getUserInfo(
       url,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
+      toolSessionContext,
     }, error);
 
     return {
@@ -601,7 +695,7 @@ export async function getUserInfo(
         user_name: normalizedUserName,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {},
     };
   }
 }

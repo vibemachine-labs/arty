@@ -146,12 +146,10 @@ function deriveStoryId(story: HNStory): number {
  *
  * @param params.story_type - Category of stories: "top" (front page), "new" (recent), "ask_hn", "show_hn"
  * @param params.num_stories - Number of stories to return (default: 5)
- * @param context_params - Optional context parameters
  * @param toolSessionContext - Optional session context for the tool
  */
 export async function showTopStories(
   params: ShowTopStoriesParams,
-  context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
@@ -171,7 +169,7 @@ export async function showTopStories(
     });
   }
 
-  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page, toolSessionContext });
+  log.info('[hacker_news] showTopStories called', {}, { params, toolSessionContext });
 
   // Validate story_type
   const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
@@ -213,7 +211,12 @@ export async function showTopStories(
   let currentPage: number = page;
 
   // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  // This is the baseline of all previously seen stories
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
+
+  // Keep a separate copy for the final seen_story_ids return value
+  // This should only include stories seen BEFORE this call, not the new ones we're about to fetch
+  const baselineSeenStoryIds = Array.from(seenStoryIdsSet);
 
   // De-duplication loop: keep fetching until we have num_stories unseen stories
   const MAX_ATTEMPTS = 5;
@@ -323,7 +326,7 @@ export async function showTopStories(
       }),
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify(newStoryIds),
-        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        seen_story_ids: JSON.stringify(baselineSeenStoryIds),
         current_page: String(currentPage),
       },
     };
@@ -351,7 +354,7 @@ export async function showTopStories(
       // On error, preserve existing context state (move new to seen, no new IDs)
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify([]),
-        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        seen_story_ids: JSON.stringify(baselineSeenStoryIds),
         current_page: String(currentPage),
       },
     };
@@ -363,7 +366,6 @@ export async function showTopStories(
  */
 export async function searchStories(
   params: SearchStoriesParams,
-  context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -493,7 +495,6 @@ export async function searchStories(
  */
 export async function getStoryInfo(
   params: GetStoryInfoParams,
-  context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -605,7 +606,6 @@ async function getUserStoriesInternal(user_name: string, num_stories: number): P
  */
 export async function getUserInfo(
   params: GetUserInfoParams,
-  context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {

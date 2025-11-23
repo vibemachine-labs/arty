@@ -1763,7 +1763,7 @@ final class WebRTCEventHandler {
 
     // 3) Insert a single system "summary" item FIRST before deleting old context
     // This prevents "rug-pulling" the context from the AI
-    let summaryWithPreamble = "We are still in the same conversation, but here is a summary since we will be deleting old context. Ignore this for now, it's just for providing context for later messages:\n\n\(summaryText)"
+    let summaryWithPreamble = "We are still in the same conversation, but here is a summary since we will be deleting old context. No action needed, and do not repeat your greeting, just keep the conversation flowing like a natural assistant. \n\n\(summaryText)"
     
     let summaryEvent: [String: Any] = [
       "type": "conversation.item.create",

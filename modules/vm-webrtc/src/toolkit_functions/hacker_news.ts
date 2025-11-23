@@ -145,7 +145,7 @@ function deriveStoryId(story: HNStory): number {
  * Fetch stories from Hacker News by category.
  *
  * @param params.story_type - Category of stories: "top" (front page), "new" (recent), "ask_hn", "show_hn"
- * @param params.num_stories - Number of stories to return (default: 10)
+ * @param params.num_stories - Number of stories to return (default: 5)
  * @param context_params - Optional context parameters
  * @param toolSessionContext - Optional session context for the tool
  */
@@ -187,6 +187,13 @@ export async function showTopStories(
   const params_config = apiParams[normalizedType];
   const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${page}`;
 
+  // Extract previous story IDs from toolSessionContext
+  const previousNewStoryIds: number[] = (toolSessionContext?.new_story_ids as number[]) || [];
+  const previousSeenStoryIds: number[] = (toolSessionContext?.seen_story_ids as number[]) || [];
+
+  // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
+
   try {
     log.info('[hacker_news] Fetching stories from API', {}, { url });
 
@@ -198,13 +205,19 @@ export async function showTopStories(
     }
 
     const data = await response.json();
-    const stories = data.hits.map((story: HNStory) => formatStoryDetails(story));
+    // Defensive access: Algolia API guarantees these fields on success, but use fallbacks for safety
+    const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
+
+    // Get the new story IDs from this fetch
+    const newStoryIds: number[] = stories.map((s: FormattedStory) => s.id);
 
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
       count: stories.length,
       url,
       stories,
+      newStoryIds,
+      seenStoryIds: Array.from(seenStoryIdsSet),
     });
 
     return {
@@ -215,14 +228,17 @@ export async function showTopStories(
         story_type: normalizedType,
         stories,
         pagination: {
-          page: data.page,
-          hitsPerPage: data.hitsPerPage,
-          nbPages: data.nbPages,
-          nbHits: data.nbHits,
+          page: data.page ?? 0,
+          hitsPerPage: data.hitsPerPage ?? num_stories,
+          nbPages: data.nbPages ?? 0,
+          nbHits: data.nbHits ?? 0,
         },
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        new_story_ids: newStoryIds,
+        seen_story_ids: Array.from(seenStoryIdsSet),
+      },
     };
 
   } catch (error) {
@@ -243,7 +259,11 @@ export async function showTopStories(
         story_type: normalizedType,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      // On error, preserve existing context state (move new to seen, no new IDs)
+      updatedToolSessionContext: {
+        new_story_ids: [],
+        seen_story_ids: Array.from(seenStoryIdsSet),
+      },
     };
   }
 }
@@ -292,6 +312,13 @@ export async function searchStories(
     url,
   });
 
+  // Extract previous story IDs from toolSessionContext
+  const previousNewStoryIds: number[] = (toolSessionContext?.new_story_ids as number[]) || [];
+  const previousSeenStoryIds: number[] = (toolSessionContext?.seen_story_ids as number[]) || [];
+
+  // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
+
   try {
     const response = await fetch(url);
 
@@ -303,12 +330,17 @@ export async function searchStories(
     const data = await response.json();
     const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
 
+    // Get the new story IDs from this fetch
+    const newStoryIds: number[] = stories.map((s: FormattedStory) => s.id);
+
     log.info('[hacker_news] searchStories completed', {}, {
       query: normalizedQuery,
       count: stories.length,
       search_by_date,
       page,
       url,
+      newStoryIds,
+      seenStoryIdsCount: seenStoryIdsSet.size,
     });
 
     return {
@@ -320,14 +352,17 @@ export async function searchStories(
         search_by_date,
         stories,
         pagination: {
-          page: data.page,
-          hitsPerPage: data.hitsPerPage,
-          nbPages: data.nbPages,
-          nbHits: data.nbHits,
+          page: data.page ?? 0,
+          hitsPerPage: data.hitsPerPage ?? num_results,
+          nbPages: data.nbPages ?? 0,
+          nbHits: data.nbHits ?? 0,
         },
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        new_story_ids: newStoryIds,
+        seen_story_ids: Array.from(seenStoryIdsSet),
+      },
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -347,7 +382,11 @@ export async function searchStories(
         query: normalizedQuery,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      // On error, preserve existing context state (move new to seen, no new IDs)
+      updatedToolSessionContext: {
+        new_story_ids: [],
+        seen_story_ids: Array.from(seenStoryIdsSet),
+      },
     };
   }
 }

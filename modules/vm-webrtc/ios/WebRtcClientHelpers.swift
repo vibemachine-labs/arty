@@ -48,7 +48,7 @@ extension OpenAIWebRTCClient {
     configuration.mode = AVAudioSession.Mode.voiceChat.rawValue
     configuration.category = AVAudioSession.Category.playAndRecord.rawValue
 
-    var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+    var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .mixWithOthers]
     if route == .speaker {
       options.insert(.defaultToSpeaker)
     }
@@ -79,7 +79,7 @@ extension OpenAIWebRTCClient {
         "previousOutputs": describeAudioOutputs(session.currentRoute)
       ]))
 
-      var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+      var options: AVAudioSession.CategoryOptions = [.allowBluetooth, .mixWithOthers]
       if route == .speaker {
         options.insert(.defaultToSpeaker)
       }

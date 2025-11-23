@@ -11,6 +11,7 @@ final class WebRTCEventHandler {
     let gpt5GDriveFixerDelegate: BaseTool?
     let gpt5WebSearchDelegate: BaseTool?
     let toolkitHelper: ToolkitHelper?
+    let audioMixPlayer: AudioMixPlayer?
     let sendToolCallError: (_ callId: String, _ error: String) -> Void
     let emitModuleEvent: (_ name: String, _ payload: [String: Any]) -> Void
     let sendDataChannelMessage: (_ event: [String: Any]) -> Void
@@ -640,6 +641,10 @@ final class WebRTCEventHandler {
         "status_update": "Tool called: \(toolName)"
       ])
     }
+
+    // Play audio feedback when tool is called (mixing with WebRTC audio)
+    // Uses audio.mp3 or audio.wav - file will be added later
+    context.audioMixPlayer?.playAudio(filename: "audio")
 
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }

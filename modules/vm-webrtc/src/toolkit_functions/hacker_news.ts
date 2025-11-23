@@ -151,7 +151,7 @@ function deriveStoryId(story: HNStory): number {
  */
 export async function showTopStories(
   params: ShowTopStoriesParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
@@ -171,7 +171,7 @@ export async function showTopStories(
     });
   }
 
-  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page, toolSessionContext });
+  log.info('[hacker_news] showTopStories called', {}, { params, context_params, toolSessionContext });
 
   // Validate story_type
   const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
@@ -213,7 +213,12 @@ export async function showTopStories(
   let currentPage: number = page;
 
   // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  // This is the baseline of all previously seen stories
   const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
+
+  // Keep a separate copy for the final seen_story_ids return value
+  // This should only include stories seen BEFORE this call, not the new ones we're about to fetch
+  const baselineSeenStoryIds = Array.from(seenStoryIdsSet);
 
   // De-duplication loop: keep fetching until we have num_stories unseen stories
   const MAX_ATTEMPTS = 5;
@@ -229,10 +234,10 @@ export async function showTopStories(
 
       log.info('[hacker_news] Fetching stories from API', {}, {
         url,
-        currentPage,
-        attempt: attempts,
-        collectedSoFar: collectedStories.length,
-        targetCount: num_stories,
+        pageBeingFetched: currentPage,
+        attemptNumber: attempts,
+        storiesCollectedSoFar: collectedStories.length,
+        storiesTargetCount: num_stories,
         toolSessionContext,
       });
 
@@ -255,8 +260,8 @@ export async function showTopStories(
       log.info('[hacker_news] Filtering stories', {}, {
         fetchedCount: allStories.length,
         unseenCount: unseenStories.length,
-        currentPage,
-        attempt: attempts,
+        pageBeingFetched: currentPage,
+        attemptNumber: attempts,
         seenStoryIdsCount: seenStoryIdsSet.size,
         toolSessionContext,
       });
@@ -274,8 +279,8 @@ export async function showTopStories(
       // If we got no unseen stories from this page, we might have exhausted available stories
       if (unseenStories.length === 0 && allStories.length > 0) {
         log.info('[hacker_news] All stories on page were already seen, continuing to next page', {}, {
-          currentPage,
-          attempt: attempts,
+          nextPageToFetch: currentPage,
+          attemptNumber: attempts,
           toolSessionContext,
         });
       }
@@ -297,11 +302,11 @@ export async function showTopStories(
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
       count: collectedStories.length,
-      attempts,
-      finalPage: currentPage,
+      totalAttempts: attempts,
+      nextPageForFutureCalls: currentPage,
       stories: collectedStories,
       newStoryIds,
-      seenStoryIds: Array.from(seenStoryIdsSet),
+      baselineSeenStoryIds,
       toolSessionContext,
     });
 
@@ -323,7 +328,7 @@ export async function showTopStories(
       }),
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify(newStoryIds),
-        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        seen_story_ids: JSON.stringify(baselineSeenStoryIds),
         current_page: String(currentPage),
       },
     };
@@ -332,8 +337,8 @@ export async function showTopStories(
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.error('[hacker_news] Failed to fetch stories', {}, {
       story_type: normalizedType,
-      currentPage,
-      attempts,
+      pageAtFailure: currentPage,
+      totalAttempts: attempts,
       error: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
       toolSessionContext,
@@ -351,7 +356,7 @@ export async function showTopStories(
       // On error, preserve existing context state (move new to seen, no new IDs)
       updatedToolSessionContext: {
         new_story_ids: JSON.stringify([]),
-        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+        seen_story_ids: JSON.stringify(baselineSeenStoryIds),
         current_page: String(currentPage),
       },
     };
@@ -363,7 +368,7 @@ export async function showTopStories(
  */
 export async function searchStories(
   params: SearchStoriesParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -394,12 +399,8 @@ export async function searchStories(
   const url = `${BASE_API_URL}/${endpoint}?query=${encodeURIComponent(normalizedQuery)}&hitsPerPage=${num_results}&page=${page}&tags=story`;
 
   log.info('[hacker_news] searchStories called', {}, {
-    query: normalizedQuery,
-    num_results,
-    search_by_date,
-    page,
-    endpoint,
-    url,
+    params,
+    context_params,
     toolSessionContext,
   });
 
@@ -493,7 +494,7 @@ export async function searchStories(
  */
 export async function getStoryInfo(
   params: GetStoryInfoParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -505,10 +506,8 @@ export async function getStoryInfo(
   const url = `${BASE_API_URL}/items/${story_id}`;
 
   log.info('[hacker_news] getStoryInfo called', {}, {
-    story_id,
-    comment_depth,
-    comments_per_level,
-    url,
+    params,
+    context_params,
     toolSessionContext,
   });
 
@@ -605,7 +604,7 @@ async function getUserStoriesInternal(user_name: string, num_stories: number): P
  */
 export async function getUserInfo(
   params: GetUserInfoParams,
-  context_params?: any,
+  context_params?: any, // not all tools use context_params, but some do, so it cannot be removed
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
   const {
@@ -633,9 +632,8 @@ export async function getUserInfo(
   const url = `${BASE_API_URL}/users/${encodeURIComponent(normalizedUserName)}`;
 
   log.info('[hacker_news] getUserInfo called', {}, {
-    user_name: normalizedUserName,
-    num_stories,
-    url,
+    params,
+    context_params,
     toolSessionContext,
   });
 

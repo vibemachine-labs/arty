@@ -305,8 +305,8 @@ export async function showTopStories(
       totalAttempts: attempts,
       nextPageForFutureCalls: currentPage,
       stories: collectedStories,
-      newStoryIds,
-      baselineSeenStoryIds,
+      new_story_ids: newStoryIds,
+      seen_story_ids: baselineSeenStoryIds.length > 0 ? baselineSeenStoryIds : [],
       toolSessionContext,
     });
 

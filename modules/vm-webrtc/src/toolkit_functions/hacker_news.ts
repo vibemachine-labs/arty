@@ -4,7 +4,7 @@ import type { ToolSessionContext, ToolkitResult } from './types';
 // MARK: - Constants
 
 const BASE_API_URL = 'https://hn.algolia.com/api/v1';
-const DEFAULT_NUM_STORIES = 10;
+const DEFAULT_NUM_STORIES = 5;
 const DEFAULT_COMMENT_DEPTH = 2;
 const DEFAULT_NUM_COMMENTS = 10;
 
@@ -13,12 +13,14 @@ const DEFAULT_NUM_COMMENTS = 10;
 export interface ShowTopStoriesParams {
   story_type: 'top' | 'new' | 'ask_hn' | 'show_hn';
   num_stories?: number;
+  page?: number;
 }
 
 export interface SearchStoriesParams {
   query: string;
   num_results?: number;
   search_by_date?: boolean;
+  page?: number;
 }
 
 export interface GetStoryInfoParams {
@@ -143,7 +145,7 @@ function deriveStoryId(story: HNStory): number {
  * Fetch stories from Hacker News by category.
  *
  * @param params.story_type - Category of stories: "top" (front page), "new" (recent), "ask_hn", "show_hn"
- * @param params.num_stories - Number of stories to return (default: 10)
+ * @param params.num_stories - Number of stories to return (default: 5)
  * @param context_params - Optional context parameters
  * @param toolSessionContext - Optional session context for the tool
  */
@@ -152,9 +154,9 @@ export async function showTopStories(
   context_params?: any,
   toolSessionContext?: ToolSessionContext
 ): Promise<ToolkitResult> {
-  const { story_type, num_stories = DEFAULT_NUM_STORIES } = params;
+  const { story_type, num_stories = DEFAULT_NUM_STORIES, page = 0 } = params;
 
-  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories });
+  log.info('[hacker_news] showTopStories called', {}, { story_type, num_stories, page });
 
   // Validate story_type
   const validTypes = ['top', 'new', 'ask_hn', 'show_hn'];
@@ -183,7 +185,18 @@ export async function showTopStories(
   };
 
   const params_config = apiParams[normalizedType];
-  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}`;
+  const url = `${BASE_API_URL}/${params_config.endpoint}?tags=${params_config.tags}&hitsPerPage=${num_stories}&page=${page}`;
+
+  // Extract previous story IDs from toolSessionContext (stored as JSON strings)
+  const previousNewStoryIds: number[] = toolSessionContext?.new_story_ids
+    ? JSON.parse(toolSessionContext.new_story_ids)
+    : [];
+  const previousSeenStoryIds: number[] = toolSessionContext?.seen_story_ids
+    ? JSON.parse(toolSessionContext.seen_story_ids)
+    : [];
+
+  // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
 
   try {
     log.info('[hacker_news] Fetching stories from API', {}, { url });
@@ -196,13 +209,19 @@ export async function showTopStories(
     }
 
     const data = await response.json();
-    const stories = data.hits.map((story: HNStory) => formatStoryDetails(story));
+    // Defensive access: Algolia API guarantees these fields on success, but use fallbacks for safety
+    const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
+
+    // Get the new story IDs from this fetch
+    const newStoryIds: number[] = stories.map((s: FormattedStory) => s.id);
 
     log.info('[hacker_news] Stories fetched successfully', {}, {
       story_type: normalizedType,
       count: stories.length,
       url,
       stories,
+      newStoryIds,
+      seenStoryIds: Array.from(seenStoryIdsSet),
     });
 
     return {
@@ -212,9 +231,18 @@ export async function showTopStories(
         tool: 'showTopStories',
         story_type: normalizedType,
         stories,
+        pagination: {
+          page: data.page ?? 0,
+          hitsPerPage: data.hitsPerPage ?? num_stories,
+          nbPages: data.nbPages ?? 0,
+          nbHits: data.nbHits ?? 0,
+        },
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        new_story_ids: JSON.stringify(newStoryIds),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+      },
     };
 
   } catch (error) {
@@ -235,7 +263,11 @@ export async function showTopStories(
         story_type: normalizedType,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      // On error, preserve existing context state (move new to seen, no new IDs)
+      updatedToolSessionContext: {
+        new_story_ids: JSON.stringify([]),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+      },
     };
   }
 }
@@ -252,6 +284,7 @@ export async function searchStories(
     query,
     num_results = DEFAULT_NUM_STORIES,
     search_by_date = false,
+    page = 0,
   } = params;
 
   const normalizedQuery = query?.trim();
@@ -272,15 +305,27 @@ export async function searchStories(
   }
 
   const endpoint = search_by_date ? 'search_by_date' : 'search';
-  const url = `${BASE_API_URL}/${endpoint}?query=${encodeURIComponent(normalizedQuery)}&hitsPerPage=${num_results}&tags=story`;
+  const url = `${BASE_API_URL}/${endpoint}?query=${encodeURIComponent(normalizedQuery)}&hitsPerPage=${num_results}&page=${page}&tags=story`;
 
   log.info('[hacker_news] searchStories called', {}, {
     query: normalizedQuery,
     num_results,
     search_by_date,
+    page,
     endpoint,
     url,
   });
+
+  // Extract previous story IDs from toolSessionContext (stored as JSON strings)
+  const previousNewStoryIds: number[] = toolSessionContext?.new_story_ids
+    ? JSON.parse(toolSessionContext.new_story_ids)
+    : [];
+  const previousSeenStoryIds: number[] = toolSessionContext?.seen_story_ids
+    ? JSON.parse(toolSessionContext.seen_story_ids)
+    : [];
+
+  // Merge previous new_story_ids into seen_story_ids (they are now "old")
+  const seenStoryIdsSet = new Set([...previousSeenStoryIds, ...previousNewStoryIds]);
 
   try {
     const response = await fetch(url);
@@ -293,11 +338,17 @@ export async function searchStories(
     const data = await response.json();
     const stories = (data.hits || []).map((story: HNStory) => formatStoryDetails(story));
 
+    // Get the new story IDs from this fetch
+    const newStoryIds: number[] = stories.map((s: FormattedStory) => s.id);
+
     log.info('[hacker_news] searchStories completed', {}, {
       query: normalizedQuery,
       count: stories.length,
       search_by_date,
+      page,
       url,
+      newStoryIds,
+      seenStoryIdsCount: seenStoryIdsSet.size,
     });
 
     return {
@@ -308,9 +359,18 @@ export async function searchStories(
         query: normalizedQuery,
         search_by_date,
         stories,
+        pagination: {
+          page: data.page ?? 0,
+          hitsPerPage: data.hitsPerPage ?? num_results,
+          nbPages: data.nbPages ?? 0,
+          nbHits: data.nbHits ?? 0,
+        },
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        new_story_ids: JSON.stringify(newStoryIds),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+      },
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -330,7 +390,11 @@ export async function searchStories(
         query: normalizedQuery,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      // On error, preserve existing context state (move new to seen, no new IDs)
+      updatedToolSessionContext: {
+        new_story_ids: JSON.stringify([]),
+        seen_story_ids: JSON.stringify(Array.from(seenStoryIdsSet)),
+      },
     };
   }
 }

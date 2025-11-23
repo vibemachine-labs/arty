@@ -704,6 +704,9 @@ final class WebRTCEventHandler {
         "status": status as Any
       ])
     )
+
+    // Stop any playing audio when the other side starts speaking
+    context.audioMixPlayer?.stop()
   }
 
   private func handleResponseDoneEvent(_ event: [String: Any], context: ToolContext) {

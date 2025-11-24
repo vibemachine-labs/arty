@@ -11,6 +11,7 @@ final class WebRTCEventHandler {
     let gpt5GDriveFixerDelegate: BaseTool?
     let gpt5WebSearchDelegate: BaseTool?
     let toolkitHelper: ToolkitHelper?
+    let audioMixPlayer: AudioMixPlayer?
     let sendToolCallError: (_ callId: String, _ error: String) -> Void
     let emitModuleEvent: (_ name: String, _ payload: [String: Any]) -> Void
     let sendDataChannelMessage: (_ event: [String: Any]) -> Void
@@ -641,6 +642,10 @@ final class WebRTCEventHandler {
       ])
     }
 
+    // Play audio feedback when tool is called (mixing with WebRTC audio)
+    // Loop random beeps until we get a response
+    context.audioMixPlayer?.startLoopingRandomBeeps(prefix: "artybeeps")
+
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }
 
@@ -700,6 +705,9 @@ final class WebRTCEventHandler {
         "status": status as Any
       ])
     )
+
+    // Stop any playing audio when the other side starts speaking
+    context.audioMixPlayer?.stop()
   }
 
   private func handleResponseDoneEvent(_ event: [String: Any], context: ToolContext) {

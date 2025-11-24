@@ -27,6 +27,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "expo": "^54.0.23",
+    "expo-asset": "~12.0.10",
     "expo-auth-session": "~7.0.8",
     "expo-av": "~16.0.7",
     "expo-camera": "~17.0.9",

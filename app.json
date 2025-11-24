@@ -28,13 +28,29 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tleyden.vibemachine"
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "assetBundlePatterns": [
+      "assets/sounds/*"
+    ],
     "plugins": [
+      [
+        "expo-asset",
+        {
+          "assets": [
+            "./assets/sounds/artybeeps1.mp3",
+            "./assets/sounds/artybeeps2.mp3",
+            "./assets/sounds/artybeeps3.mp3",
+            "./assets/sounds/artybeeps4.mp3",
+            "./assets/sounds/artybeeps5.mp3"
+          ]
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",

@@ -121,6 +121,9 @@ final class OpenAIWebRTCClient: NSObject {
 
   // Reference to the Gen2 toolkit helper
   var toolkitHelper: ToolkitHelper?
+
+  // Audio mix player for playing sounds during WebRTC session
+  let audioMixPlayer = AudioMixPlayer()
         
   var toolDefinitions: [[String: Any]] = []
   private var apiKey: String?
@@ -177,6 +180,7 @@ final class OpenAIWebRTCClient: NSObject {
       gpt5GDriveFixerDelegate: gpt5GDriveFixerDelegate,
       gpt5WebSearchDelegate: gpt5WebSearchDelegate,
       toolkitHelper: toolkitHelper,
+      audioMixPlayer: audioMixPlayer,
       sendToolCallError: { [weak self] callId, error in
         guard let self else { return }
         self.sendToolCallError(callId: callId, error: error)

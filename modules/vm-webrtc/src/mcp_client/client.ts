@@ -392,6 +392,30 @@ export class MCPClient {
   }
 
   /**
+   * Validate arguments for specific endpoints that require non-empty values
+   */
+  private validateArgumentsForEndpoint(
+    toolName: string,
+    args: Record<string, unknown> | undefined
+  ): void {
+    // Special handling for deepwiki MCP server
+    if (this.endpoint === 'https://mcp.deepwiki.com/mcp') {
+      if (toolName === 'ask_question') {
+        const repoName = args?.repoName;
+        const question = args?.question;
+
+        if (!repoName || (typeof repoName === 'string' && repoName.trim() === '')) {
+          throw new Error('deepwiki ask_question requires non-empty repoName argument');
+        }
+
+        if (!question || (typeof question === 'string' && question.trim() === '')) {
+          throw new Error('deepwiki ask_question requires non-empty question argument');
+        }
+      }
+    }
+  }
+
+  /**
    * Call a tool on the MCP server
    */
   async callTool(
@@ -399,6 +423,19 @@ export class MCPClient {
     options?: RequestOptions,
     toolGroup?: string
   ): Promise<CallToolResult> {
+    // Validate arguments for endpoints with special requirements
+    try {
+      this.validateArgumentsForEndpoint(params.name, params.arguments);
+    } catch (error) {
+      log.error('[MCPClient] Argument validation failed', {}, {
+        endpoint: this.endpoint,
+        toolName: params.name,
+        arguments: params.arguments,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+
     const logMessage = toolGroup
       ? `[MCPClient] Calling tool on MCP server (${toolGroup})`
       : '[MCPClient] Calling tool on MCP server';

@@ -78,8 +78,8 @@ final class AudioMixPlayer: NSObject {
 
   /// Internal implementation - must be called on stateQueue
   private func playAudioInternal(url: URL) {
-    // Stop any existing playback
-    stopInternal()
+    // Stop any existing playback (but preserve loop state)
+    stopPlaybackInternal()
 
     do {
       // Configure for mixing with WebRTC
@@ -218,23 +218,36 @@ final class AudioMixPlayer: NSObject {
     }
   }
 
-  /// Stops current audio playback
+  /// Stops current audio playback and cancels looping
   func stop() {
     stateQueue.async {
-      self.stopInternal()
+      let wasLooping = self.isLoopingBeeps
+      let hadBeeps = self.beepURLs.count
+
+      // Clear loop state - only done in public stop()
+      self.isLoopingBeeps = false
+      self.beepURLs = []
+
+      self.stopPlaybackInternal()
+
+      self.logger.log(
+        "[AudioMixPlayer] Stop called - cleared loop state",
+        attributes: logAttributes(for: .info, metadata: [
+          "wasLooping": wasLooping,
+          "hadBeepsCount": hadBeeps
+        ])
+      )
     }
   }
 
-  /// Internal implementation - must be called on stateQueue
-  private func stopInternal() {
-    isLoopingBeeps = false
-    beepURLs = []
-
+  /// Internal implementation - stops playback but preserves loop state
+  /// Must be called on stateQueue
+  private func stopPlaybackInternal() {
     if let player = audioPlayer, player.isPlaying {
       player.stop()
       logger.log(
-        "[AudioMixPlayer] Stopped audio playback",
-        attributes: logAttributes(for: .info)
+        "[AudioMixPlayer] Stopped active playback",
+        attributes: logAttributes(for: .debug)
       )
     }
     audioPlayer = nil
@@ -267,14 +280,28 @@ extension AudioMixPlayer: AVAudioPlayerDelegate {
         "[AudioMixPlayer] Playback finished",
         attributes: logAttributes(for: .debug, metadata: [
           "success": flag,
-          "isLoopingBeeps": self.isLoopingBeeps
+          "isLoopingBeeps": self.isLoopingBeeps,
+          "beepURLsCount": self.beepURLs.count
         ])
       )
 
       // If looping, play the next random beep
       if self.isLoopingBeeps && !self.beepURLs.isEmpty {
         let nextURL = self.beepURLs.randomElement()!
+        self.logger.log(
+          "[AudioMixPlayer] Looping - playing next beep",
+          attributes: logAttributes(for: .debug, metadata: [
+            "nextFile": nextURL.lastPathComponent
+          ])
+        )
         self.playAudioInternal(url: nextURL)
+      } else {
+        self.logger.log(
+          "[AudioMixPlayer] Not looping - playback stopped",
+          attributes: logAttributes(for: .debug, metadata: [
+            "reason": !self.isLoopingBeeps ? "isLoopingBeeps=false" : "beepURLs empty"
+          ])
+        )
       }
     }
   }

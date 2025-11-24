@@ -643,7 +643,8 @@ final class WebRTCEventHandler {
     }
 
     // Play audio feedback when tool is called (mixing with WebRTC audio)
-    context.audioMixPlayer?.playAudio(filename: "audio2")
+    let randomBeep = Int.random(in: 1...5)
+    context.audioMixPlayer?.playAudio(filename: "ArtyBeeps\(randomBeep)")
 
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }

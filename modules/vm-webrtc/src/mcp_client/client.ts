@@ -400,8 +400,9 @@ export class MCPClient {
   ): void {
     // Special handling for deepwiki MCP server
     if (this.endpoint === 'https://mcp.deepwiki.com/mcp') {
+      const repoName = args?.repoName;
+
       if (toolName === 'ask_question') {
-        const repoName = args?.repoName;
         const question = args?.question;
 
         if (!repoName || (typeof repoName === 'string' && repoName.trim() === '')) {
@@ -410,6 +411,10 @@ export class MCPClient {
 
         if (!question || (typeof question === 'string' && question.trim() === '')) {
           throw new Error('deepwiki ask_question requires non-empty question argument');
+        }
+      } else if (toolName === 'read_wiki_contents' || toolName === 'read_wiki_structure') {
+        if (!repoName || (typeof repoName === 'string' && repoName.trim() === '')) {
+          throw new Error(`deepwiki ${toolName} requires non-empty repoName argument`);
         }
       }
     }

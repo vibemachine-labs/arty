@@ -581,11 +581,15 @@ extension OpenAIWebRTCClient {
       }
 
       // Check state machine before sending initial response.create
-      let _ = strongSelf.eventHandler.willSendResponseCreate(trigger: "session_init")
-
-      let sent = strongSelf.sendEvent(["type": "response.create"])
-      if sent {
-        strongSelf.eventHandler.didSendResponseCreate(trigger: "session_init")
+      let trigger = "session_init"
+      if strongSelf.eventHandler.checkResponseInProgress() {
+        // Queue for later - shouldn't happen on init but handle it
+        strongSelf.eventHandler.queueResponseCreate(trigger: trigger)
+      } else {
+        let sent = strongSelf.sendEvent(["type": "response.create"])
+        if sent {
+          strongSelf.eventHandler.didSendResponseCreate(trigger: trigger)
+        }
       }
     }
   }

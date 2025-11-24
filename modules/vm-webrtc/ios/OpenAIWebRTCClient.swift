@@ -349,6 +349,12 @@ final class OpenAIWebRTCClient: NSObject {
     self.sessionVoice = defaultVoice
     self.sessionAudioSpeed = 1.0
     super.init()
+
+    // Set up callback for sending queued response.create
+    eventHandler.sendResponseCreateCallback = { [weak self] in
+      guard let self = self else { return false }
+      return self.sendEvent(["type": "response.create"])
+    }
   }
 
   deinit {
@@ -699,32 +705,49 @@ extension OpenAIWebRTCClient: ToolCallResponder {
       )
       eventHandler.recordExternalActivity(reason: "tool_call_result")
 
-      // Continue conversation
-      self.logger.log(
-        "📤 [RESPONSE_CREATE] Triggering response.create to continue conversation",
-        attributes: logAttributes(for: .info, metadata: [
-          "trigger": "tool_call_result",
-          "callId": callId,
-          "timestamp": ISO8601DateFormatter().string(from: Date())
-        ])
-      )
-
       // Check state machine before sending response.create
-      let _ = eventHandler.willSendResponseCreate(trigger: "tool_call_result:\(callId)")
+      let trigger = "tool_call_result:\(callId)"
+      if eventHandler.checkResponseInProgress() {
 
-      let responseCreateSent = sendEvent(["type": "response.create"])
-
-      if responseCreateSent {
-        eventHandler.didSendResponseCreate(trigger: "tool_call_result:\(callId)")
-      } else {
+        // Continue conversation
         self.logger.log(
-          "❌ [RESPONSE_CREATE_FAILED] Failed to send response.create",
-          attributes: logAttributes(for: .error, metadata: [
+          "⚠️ Already have a response in progress; queuing response.create",
+          attributes: logAttributes(for: .warn, metadata: [
+            "trigger": "tool_call_result",
             "callId": callId,
-            "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
             "timestamp": ISO8601DateFormatter().string(from: Date())
           ])
         )
+
+        // Queue for later - will be sent when current response completes
+        eventHandler.queueResponseCreate(trigger: trigger)
+      } else {
+
+        // Continue conversation
+        self.logger.log(
+          "📤 [RESPONSE_CREATE] Going to send response.create to continue conversation",
+          attributes: logAttributes(for: .info, metadata: [
+            "trigger": "tool_call_result",
+            "callId": callId,
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+
+        // Safe to send immediately
+        let responseCreateSent = sendEvent(["type": "response.create"])
+
+        if responseCreateSent {
+          eventHandler.didSendResponseCreate(trigger: trigger)
+        } else {
+          self.logger.log(
+            "❌ [RESPONSE_CREATE_FAILED] Failed to send response.create",
+            attributes: logAttributes(for: .error, metadata: [
+              "callId": callId,
+              "dataChannelState": dataChannel?.readyState.rawValue ?? -1,
+              "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+          )
+        }
       }
     } else {
       self.logger.log(
@@ -809,11 +832,15 @@ extension OpenAIWebRTCClient: ToolCallResponder {
     )
 
     // Check state machine before sending response.create
-    let _ = eventHandler.willSendResponseCreate(trigger: "tool_call_error:\(callId)")
-
-    let responseCreateSent = sendEvent(["type": "response.create"])
-    if responseCreateSent {
-      eventHandler.didSendResponseCreate(trigger: "tool_call_error:\(callId)")
+    let trigger = "tool_call_error:\(callId)"
+    if eventHandler.checkResponseInProgress() {
+      // Queue for later - will be sent when current response completes
+      eventHandler.queueResponseCreate(trigger: trigger)
+    } else {
+      let responseCreateSent = sendEvent(["type": "response.create"])
+      if responseCreateSent {
+        eventHandler.didSendResponseCreate(trigger: trigger)
+      }
     }
     eventHandler.recordExternalActivity(reason: "tool_call_error")
   }

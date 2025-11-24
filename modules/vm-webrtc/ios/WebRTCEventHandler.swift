@@ -175,25 +175,38 @@ final class WebRTCEventHandler {
   private var responseInProgress: Bool = false
   private var currentResponseId: String?
 
-  /// Check if a response is currently in progress and log a warning if attempting to create a new one.
-  /// Call this BEFORE sending response.create to detect potential "conversation_already_has_active_response" errors.
-  /// Returns true if it's safe to send, false if a response is already in progress (warning will be logged).
-  func willSendResponseCreate(trigger: String) -> Bool {
+  // Queued response.create - max one item with 30 second TTL
+  private var queuedResponseCreate: (trigger: String, timestamp: Date)?
+  private let queuedResponseTTL: TimeInterval = 30.0
+
+  // Callback to send response.create when queue is processed
+  var sendResponseCreateCallback: (() -> Bool)?
+
+  /// Check if a response is currently in progress.
+  /// Returns true if response in progress, false otherwise.
+  func checkResponseInProgress() -> Bool {
     return responseStateQueue.sync {
-      if responseInProgress {
-        logger.log(
-          "⚠️ [ResponseStateMachine] Attempting to send response.create while response already in progress",
-          attributes: logAttributes(for: .warn, metadata: [
-            "trigger": trigger,
-            "currentResponseId": currentResponseId as Any,
-            "responseInProgress": responseInProgress,
-            "recommendation": "Wait for response.done before sending another response.create",
-            "timestamp": ISO8601DateFormatter().string(from: Date())
-          ])
-        )
-        return false
-      }
-      return true
+      return responseInProgress
+    }
+  }
+
+  /// Queue a response.create to be sent when the current response completes.
+  /// Overwrites any previously queued item (max queue size = 1).
+  func queueResponseCreate(trigger: String) {
+    responseStateQueue.async {
+      let previousQueued = self.queuedResponseCreate
+      self.queuedResponseCreate = (trigger: trigger, timestamp: Date())
+
+      self.logger.log(
+        "📥 [ResponseStateMachine] Queued response.create (response in progress)",
+        attributes: logAttributes(for: .info, metadata: [
+          "trigger": trigger,
+          "currentResponseId": self.currentResponseId as Any,
+          "previousQueuedTrigger": previousQueued?.trigger as Any,
+          "ttlSeconds": self.queuedResponseTTL,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
     }
   }
 
@@ -217,6 +230,7 @@ final class WebRTCEventHandler {
     responseStateQueue.async {
       self.responseInProgress = false
       self.currentResponseId = nil
+      self.queuedResponseCreate = nil
       self.logger.log(
         "[ResponseStateMachine] Response state reset",
         attributes: logAttributes(for: .debug)
@@ -705,6 +719,27 @@ final class WebRTCEventHandler {
       let wasInProgress = self.responseInProgress
       self.responseInProgress = false
       self.currentResponseId = nil
+
+      // Check for queued response.create
+      var queuedToSend: (trigger: String, timestamp: Date)?
+      if let queued = self.queuedResponseCreate {
+        let age = Date().timeIntervalSince(queued.timestamp)
+        if age <= self.queuedResponseTTL {
+          queuedToSend = queued
+        } else {
+          self.logger.log(
+            "⏰ [ResponseStateMachine] Queued response.create expired",
+            attributes: logAttributes(for: .warn, metadata: [
+              "trigger": queued.trigger,
+              "ageSeconds": age,
+              "ttlSeconds": self.queuedResponseTTL,
+              "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+          )
+        }
+        self.queuedResponseCreate = nil
+      }
+
       self.logger.log(
         "[ResponseStateMachine] Response done, no longer in progress",
         attributes: logAttributes(for: .debug, metadata: [
@@ -712,9 +747,62 @@ final class WebRTCEventHandler {
           "status": status as Any,
           "wasInProgress": wasInProgress,
           "responseInProgress": false,
+          "hasQueuedResponse": queuedToSend != nil,
           "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
       )
+
+      // Send queued response.create if valid
+      if let queued = queuedToSend {
+        self.logger.log(
+          "📤 [ResponseStateMachine] Sending queued response.create",
+          attributes: logAttributes(for: .info, metadata: [
+            "trigger": queued.trigger,
+            "queuedAgeSeconds": Date().timeIntervalSince(queued.timestamp),
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+
+        // Mark as in progress before sending
+        self.responseInProgress = true
+
+        // Send via callback
+        DispatchQueue.main.async {
+          if let callback = self.sendResponseCreateCallback {
+            let sent = callback()
+            if sent {
+              self.logger.log(
+                "✅ [ResponseStateMachine] Queued response.create sent successfully",
+                attributes: logAttributes(for: .info, metadata: [
+                  "trigger": queued.trigger
+                ])
+              )
+            } else {
+              self.logger.log(
+                "❌ [ResponseStateMachine] Failed to send queued response.create",
+                attributes: logAttributes(for: .error, metadata: [
+                  "trigger": queued.trigger
+                ])
+              )
+              // Reset state since send failed
+              self.responseStateQueue.async {
+                self.responseInProgress = false
+              }
+            }
+          } else {
+            self.logger.log(
+              "❌ [ResponseStateMachine] No sendResponseCreateCallback configured",
+              attributes: logAttributes(for: .error, metadata: [
+                "trigger": queued.trigger
+              ])
+            )
+            // Reset state since we couldn't send
+            self.responseStateQueue.async {
+              self.responseInProgress = false
+            }
+          }
+        }
+      }
     }
 
     logger.log(

@@ -8,6 +8,10 @@ final class AudioMixPlayer: NSObject {
   private var audioPlayer: AVAudioPlayer?
   private let logger = VmWebrtcLogging.logger
 
+  // For looping random beeps
+  private var isLoopingBeeps: Bool = false
+  private var beepFilenames: [String] = []
+
   /// Plays an audio file while WebRTC session is active
   /// - Parameter filename: The audio file name (e.g., "audio.mp3" or "audio.wav")
   /// - Note: The file should be in the app bundle or a known location
@@ -109,8 +113,38 @@ final class AudioMixPlayer: NSObject {
     }
   }
 
+  /// Starts playing random beeps from the provided filenames until stop() is called
+  /// - Parameter filenames: Array of audio filenames to randomly choose from
+  func startLoopingRandomBeeps(filenames: [String]) {
+    guard !filenames.isEmpty else {
+      logger.log(
+        "[AudioMixPlayer] Cannot start looping - no filenames provided",
+        attributes: logAttributes(for: .warn)
+      )
+      return
+    }
+
+    isLoopingBeeps = true
+    beepFilenames = filenames
+
+    // Play the first random beep
+    let randomFilename = filenames.randomElement()!
+    playAudio(filename: randomFilename)
+
+    logger.log(
+      "[AudioMixPlayer] Started looping random beeps",
+      attributes: logAttributes(for: .info, metadata: [
+        "filenameCount": filenames.count,
+        "firstBeep": randomFilename
+      ])
+    )
+  }
+
   /// Stops current audio playback
   func stop() {
+    isLoopingBeeps = false
+    beepFilenames = []
+
     if let player = audioPlayer, player.isPlaying {
       player.stop()
       logger.log(
@@ -143,10 +177,17 @@ extension AudioMixPlayer: AVAudioPlayerDelegate {
   func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
     logger.log(
       "[AudioMixPlayer] Playback finished",
-      attributes: logAttributes(for: .info, metadata: [
-        "success": flag
+      attributes: logAttributes(for: .debug, metadata: [
+        "success": flag,
+        "isLoopingBeeps": isLoopingBeeps
       ])
     )
+
+    // If looping, play the next random beep
+    if isLoopingBeeps && !beepFilenames.isEmpty {
+      let nextFilename = beepFilenames.randomElement()!
+      playAudio(filename: nextFilename)
+    }
   }
 
   func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {

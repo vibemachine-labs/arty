@@ -359,6 +359,13 @@ final class OpenAIWebRTCClient: NSObject {
       guard let self = self else { return false }
       return self.sendEvent(["type": "response.create"])
     }
+
+    // Set up audio streaming check to prevent overlap
+    // AudioMixPlayer will check this before playing any audio
+    audioMixPlayer.isAssistantAudioStreamingCheck = { [weak self] in
+      guard let self = self else { return false }
+      return self.eventHandler.checkAssistantAudioStreaming()
+    }
   }
 
   deinit {
@@ -585,6 +592,8 @@ final class OpenAIWebRTCClient: NSObject {
 
       eventHandler.stopIdleMonitoring(reason: "connection_closed")
       eventHandler.resetConversationTracking()
+      eventHandler.resetAudioStreamingState()
+      eventHandler.resetFunctionCallState()
       stopInboundAudioStatsMonitoring()
       stopOutboundAudioStatsMonitoring()
       remoteAudioTrackId = nil

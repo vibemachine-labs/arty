@@ -15,6 +15,10 @@ final class AudioMixPlayer: NSObject {
   // Serial queue for thread-safe access to mutable state
   private let stateQueue = DispatchQueue(label: "com.vmwebrtc.audiomixplayer.state")
 
+  // Callback to check if assistant audio is currently streaming
+  // If true, audio playback will be blocked to prevent overlap
+  var isAssistantAudioStreamingCheck: (() -> Bool)?
+
   /// Plays an audio file while WebRTC session is active
   /// - Parameter filename: The audio file name (e.g., "audio.mp3" or "audio.wav")
   /// - Note: The file should be in the app bundle or a known location
@@ -78,6 +82,19 @@ final class AudioMixPlayer: NSObject {
 
   /// Internal implementation - must be called on stateQueue
   private func playAudioInternal(url: URL) {
+    // CRITICAL PROTECTION: Do not play audio if assistant is currently speaking
+    // This prevents audio overlap based on precise OpenAI Realtime API events
+    if let streamingCheck = isAssistantAudioStreamingCheck, streamingCheck() {
+      logger.log(
+        "[AudioMixPlayer] Blocked audio playback - assistant is speaking",
+        attributes: logAttributes(for: .info, metadata: [
+          "url": url.lastPathComponent,
+          "reason": "assistant_audio_streaming"
+        ])
+      )
+      return
+    }
+
     // Stop any existing playback (but preserve loop state)
     stopPlaybackInternal()
 

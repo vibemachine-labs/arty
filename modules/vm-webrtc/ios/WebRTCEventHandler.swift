@@ -183,11 +183,35 @@ final class WebRTCEventHandler {
   // Callback to send response.create when queue is processed
   var sendResponseCreateCallback: (() -> Bool)?
 
+  // MARK: - Assistant Audio Streaming State
+  // Track when assistant audio is actively streaming (more precise than response state)
+  // This provides extra protection against audio overlap based on lower-level OpenAI events:
+  // - output_audio_buffer.started (WebRTC mode): server begins streaming audio to client
+  // - response.audio.delta: model-generated audio chunks are arriving
+  private let audioStreamingQueue = DispatchQueue(label: "com.vibemachine.webrtc.audio-streaming")
+  private var assistantAudioStreaming: Bool = false
+
+  // MARK: - Function Call State Tracking
+  // Track streaming function call arguments per call_id
+  // Maps call_id -> accumulated arguments JSON string
+  private let functionCallQueue = DispatchQueue(label: "com.vibemachine.webrtc.function-calls")
+  private var streamingFunctionCallArguments: [String: String] = [:]
+  private var activeFunctionCallIds: Set<String> = []
+
   /// Check if a response is currently in progress.
   /// Returns true if response in progress, false otherwise.
   func checkResponseInProgress() -> Bool {
     return responseStateQueue.sync {
       return responseInProgress
+    }
+  }
+
+  /// Check if assistant audio is currently streaming.
+  /// This is a more precise indicator than response state, based on lower-level OpenAI events.
+  /// Returns true if audio is streaming, false otherwise.
+  func checkAssistantAudioStreaming() -> Bool {
+    return audioStreamingQueue.sync {
+      return assistantAudioStreaming
     }
   }
 
@@ -236,6 +260,37 @@ final class WebRTCEventHandler {
         "[ResponseStateMachine] Response state reset",
         attributes: logAttributes(for: .debug)
       )
+    }
+  }
+
+  /// Reset audio streaming state. Call when connection closes or session ends.
+  func resetAudioStreamingState() {
+    audioStreamingQueue.async {
+      self.assistantAudioStreaming = false
+      self.logger.log(
+        "[AudioStreamingState] Audio streaming state reset",
+        attributes: logAttributes(for: .debug)
+      )
+    }
+  }
+
+  /// Reset function call streaming state. Call when connection closes or session ends.
+  func resetFunctionCallState() {
+    functionCallQueue.async {
+      let hadPendingCalls = !self.activeFunctionCallIds.isEmpty
+      self.streamingFunctionCallArguments.removeAll()
+      self.activeFunctionCallIds.removeAll()
+      if hadPendingCalls {
+        self.logger.log(
+          "[FunctionCall] Cleared pending function call state",
+          attributes: logAttributes(for: .warn, metadata: ["reason": "connection_reset"])
+        )
+      } else {
+        self.logger.log(
+          "[FunctionCall] Function call state reset",
+          attributes: logAttributes(for: .debug)
+        )
+      }
     }
   }
 
@@ -297,8 +352,14 @@ final class WebRTCEventHandler {
       handleErrorEvent(event, context: context)
     case "response.created":
       handleResponseCreatedEvent(event, context: context)
+    case "response.function_call_arguments.delta":
+      handleFunctionCallArgumentsDeltaEvent(event, context: context)
     case "response.function_call_arguments.done":
-      handleToolCallEvent(event, context: context)
+      handleFunctionCallArgumentsDoneEvent(event, context: context)
+    case "response.output_item.added":
+      handleOutputItemAddedEvent(event, context: context)
+    case "response.output_item.done":
+      handleOutputItemDoneEvent(event, context: context)
     case "response.usage":
       handleTokenUsageEvent(event, context: context)
     case "response.done":
@@ -319,6 +380,14 @@ final class WebRTCEventHandler {
       handleConversationItemDeleted(event, context: context)
     case "conversation.item.input_audio_transcription.completed":
       handleInputAudioTranscriptionCompleted(event, context: context)
+    case "response.audio.delta":
+      handleAssistantAudioDeltaEvent(event, context: context)
+    case "response.audio.done":
+      handleAssistantAudioDoneEvent(event, context: context)
+    case "output_audio_buffer.started":
+      handleOutputAudioBufferStartedEvent(event, context: context)
+    case "output_audio_buffer.done":
+      handleOutputAudioBufferDoneEvent(event, context: context)
     default:
       logger.log(
         "[WebRTCEventHandler] Unhandled WebRTC event",
@@ -589,7 +658,47 @@ final class WebRTCEventHandler {
     lastActivityAt = nil
   }
 
-  private func handleToolCallEvent(_ event: [String: Any], context: ToolContext) {
+  // MARK: - Function Call Event Handlers
+  // These handlers track function call streaming and completion based on OpenAI Realtime API events
+
+  /// Handles response.function_call_arguments.delta - streaming function call arguments
+  /// Arguments arrive incrementally and are accumulated until .done event
+  private func handleFunctionCallArgumentsDeltaEvent(_ event: [String: Any], context: ToolContext) {
+    guard let callId = event["call_id"] as? String,
+          let delta = event["delta"] as? String else {
+      logger.log(
+        "[WebRTCEventHandler] function_call_arguments.delta event missing required fields",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
+      )
+      return
+    }
+
+    let itemId = event["item_id"] as? String
+    let outputIndex = event["output_index"] as? Int
+
+    functionCallQueue.async {
+      // Accumulate arguments for this call
+      let existingArgs = self.streamingFunctionCallArguments[callId] ?? ""
+      self.streamingFunctionCallArguments[callId] = existingArgs + delta
+      self.activeFunctionCallIds.insert(callId)
+
+      self.logger.log(
+        "[FunctionCall] Arguments streaming (delta)",
+        attributes: logAttributes(for: .debug, metadata: [
+          "callId": callId,
+          "itemId": itemId as Any,
+          "outputIndex": outputIndex as Any,
+          "deltaLength": delta.count,
+          "accumulatedLength": self.streamingFunctionCallArguments[callId]?.count ?? 0,
+          "deltaPreview": String(delta.prefix(100))
+        ])
+      )
+    }
+  }
+
+  /// Handles response.function_call_arguments.done - function call arguments complete
+  /// This triggers the actual tool execution
+  private func handleFunctionCallArgumentsDoneEvent(_ event: [String: Any], context: ToolContext) {
     guard let callId = event["call_id"] as? String,
           let toolName = event["name"] as? String,
           let argumentsJSON = event["arguments"] as? String else {
@@ -600,16 +709,36 @@ final class WebRTCEventHandler {
       return
     }
 
+    let itemId = event["item_id"] as? String
+    let outputIndex = event["output_index"] as? Int
+
+    // Check if we have accumulated streaming arguments for this call
+    var wasStreaming = false
+    var streamedLength = 0
+    functionCallQueue.sync {
+      if let accumulated = self.streamingFunctionCallArguments[callId] {
+        wasStreaming = true
+        streamedLength = accumulated.count
+        // Clean up streaming state now that arguments are done
+        self.streamingFunctionCallArguments.removeValue(forKey: callId)
+        self.activeFunctionCallIds.remove(callId)
+      }
+    }
+
     // Enhanced logging at tool call start with conversation state
     conversationQueue.async {
       self.logger.log(
         "🔨 [TOOL_DISPATCH_START] Tool call received and dispatching",
         attributes: logAttributes(for: .info, metadata: [
           "callId": callId,
+          "itemId": itemId as Any,
+          "outputIndex": outputIndex as Any,
           "toolName": toolName,
           "arguments_length": argumentsJSON.count,
           "arguments_preview": String(argumentsJSON.prefix(1000)),
-          "totalConversationItems": self.conversationItems.count,  // All conversation items (turns + non-turns like system messages, function calls, etc.)
+          "wasStreaming": wasStreaming,
+          "streamedChunksLength": streamedLength,
+          "totalConversationItems": self.conversationItems.count,
           "currentTurnCount": self.conversationTurnCount,
           "maxTurns": self.maxConversationTurns as Any,
           "dispatchTimestamp": ISO8601DateFormatter().string(from: Date())
@@ -618,12 +747,14 @@ final class WebRTCEventHandler {
     }
 
     logger.log(
-      "[WebRTCEventHandler] Tool call received",
+      "[FunctionCall] Arguments complete - executing tool",
       attributes: logAttributes(for: .info, metadata: [
         "callId": callId,
         "name": toolName,
         "arguments_length": argumentsJSON.count,
-        "arguments_preview": String(argumentsJSON.prefix(1000))
+        "arguments_preview": String(argumentsJSON.prefix(1000)),
+        "wasStreaming": wasStreaming,
+        "streamedChunksLength": streamedLength
       ])
     )
 
@@ -647,6 +778,116 @@ final class WebRTCEventHandler {
     context.audioMixPlayer?.startLoopingRandomBeeps(prefix: "artybeeps")
 
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
+  }
+
+  /// Handles response.output_item.added - new output item created during response
+  /// Output items can be messages, function calls, or other response content
+  private func handleOutputItemAddedEvent(_ event: [String: Any], context: ToolContext) {
+    guard let item = event["item"] as? [String: Any],
+          let itemId = item["id"] as? String,
+          let itemType = item["type"] as? String else {
+      logger.log(
+        "[WebRTCEventHandler] output_item.added event missing required fields",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
+      )
+      return
+    }
+
+    let responseId = event["response_id"] as? String
+    let outputIndex = event["output_index"] as? Int
+
+    logger.log(
+      "[OutputItem] Item added to response",
+      attributes: logAttributes(for: .debug, metadata: [
+        "itemId": itemId,
+        "itemType": itemType,
+        "responseId": responseId as Any,
+        "outputIndex": outputIndex as Any,
+        "status": item["status"] as Any
+      ])
+    )
+
+    // If it's a function call, log additional details
+    if itemType == "function_call" {
+      let callId = item["call_id"] as? String
+      let name = item["name"] as? String
+      logger.log(
+        "[OutputItem] Function call output item added",
+        attributes: logAttributes(for: .info, metadata: [
+          "itemId": itemId,
+          "callId": callId as Any,
+          "functionName": name as Any,
+          "responseId": responseId as Any,
+          "outputIndex": outputIndex as Any
+        ])
+      )
+    }
+  }
+
+  /// Handles response.output_item.done - output item completed
+  /// Signals that an output item (message, function call, etc.) has finished streaming
+  private func handleOutputItemDoneEvent(_ event: [String: Any], context: ToolContext) {
+    guard let item = event["item"] as? [String: Any],
+          let itemId = item["id"] as? String,
+          let itemType = item["type"] as? String else {
+      logger.log(
+        "[WebRTCEventHandler] output_item.done event missing required fields",
+        attributes: logAttributes(for: .warn, metadata: ["event": String(describing: event)])
+      )
+      return
+    }
+
+    let responseId = event["response_id"] as? String
+    let outputIndex = event["output_index"] as? Int
+
+    logger.log(
+      "[OutputItem] Item completed",
+      attributes: logAttributes(for: .debug, metadata: [
+        "itemId": itemId,
+        "itemType": itemType,
+        "responseId": responseId as Any,
+        "outputIndex": outputIndex as Any,
+        "status": item["status"] as Any
+      ])
+    )
+
+    // If it's a function call, log completion with full details
+    if itemType == "function_call" {
+      let callId = item["call_id"] as? String
+      let name = item["name"] as? String
+      let arguments = item["arguments"] as? String
+      let status = item["status"] as? String
+
+      logger.log(
+        "[OutputItem] Function call output item completed",
+        attributes: logAttributes(for: .info, metadata: [
+          "itemId": itemId,
+          "callId": callId as Any,
+          "functionName": name as Any,
+          "status": status as Any,
+          "argumentsLength": arguments?.count as Any,
+          "responseId": responseId as Any,
+          "outputIndex": outputIndex as Any
+        ])
+      )
+    }
+
+    // If it's a message, log message details
+    if itemType == "message" {
+      let role = item["role"] as? String
+      let status = item["status"] as? String
+
+      logger.log(
+        "[OutputItem] Message output item completed",
+        attributes: logAttributes(for: .info, metadata: [
+          "itemId": itemId,
+          "role": role as Any,
+          "status": status as Any,
+          "responseId": responseId as Any,
+          "outputIndex": outputIndex as Any
+        ])
+      )
+    }
   }
 
   private func handleTokenUsageEvent(_ event: [String: Any], context: ToolContext) {
@@ -858,6 +1099,77 @@ final class WebRTCEventHandler {
         "responseId": responseId as Any
       ])
     )
+  }
+
+  // MARK: - Assistant Audio Streaming Event Handlers
+  // These handlers provide precise tracking of when assistant audio is actively streaming
+  // Based on OpenAI Realtime API (WebRTC) lower-level events
+
+  /// Handles response.audio.delta event - model-generated audio chunks are arriving
+  /// This is the most reliable cross-platform indicator that audio is streaming
+  private func handleAssistantAudioDeltaEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      if !self.assistantAudioStreaming {
+        self.assistantAudioStreaming = true
+        self.logger.log(
+          "[AudioStreamingState] Assistant audio streaming started (audio.delta)",
+          attributes: logAttributes(for: .info, metadata: [
+            "eventType": "response.audio.delta",
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+        // Stop any playing audio immediately when we detect audio chunks
+        context.audioMixPlayer?.stop()
+      }
+    }
+  }
+
+  /// Handles response.audio.done event - audio streaming is complete
+  private func handleAssistantAudioDoneEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      self.assistantAudioStreaming = false
+      self.logger.log(
+        "[AudioStreamingState] Assistant audio streaming ended (audio.done)",
+        attributes: logAttributes(for: .info, metadata: [
+          "eventType": "response.audio.done",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+  }
+
+  /// Handles output_audio_buffer.started event (WebRTC-specific)
+  /// Server begins streaming audio to the client - the most precise indicator
+  private func handleOutputAudioBufferStartedEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      if !self.assistantAudioStreaming {
+        self.assistantAudioStreaming = true
+        self.logger.log(
+          "[AudioStreamingState] Assistant audio streaming started (buffer.started)",
+          attributes: logAttributes(for: .info, metadata: [
+            "eventType": "output_audio_buffer.started",
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+        // Stop any playing audio immediately when buffer streaming starts
+        context.audioMixPlayer?.stop()
+      }
+    }
+  }
+
+  /// Handles output_audio_buffer.done event (WebRTC-specific)
+  /// Audio buffer streaming is complete
+  private func handleOutputAudioBufferDoneEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      self.assistantAudioStreaming = false
+      self.logger.log(
+        "[AudioStreamingState] Assistant audio streaming ended (buffer.done)",
+        attributes: logAttributes(for: .info, metadata: [
+          "eventType": "output_audio_buffer.done",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
   }
 
   private func emitTokenUsage(usage: [String: Any], responseId: String?, context: ToolContext) {

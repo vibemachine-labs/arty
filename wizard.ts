@@ -99,7 +99,39 @@ async function startExpoServer(): Promise<number> {
     stdin: "inherit",
   });
 
+  // Set up signal handlers to forward signals to child process
+  let isShuttingDown = false;
+
+  const shutdownHandler = (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
+
+    console.log(`\n\n⚠️  Received ${signal}, shutting down Expo server gracefully...`);
+
+    // Kill the child process
+    expoProc.kill(signal);
+
+    // Give it 2 seconds to clean up, then force kill if needed
+    setTimeout(() => {
+      if (!expoProc.killed) {
+        console.log('\n⚠️  Process did not exit cleanly, force killing...');
+        expoProc.kill('SIGKILL');
+      }
+    }, 2000);
+  };
+
+  // Handle SIGINT (Ctrl+C) and SIGTERM
+  process.on('SIGINT', () => shutdownHandler('SIGINT'));
+  process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+
   const expoExitCode = await expoProc.exited;
+
+  // Clean up signal handlers
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
+
   return expoExitCode;
 }
 
@@ -160,7 +192,39 @@ async function executeCommand(command: string): Promise<number> {
     stdin: "inherit",
   });
 
+  // Set up signal handlers to forward signals to child process
+  let isShuttingDown = false;
+
+  const shutdownHandler = (signal: NodeJS.Signals) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
+
+    console.log(`\n\n⚠️  Received ${signal}, shutting down command gracefully...`);
+
+    // Kill the child process
+    proc.kill(signal);
+
+    // Give it 2 seconds to clean up, then force kill if needed
+    setTimeout(() => {
+      if (!proc.killed) {
+        console.log('\n⚠️  Process did not exit cleanly, force killing...');
+        proc.kill('SIGKILL');
+      }
+    }, 2000);
+  };
+
+  // Handle SIGINT (Ctrl+C) and SIGTERM
+  process.on('SIGINT', () => shutdownHandler('SIGINT'));
+  process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+
   const exitCode = await proc.exited;
+
+  // Clean up signal handlers
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
+
   return exitCode;
 }
 

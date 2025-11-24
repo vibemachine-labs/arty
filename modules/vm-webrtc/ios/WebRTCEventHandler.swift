@@ -183,11 +183,28 @@ final class WebRTCEventHandler {
   // Callback to send response.create when queue is processed
   var sendResponseCreateCallback: (() -> Bool)?
 
+  // MARK: - Assistant Audio Streaming State
+  // Track when assistant audio is actively streaming (more precise than response state)
+  // This provides extra protection against audio overlap based on lower-level OpenAI events:
+  // - output_audio_buffer.started (WebRTC mode): server begins streaming audio to client
+  // - response.audio.delta: model-generated audio chunks are arriving
+  private let audioStreamingQueue = DispatchQueue(label: "com.vibemachine.webrtc.audio-streaming")
+  private var assistantAudioStreaming: Bool = false
+
   /// Check if a response is currently in progress.
   /// Returns true if response in progress, false otherwise.
   func checkResponseInProgress() -> Bool {
     return responseStateQueue.sync {
       return responseInProgress
+    }
+  }
+
+  /// Check if assistant audio is currently streaming.
+  /// This is a more precise indicator than response state, based on lower-level OpenAI events.
+  /// Returns true if audio is streaming, false otherwise.
+  func checkAssistantAudioStreaming() -> Bool {
+    return audioStreamingQueue.sync {
+      return assistantAudioStreaming
     }
   }
 
@@ -234,6 +251,17 @@ final class WebRTCEventHandler {
       self.queuedResponseCreate = nil
       self.logger.log(
         "[ResponseStateMachine] Response state reset",
+        attributes: logAttributes(for: .debug)
+      )
+    }
+  }
+
+  /// Reset audio streaming state. Call when connection closes or session ends.
+  func resetAudioStreamingState() {
+    audioStreamingQueue.async {
+      self.assistantAudioStreaming = false
+      self.logger.log(
+        "[AudioStreamingState] Audio streaming state reset",
         attributes: logAttributes(for: .debug)
       )
     }
@@ -319,6 +347,14 @@ final class WebRTCEventHandler {
       handleConversationItemDeleted(event, context: context)
     case "conversation.item.input_audio_transcription.completed":
       handleInputAudioTranscriptionCompleted(event, context: context)
+    case "response.audio.delta":
+      handleAssistantAudioDeltaEvent(event, context: context)
+    case "response.audio.done":
+      handleAssistantAudioDoneEvent(event, context: context)
+    case "output_audio_buffer.started":
+      handleOutputAudioBufferStartedEvent(event, context: context)
+    case "output_audio_buffer.done":
+      handleOutputAudioBufferDoneEvent(event, context: context)
     default:
       logger.log(
         "[WebRTCEventHandler] Unhandled WebRTC event",
@@ -858,6 +894,77 @@ final class WebRTCEventHandler {
         "responseId": responseId as Any
       ])
     )
+  }
+
+  // MARK: - Assistant Audio Streaming Event Handlers
+  // These handlers provide precise tracking of when assistant audio is actively streaming
+  // Based on OpenAI Realtime API (WebRTC) lower-level events
+
+  /// Handles response.audio.delta event - model-generated audio chunks are arriving
+  /// This is the most reliable cross-platform indicator that audio is streaming
+  private func handleAssistantAudioDeltaEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      if !self.assistantAudioStreaming {
+        self.assistantAudioStreaming = true
+        self.logger.log(
+          "[AudioStreamingState] Assistant audio streaming started (audio.delta)",
+          attributes: logAttributes(for: .info, metadata: [
+            "eventType": "response.audio.delta",
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+        // Stop any playing audio immediately when we detect audio chunks
+        context.audioMixPlayer?.stop()
+      }
+    }
+  }
+
+  /// Handles response.audio.done event - audio streaming is complete
+  private func handleAssistantAudioDoneEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      self.assistantAudioStreaming = false
+      self.logger.log(
+        "[AudioStreamingState] Assistant audio streaming ended (audio.done)",
+        attributes: logAttributes(for: .info, metadata: [
+          "eventType": "response.audio.done",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
+  }
+
+  /// Handles output_audio_buffer.started event (WebRTC-specific)
+  /// Server begins streaming audio to the client - the most precise indicator
+  private func handleOutputAudioBufferStartedEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      if !self.assistantAudioStreaming {
+        self.assistantAudioStreaming = true
+        self.logger.log(
+          "[AudioStreamingState] Assistant audio streaming started (buffer.started)",
+          attributes: logAttributes(for: .info, metadata: [
+            "eventType": "output_audio_buffer.started",
+            "timestamp": ISO8601DateFormatter().string(from: Date())
+          ])
+        )
+        // Stop any playing audio immediately when buffer streaming starts
+        context.audioMixPlayer?.stop()
+      }
+    }
+  }
+
+  /// Handles output_audio_buffer.done event (WebRTC-specific)
+  /// Audio buffer streaming is complete
+  private func handleOutputAudioBufferDoneEvent(_ event: [String: Any], context: ToolContext) {
+    audioStreamingQueue.async {
+      self.assistantAudioStreaming = false
+      self.logger.log(
+        "[AudioStreamingState] Assistant audio streaming ended (buffer.done)",
+        attributes: logAttributes(for: .info, metadata: [
+          "eventType": "output_audio_buffer.done",
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
+    }
   }
 
   private func emitTokenUsage(usage: [String: Any], responseId: String?, context: ToolContext) {

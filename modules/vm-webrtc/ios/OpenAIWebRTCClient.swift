@@ -593,6 +593,7 @@ final class OpenAIWebRTCClient: NSObject {
       eventHandler.stopIdleMonitoring(reason: "connection_closed")
       eventHandler.resetConversationTracking()
       eventHandler.resetAudioStreamingState()
+      eventHandler.resetFunctionCallState()
       stopInboundAudioStatsMonitoring()
       stopOutboundAudioStatsMonitoring()
       remoteAudioTrackId = nil

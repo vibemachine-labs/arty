@@ -10,7 +10,7 @@ final class AudioMixPlayer: NSObject {
 
   // For looping random beeps
   private var isLoopingBeeps: Bool = false
-  private var beepFilenames: [String] = []
+  private var beepURLs: [URL] = []
 
   /// Plays an audio file while WebRTC session is active
   /// - Parameter filename: The audio file name (e.g., "audio.mp3" or "audio.wav")
@@ -113,29 +113,58 @@ final class AudioMixPlayer: NSObject {
     }
   }
 
-  /// Starts playing random beeps from the provided filenames until stop() is called
-  /// - Parameter filenames: Array of audio filenames to randomly choose from
-  func startLoopingRandomBeeps(filenames: [String]) {
-    guard !filenames.isEmpty else {
+  /// Starts playing random beeps matching a prefix until stop() is called
+  /// Searches the app bundle for all audio files starting with the given prefix
+  /// - Parameter prefix: Filename prefix to match (e.g., "ArtyBeeps")
+  func startLoopingRandomBeeps(prefix: String) {
+    // Find all audio files in bundle matching the prefix
+    let audioExtensions = ["mp3", "wav", "m4a", "aac"]
+    var foundURLs: [URL] = []
+
+    // Search main bundle
+    for ext in audioExtensions {
+      if let urls = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) {
+        let matching = urls.filter { $0.lastPathComponent.hasPrefix(prefix) }
+        foundURLs.append(contentsOf: matching)
+      }
+    }
+
+    // Also search module bundle
+    let moduleBundle = Bundle(for: AudioMixPlayer.self)
+    for ext in audioExtensions {
+      if let urls = moduleBundle.urls(forResourcesWithExtension: ext, subdirectory: nil) {
+        let matching = urls.filter { $0.lastPathComponent.hasPrefix(prefix) }
+        foundURLs.append(contentsOf: matching)
+      }
+    }
+
+    // Remove duplicates
+    let uniqueURLs = Array(Set(foundURLs))
+
+    guard !uniqueURLs.isEmpty else {
       logger.log(
-        "[AudioMixPlayer] Cannot start looping - no filenames provided",
-        attributes: logAttributes(for: .warn)
+        "[AudioMixPlayer] Cannot start looping - no files found with prefix",
+        attributes: logAttributes(for: .warn, metadata: [
+          "prefix": prefix
+        ])
       )
       return
     }
 
     isLoopingBeeps = true
-    beepFilenames = filenames
+    beepURLs = uniqueURLs
 
     // Play the first random beep
-    let randomFilename = filenames.randomElement()!
-    playAudio(filename: randomFilename)
+    let randomURL = uniqueURLs.randomElement()!
+    playAudio(url: randomURL)
 
     logger.log(
       "[AudioMixPlayer] Started looping random beeps",
       attributes: logAttributes(for: .info, metadata: [
-        "filenameCount": filenames.count,
-        "firstBeep": randomFilename
+        "prefix": prefix,
+        "fileCount": uniqueURLs.count,
+        "files": uniqueURLs.map { $0.lastPathComponent },
+        "firstBeep": randomURL.lastPathComponent
       ])
     )
   }
@@ -143,7 +172,7 @@ final class AudioMixPlayer: NSObject {
   /// Stops current audio playback
   func stop() {
     isLoopingBeeps = false
-    beepFilenames = []
+    beepURLs = []
 
     if let player = audioPlayer, player.isPlaying {
       player.stop()
@@ -184,9 +213,9 @@ extension AudioMixPlayer: AVAudioPlayerDelegate {
     )
 
     // If looping, play the next random beep
-    if isLoopingBeeps && !beepFilenames.isEmpty {
-      let nextFilename = beepFilenames.randomElement()!
-      playAudio(filename: nextFilename)
+    if isLoopingBeeps && !beepURLs.isEmpty {
+      let nextURL = beepURLs.randomElement()!
+      playAudio(url: nextURL)
     }
   }
 

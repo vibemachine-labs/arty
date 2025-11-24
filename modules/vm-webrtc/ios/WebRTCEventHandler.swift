@@ -644,7 +644,7 @@ final class WebRTCEventHandler {
 
     // Play audio feedback when tool is called (mixing with WebRTC audio)
     // Loop random beeps until we get a response
-    context.audioMixPlayer?.startLoopingRandomBeeps(prefix: "ArtyBeeps")
+    context.audioMixPlayer?.startLoopingRandomBeeps(prefix: "artybeeps")
 
     respondToToolCall(callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
   }

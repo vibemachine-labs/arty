@@ -133,16 +133,49 @@ final class AudioMixPlayer: NSObject {
     let audioExtensions = ["mp3", "wav", "m4a", "aac"]
     var foundURLs: [URL] = []
 
+    // Log bundle paths for debugging
+    logger.log(
+      "[AudioMixPlayer] Searching for audio files",
+      attributes: logAttributes(for: .debug, metadata: [
+        "prefix": prefix,
+        "mainBundlePath": Bundle.main.bundlePath,
+        "mainBundleResourcePath": Bundle.main.resourcePath ?? "nil"
+      ])
+    )
+
     // Search main bundle
     for ext in audioExtensions {
       if let urls = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) {
+        logger.log(
+          "[AudioMixPlayer] Found files in main bundle",
+          attributes: logAttributes(for: .debug, metadata: [
+            "extension": ext,
+            "count": urls.count,
+            "files": urls.map { $0.lastPathComponent }
+          ])
+        )
         let matching = urls.filter { $0.lastPathComponent.hasPrefix(prefix) }
         foundURLs.append(contentsOf: matching)
+      } else {
+        logger.log(
+          "[AudioMixPlayer] No files found in main bundle",
+          attributes: logAttributes(for: .debug, metadata: [
+            "extension": ext
+          ])
+        )
       }
     }
 
     // Also search module bundle
     let moduleBundle = Bundle(for: AudioMixPlayer.self)
+    logger.log(
+      "[AudioMixPlayer] Module bundle info",
+      attributes: logAttributes(for: .debug, metadata: [
+        "moduleBundlePath": moduleBundle.bundlePath,
+        "isSameAsMain": moduleBundle == Bundle.main
+      ])
+    )
+
     for ext in audioExtensions {
       if let urls = moduleBundle.urls(forResourcesWithExtension: ext, subdirectory: nil) {
         let matching = urls.filter { $0.lastPathComponent.hasPrefix(prefix) }
@@ -156,8 +189,10 @@ final class AudioMixPlayer: NSObject {
     guard !uniqueURLs.isEmpty else {
       logger.log(
         "[AudioMixPlayer] Cannot start looping - no files found with prefix",
-        attributes: logAttributes(for: .warn, metadata: [
-          "prefix": prefix
+        attributes: logAttributes(for: .error, metadata: [
+          "prefix": prefix,
+          "searchedExtensions": audioExtensions,
+          "mainBundlePath": Bundle.main.bundlePath
         ])
       )
       return

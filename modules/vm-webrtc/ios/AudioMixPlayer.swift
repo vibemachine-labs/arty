@@ -12,6 +12,9 @@ final class AudioMixPlayer: NSObject {
   private var isLoopingBeeps: Bool = false
   private var beepURLs: [URL] = []
 
+  // Serial queue for thread-safe access to mutable state
+  private let stateQueue = DispatchQueue(label: "com.vmwebrtc.audiomixplayer.state")
+
   /// Plays an audio file while WebRTC session is active
   /// - Parameter filename: The audio file name (e.g., "audio.mp3" or "audio.wav")
   /// - Note: The file should be in the app bundle or a known location
@@ -61,13 +64,22 @@ final class AudioMixPlayer: NSObject {
       return
     }
 
-    playAudio(url: url)
+    stateQueue.async {
+      self.playAudioInternal(url: url)
+    }
   }
 
   /// Plays audio from a URL
   func playAudio(url: URL) {
+    stateQueue.async {
+      self.playAudioInternal(url: url)
+    }
+  }
+
+  /// Internal implementation - must be called on stateQueue
+  private func playAudioInternal(url: URL) {
     // Stop any existing playback
-    stop()
+    stopInternal()
 
     do {
       // Configure for mixing with WebRTC
@@ -151,26 +163,35 @@ final class AudioMixPlayer: NSObject {
       return
     }
 
-    isLoopingBeeps = true
-    beepURLs = uniqueURLs
+    stateQueue.async {
+      self.isLoopingBeeps = true
+      self.beepURLs = uniqueURLs
 
-    // Play the first random beep
-    let randomURL = uniqueURLs.randomElement()!
-    playAudio(url: randomURL)
+      // Play the first random beep
+      let randomURL = uniqueURLs.randomElement()!
+      self.playAudioInternal(url: randomURL)
 
-    logger.log(
-      "[AudioMixPlayer] Started looping random beeps",
-      attributes: logAttributes(for: .info, metadata: [
-        "prefix": prefix,
-        "fileCount": uniqueURLs.count,
-        "files": uniqueURLs.map { $0.lastPathComponent },
-        "firstBeep": randomURL.lastPathComponent
-      ])
-    )
+      self.logger.log(
+        "[AudioMixPlayer] Started looping random beeps",
+        attributes: logAttributes(for: .info, metadata: [
+          "prefix": prefix,
+          "fileCount": uniqueURLs.count,
+          "files": uniqueURLs.map { $0.lastPathComponent },
+          "firstBeep": randomURL.lastPathComponent
+        ])
+      )
+    }
   }
 
   /// Stops current audio playback
   func stop() {
+    stateQueue.async {
+      self.stopInternal()
+    }
+  }
+
+  /// Internal implementation - must be called on stateQueue
+  private func stopInternal() {
     isLoopingBeeps = false
     beepURLs = []
 
@@ -186,7 +207,9 @@ final class AudioMixPlayer: NSObject {
 
   /// Returns true if audio is currently playing
   var isPlaying: Bool {
-    return audioPlayer?.isPlaying ?? false
+    return stateQueue.sync {
+      audioPlayer?.isPlaying ?? false
+    }
   }
 
   private func describeCategoryOptions(_ options: AVAudioSession.CategoryOptions) -> String {
@@ -204,18 +227,20 @@ final class AudioMixPlayer: NSObject {
 
 extension AudioMixPlayer: AVAudioPlayerDelegate {
   func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-    logger.log(
-      "[AudioMixPlayer] Playback finished",
-      attributes: logAttributes(for: .debug, metadata: [
-        "success": flag,
-        "isLoopingBeeps": isLoopingBeeps
-      ])
-    )
+    stateQueue.async {
+      self.logger.log(
+        "[AudioMixPlayer] Playback finished",
+        attributes: logAttributes(for: .debug, metadata: [
+          "success": flag,
+          "isLoopingBeeps": self.isLoopingBeeps
+        ])
+      )
 
-    // If looping, play the next random beep
-    if isLoopingBeeps && !beepURLs.isEmpty {
-      let nextURL = beepURLs.randomElement()!
-      playAudio(url: nextURL)
+      // If looping, play the next random beep
+      if self.isLoopingBeeps && !self.beepURLs.isEmpty {
+        let nextURL = self.beepURLs.randomElement()!
+        self.playAudioInternal(url: nextURL)
+      }
     }
   }
 

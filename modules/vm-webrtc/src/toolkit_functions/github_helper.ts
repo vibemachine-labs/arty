@@ -186,18 +186,26 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
   }
 
   if (popularMatches.length > 1) {
-    const repoList = popularMatches.map(item =>
+    // Only show top 5 matches to avoid overwhelming the user
+    const topMatches = popularMatches.slice(0, 5);
+    const repoList = topMatches.map(item =>
       `"${item.full_name}" (${item.stargazers_count} stars)`
     ).join(', ');
+
+    const totalMatchCount = popularMatches.length;
+    const additionalCount = totalMatchCount - topMatches.length;
+    const additionalText = additionalCount > 0 ? ` (and ${additionalCount} more)` : '';
+
     log.warn('[GithubHelper] Multiple popular repositories found', {}, {
       searchTerm,
-      count: popularMatches.length,
+      count: totalMatchCount,
+      shownCount: topMatches.length,
       repos: popularMatches.map(item => ({
         fullName: item.full_name,
         stars: item.stargazers_count,
       })),
     });
-    throw new Error(`Found ${popularMatches.length} popular repositories named "${searchTerm}": ${repoList}. Please specify which one you mean by using the full owner/repo format (e.g., "${popularMatches[0].full_name}").`);
+    throw new Error(`Found ${totalMatchCount} popular repositories named "${searchTerm}": ${repoList}${additionalText}. Please specify which one you mean by using the full owner/repo format (e.g., "${topMatches[0].full_name}").`);
   }
 
   // Single popular match found - use it

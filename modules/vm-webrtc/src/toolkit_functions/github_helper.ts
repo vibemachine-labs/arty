@@ -57,12 +57,12 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
   (globalThis as any).octokit = oct;
   (globalThis as any).authenticated_github_user = authUser;
 
-  // If identifier contains slash => treat as org/repo
+  // If identifier contains slash => treat as org/repo and verify it exists
   if (repoIdentifier.includes('/')) {
     const [rawOwner, rawRepo] = repoIdentifier.split('/');
     const owner = rawOwner.trim();
     const repo = rawRepo.trim();
-    log.info('[GithubHelper] Trying direct verify of repo', {}, { owner, repo });
+    log.info('[GithubHelper] Direct lookup - verifying repo exists', {}, { owner, repo });
 
     try {
       const { data } = await oct.rest.repos.get({
@@ -72,38 +72,104 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
       // Use the actual case-sensitive names from the returned data
       const actualOwner = data.owner?.login || owner;
       const actualRepo = data.name || repo;
+      const stars = data.stargazers_count || 0;
 
-      log.info('[GithubHelper] Repo exists', {}, { actualOwner, actualRepo });
+      log.info('[GithubHelper] Direct lookup successful', {}, {
+        actualOwner,
+        actualRepo,
+        stars,
+        fullName: `${actualOwner}/${actualRepo}`,
+      });
       return `${actualOwner}/${actualRepo}`;
     } catch (e) {
+      log.error('[GithubHelper] Direct lookup failed', {}, {
+        owner,
+        repo,
+        error: e instanceof Error ? e.message : String(e),
+      });
       throw new Error(`Repository not found or not accessible: ${owner}/${repo}`);
     }
-  } else {
-    // Treat as search term
-    const searchTerm = repoIdentifier.trim();
-    log.info('[GithubHelper] Searching repositories for term', {}, { searchTerm });
-
-    // Use search API
-    const { data } = await oct.request('GET /search/repositories', {
-      q: `${searchTerm} in:name`,
-      sort: 'stars',
-      order: 'desc',
-      per_page: 5,
-    });
-
-    if (!data.items || data.items.length === 0) {
-      throw new Error(`No repository found matching: ${searchTerm}`);
-    }
-
-    // Pick top result
-    const top = data.items[0];
-    const owner = top.owner?.login;
-    const repo = top.name;
-    if (!owner) {
-      throw new Error(`Unexpected search result format for term: ${searchTerm}`);
-    }
-
-    log.info('[GithubHelper] Top match', {}, { owner, repo });
-    return `${owner}/${repo}`;
   }
+
+  // No slash => search GitHub for the repo name
+  const searchTerm = repoIdentifier.trim();
+  log.info('[GithubHelper] Starting GitHub search', {}, {
+    searchTerm,
+    authenticatedUser: authUser || 'unauthenticated',
+  });
+
+  // Use search API - sort by stars descending to get most popular
+  const { data } = await oct.request('GET /search/repositories', {
+    q: `${searchTerm} in:name`,
+    sort: 'stars',
+    order: 'desc',
+    per_page: 5,
+  });
+
+  log.info('[GithubHelper] Search completed', {}, {
+    searchTerm,
+    totalCount: data.total_count,
+    resultCount: data.items?.length || 0,
+  });
+
+  if (!data.items || data.items.length === 0) {
+    log.warn('[GithubHelper] No search results found', {}, { searchTerm });
+    throw new Error(`No repository found matching: ${searchTerm}`);
+  }
+
+  // Log all search results for visibility
+  const searchResults = data.items.map((item, index) => ({
+    rank: index + 1,
+    owner: item.owner?.login,
+    repo: item.name,
+    fullName: item.full_name,
+    stars: item.stargazers_count,
+    description: item.description?.substring(0, 100) || 'No description',
+  }));
+
+  log.info('[GithubHelper] Search results (sorted by stars)', {}, {
+    searchTerm,
+    results: searchResults,
+  });
+
+  // If authenticated, check if any result matches the authenticated user
+  if (authUser) {
+    const userMatch = data.items.find(
+      (item) => item.owner?.login?.toLowerCase() === authUser.toLowerCase()
+    );
+    if (userMatch) {
+      const owner = userMatch.owner?.login;
+      const repo = userMatch.name;
+      log.info('[GithubHelper] Found match for authenticated user - prioritizing', {}, {
+        authUser,
+        owner,
+        repo,
+        stars: userMatch.stargazers_count,
+        fullName: `${owner}/${repo}`,
+      });
+      return `${owner}/${repo}`;
+    } else {
+      log.info('[GithubHelper] No match for authenticated user in results', {}, {
+        authUser,
+        searchTerm,
+      });
+    }
+  }
+
+  // No authenticated user match (or not authenticated) => return top result by stars
+  const top = data.items[0];
+  const owner = top.owner?.login;
+  const repo = top.name;
+  if (!owner) {
+    throw new Error(`Unexpected search result format for term: ${searchTerm}`);
+  }
+
+  log.info('[GithubHelper] Returning top result by stars', {}, {
+    owner,
+    repo,
+    stars: top.stargazers_count,
+    fullName: `${owner}/${repo}`,
+    isAuthenticatedUser: authUser ? owner.toLowerCase() === authUser.toLowerCase() : false,
+  });
+  return `${owner}/${repo}`;
 }

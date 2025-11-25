@@ -46,8 +46,10 @@ async function validateRepoName(params: any): Promise<any> {
       originalRepoName,
       error: error instanceof Error ? error.message : String(error),
     });
-    // Re-throw the error to propagate to caller
-    throw error;
+    // Return user-friendly error message
+    throw new Error(
+      `No repository could be located for "${originalRepoName}". Can you specify the org name or double check the spelling?`
+    );
   }
 }
 

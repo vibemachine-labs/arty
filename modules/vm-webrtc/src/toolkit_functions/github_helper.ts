@@ -57,7 +57,7 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
   (globalThis as any).octokit = oct;
   (globalThis as any).authenticated_github_user = authUser;
 
-  // If identifier contains slash => treat as org/repo and verify it exists
+  // If identifier contains slash => try direct lookup first, fall back to search
   if (repoIdentifier.includes('/')) {
     const [rawOwner, rawRepo] = repoIdentifier.split('/');
     const owner = rawOwner.trim();
@@ -82,17 +82,19 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
       });
       return `${actualOwner}/${actualRepo}`;
     } catch (e) {
-      log.error('[GithubHelper] Direct lookup failed', {}, {
+      log.warn('[GithubHelper] Direct lookup failed - falling back to search', {}, {
         owner,
         repo,
         error: e instanceof Error ? e.message : String(e),
       });
-      throw new Error(`Repository not found or not accessible: ${owner}/${repo}`);
+      // Fall through to search using just the repo name
     }
   }
 
-  // No slash => search GitHub for the repo name
-  const searchTerm = repoIdentifier.trim();
+  // Extract just the repo name for search (remove owner if present)
+  const searchTerm = repoIdentifier.includes('/')
+    ? repoIdentifier.split('/')[1].trim()
+    : repoIdentifier.trim();
   log.info('[GithubHelper] Starting GitHub search', {}, {
     searchTerm,
     authenticatedUser: authUser || 'unauthenticated',
@@ -132,10 +134,40 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     results: searchResults,
   });
 
+  // Check for exact repo name match with specific owner (if we had owner/repo originally)
+  if (repoIdentifier.includes('/')) {
+    const [originalOwner] = repoIdentifier.split('/');
+    const ownerLower = originalOwner.trim().toLowerCase();
+    const exactMatch = data.items.find(
+      (item) =>
+        item.owner?.login?.toLowerCase() === ownerLower &&
+        item.name.toLowerCase() === searchTerm.toLowerCase()
+    );
+    if (exactMatch) {
+      const owner = exactMatch.owner?.login;
+      const repo = exactMatch.name;
+      log.info('[GithubHelper] Found exact match for owner/repo - prioritizing', {}, {
+        originalOwner,
+        owner,
+        repo,
+        stars: exactMatch.stargazers_count,
+        fullName: `${owner}/${repo}`,
+      });
+      return `${owner}/${repo}`;
+    } else {
+      log.info('[GithubHelper] No exact match for owner/repo in search results', {}, {
+        originalOwner,
+        searchTerm,
+      });
+    }
+  }
+
   // If authenticated, check if any result matches the authenticated user
   if (authUser) {
     const userMatch = data.items.find(
-      (item) => item.owner?.login?.toLowerCase() === authUser.toLowerCase()
+      (item) =>
+        item.owner?.login?.toLowerCase() === authUser.toLowerCase() &&
+        item.name.toLowerCase() === searchTerm.toLowerCase()
     );
     if (userMatch) {
       const owner = userMatch.owner?.login;

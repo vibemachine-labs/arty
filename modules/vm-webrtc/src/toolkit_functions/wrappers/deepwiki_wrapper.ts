@@ -3,6 +3,53 @@
 import type { ToolkitFunction, ToolkitResult } from '../toolkit_functions';
 import type { ToolSessionContext } from '../types';
 import type { ToolkitFunctionWrapper } from './ToolkitFunctionWrapper';
+import { lookupGithubRepo } from '../github_helper';
+
+/**
+ * Validate and resolve a repository name parameter.
+ *
+ * @param params - The tool parameters object
+ * @returns Updated params with validated repoName
+ * @throws Error if repoName is missing or cannot be validated
+ */
+async function validateRepoName(params: any): Promise<any> {
+  // Check if repoName parameter exists
+  if (!params.repoName) {
+    throw new Error('Missing required parameter: repoName');
+  }
+
+  const { log } = await import('../../../../../lib/logger');
+  const originalRepoName = params.repoName;
+
+  log.info('[DeepWikiWrapper] Validating repository name', {}, {
+    originalRepoName,
+  });
+
+  try {
+    // Lookup and validate the repo using GitHub helper
+    const validatedRepoName = await lookupGithubRepo({
+      repoIdentifier: originalRepoName,
+    });
+
+    log.info('[DeepWikiWrapper] Repository name validated', {}, {
+      originalRepoName,
+      validatedRepoName,
+    });
+
+    // Return updated params with validated repo name
+    return {
+      ...params,
+      repoName: validatedRepoName,
+    };
+  } catch (error) {
+    log.error('[DeepWikiWrapper] Repository validation failed', {}, {
+      originalRepoName,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Re-throw the error to propagate to caller
+    throw error;
+  }
+}
 
 /**
  * DeepWiki wrapper - logs all tool calls for debugging and future enhancements.
@@ -31,8 +78,11 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
       });
 
       try {
-        // Execute the original function
-        const result = await originalFunction(params, context_params, toolSessionContext);
+        // Validate and resolve repository name
+        const validatedParams = await validateRepoName(params);
+
+        // Execute the original function with validated params
+        const result = await originalFunction(validatedParams, context_params, toolSessionContext);
 
         // Log successful execution
         log.info('[DeepWikiWrapper] Tool execution successful', {}, {

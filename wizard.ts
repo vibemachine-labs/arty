@@ -123,14 +123,17 @@ async function startExpoServer(): Promise<number> {
   };
 
   // Handle SIGINT (Ctrl+C) and SIGTERM
-  process.on('SIGINT', () => shutdownHandler('SIGINT'));
-  process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+  const sigintHandler = () => shutdownHandler('SIGINT');
+  const sigtermHandler = () => shutdownHandler('SIGTERM');
+
+  process.on('SIGINT', sigintHandler);
+  process.on('SIGTERM', sigtermHandler);
 
   const expoExitCode = await expoProc.exited;
 
   // Clean up signal handlers
-  process.removeAllListeners('SIGINT');
-  process.removeAllListeners('SIGTERM');
+  process.off('SIGINT', sigintHandler);
+  process.off('SIGTERM', sigtermHandler);
 
   return expoExitCode;
 }
@@ -216,14 +219,17 @@ async function executeCommand(command: string): Promise<number> {
   };
 
   // Handle SIGINT (Ctrl+C) and SIGTERM
-  process.on('SIGINT', () => shutdownHandler('SIGINT'));
-  process.on('SIGTERM', () => shutdownHandler('SIGTERM'));
+  const sigintHandler = () => shutdownHandler('SIGINT');
+  const sigtermHandler = () => shutdownHandler('SIGTERM');
+
+  process.on('SIGINT', sigintHandler);
+  process.on('SIGTERM', sigtermHandler);
 
   const exitCode = await proc.exited;
 
   // Clean up signal handlers
-  process.removeAllListeners('SIGINT');
-  process.removeAllListeners('SIGTERM');
+  process.off('SIGINT', sigintHandler);
+  process.off('SIGTERM', sigtermHandler);
 
   return exitCode;
 }

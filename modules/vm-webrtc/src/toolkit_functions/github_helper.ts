@@ -126,7 +126,7 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     q: `${searchTerm} in:name`,
     sort: 'stars',
     order: 'desc',
-    per_page: 5,
+    per_page: 20, // Fetch more to allow filtering
   });
 
   log.info('[GithubHelper] Search completed', {}, {
@@ -137,92 +137,105 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
 
   if (!data.items || data.items.length === 0) {
     log.warn('[GithubHelper] No search results found', {}, { searchTerm });
-    throw new Error(`No repository found matching: ${searchTerm}`);
+    throw new Error(`No repositories found matching "${searchTerm}". Please check the spelling or try a different search term.`);
   }
 
-  // Log all search results for visibility
-  const searchResults = data.items.map((item, index) => ({
-    rank: index + 1,
-    owner: item.owner?.login,
-    repo: item.name,
-    fullName: item.full_name,
-    stars: item.stargazers_count,
-    description: item.description?.substring(0, 100) || 'No description',
-  }));
+  // Filter for exact name matches only
+  const exactMatches = data.items.filter(
+    (item) => item.name.toLowerCase() === searchTerm.toLowerCase()
+  );
 
-  log.info('[GithubHelper] Search results (sorted by stars)', {}, {
+  log.info('[GithubHelper] Filtered for exact name matches', {}, {
     searchTerm,
-    results: searchResults,
+    originalCount: data.items.length,
+    exactMatchCount: exactMatches.length,
   });
 
-  // Check for exact repo name match with specific owner (if we had owner/repo originally)
+  if (exactMatches.length === 0) {
+    log.warn('[GithubHelper] No exact name matches found', {}, {
+      searchTerm,
+      availableRepos: data.items.slice(0, 5).map(item => item.full_name),
+    });
+    throw new Error(`No repositories found with exact name "${searchTerm}". Found similar repositories but none match exactly. Please specify the full owner/repo format (e.g., "owner/${searchTerm}") or check the spelling.`);
+  }
+
+  // Filter out repos with less than X stars
+  const MIN_STARS = 5;
+  const popularMatches = exactMatches.filter(
+    (item) => (item.stargazers_count || 0) >= MIN_STARS
+  );
+
+  log.info('[GithubHelper] Filtered for popularity threshold', {}, {
+    searchTerm,
+    minStars: MIN_STARS,
+    beforeFilterCount: exactMatches.length,
+    afterFilterCount: popularMatches.length,
+  });
+
+  if (popularMatches.length === 0) {
+    const lowStarRepos = exactMatches.map(item => ({
+      fullName: item.full_name,
+      stars: item.stargazers_count || 0,
+    }));
+    log.warn('[GithubHelper] No repositories above star threshold', {}, {
+      searchTerm,
+      minStars: MIN_STARS,
+      lowStarRepos,
+    });
+    throw new Error(`Found ${exactMatches.length} repositor${exactMatches.length === 1 ? 'y' : 'ies'} named "${searchTerm}" but ${exactMatches.length === 1 ? 'it has' : 'they have'} fewer than ${MIN_STARS} stars. Please specify the full owner/repo format (e.g., "${exactMatches[0].full_name}") to access ${exactMatches.length === 1 ? 'this repository' : 'one of these repositories'}.`);
+  }
+
+  if (popularMatches.length > 1) {
+    const repoList = popularMatches.map(item =>
+      `"${item.full_name}" (${item.stargazers_count} stars)`
+    ).join(', ');
+    log.warn('[GithubHelper] Multiple popular repositories found', {}, {
+      searchTerm,
+      count: popularMatches.length,
+      repos: popularMatches.map(item => ({
+        fullName: item.full_name,
+        stars: item.stargazers_count,
+      })),
+    });
+    throw new Error(`Found ${popularMatches.length} popular repositories named "${searchTerm}": ${repoList}. Please specify which one you mean by using the full owner/repo format (e.g., "${popularMatches[0].full_name}").`);
+  }
+
+  // Single popular match found - use it
+  const matchedRepo = popularMatches[0];
+  const owner = matchedRepo.owner?.login;
+  const repo = matchedRepo.name;
+
+  if (!owner) {
+    throw new Error(`Unexpected search result format for repository "${searchTerm}". The repository data is incomplete.`);
+  }
+
+  // Check if we had owner/repo originally and if this matches
   if (repoIdentifier.includes('/')) {
     const [originalOwner] = repoIdentifier.split('/');
     const ownerLower = originalOwner.trim().toLowerCase();
-    const exactMatch = data.items.find(
-      (item) =>
-        item.owner?.login?.toLowerCase() === ownerLower &&
-        item.name.toLowerCase() === searchTerm.toLowerCase()
-    );
-    if (exactMatch) {
-      const owner = exactMatch.owner?.login;
-      const repo = exactMatch.name;
-      log.info('[GithubHelper] Found exact match for owner/repo - prioritizing', {}, {
-        originalOwner,
-        owner,
-        repo,
-        stars: exactMatch.stargazers_count,
-        fullName: `${owner}/${repo}`,
-      });
-      return `${owner}/${repo}`;
-    } else {
-      log.info('[GithubHelper] No exact match for owner/repo in search results', {}, {
-        originalOwner,
-        searchTerm,
-      });
-    }
+    const isExactOwnerMatch = owner.toLowerCase() === ownerLower;
+
+    log.info('[GithubHelper] Found repository from owner/repo search', {}, {
+      originalOwner,
+      matchedOwner: owner,
+      repo,
+      isExactOwnerMatch,
+      stars: matchedRepo.stargazers_count,
+      fullName: `${owner}/${repo}`,
+    });
+  } else {
+    // Check if authenticated user owns this repo
+    const isAuthenticatedUserRepo = authUser ? owner.toLowerCase() === authUser.toLowerCase() : false;
+
+    log.info('[GithubHelper] Found repository from name-only search', {}, {
+      owner,
+      repo,
+      stars: matchedRepo.stargazers_count,
+      fullName: `${owner}/${repo}`,
+      isAuthenticatedUserRepo,
+      authenticatedUser: authUser || 'none',
+    });
   }
 
-  // If authenticated, check if any result matches the authenticated user
-  if (authUser) {
-    const userMatch = data.items.find(
-      (item) =>
-        item.owner?.login?.toLowerCase() === authUser.toLowerCase() &&
-        item.name.toLowerCase() === searchTerm.toLowerCase()
-    );
-    if (userMatch) {
-      const owner = userMatch.owner?.login;
-      const repo = userMatch.name;
-      log.info('[GithubHelper] Found match for authenticated user - prioritizing', {}, {
-        authUser,
-        owner,
-        repo,
-        stars: userMatch.stargazers_count,
-        fullName: `${owner}/${repo}`,
-      });
-      return `${owner}/${repo}`;
-    } else {
-      log.info('[GithubHelper] No match for authenticated user in results', {}, {
-        authUser,
-        searchTerm,
-      });
-    }
-  }
-
-  // No authenticated user match (or not authenticated) => return top result by stars
-  const top = data.items[0];
-  const owner = top.owner?.login;
-  const repo = top.name;
-  if (!owner) {
-    throw new Error(`Unexpected search result format for term: ${searchTerm}`);
-  }
-
-  log.info('[GithubHelper] Returning top result by stars', {}, {
-    owner,
-    repo,
-    stars: top.stargazers_count,
-    fullName: `${owner}/${repo}`,
-    isAuthenticatedUser: authUser ? owner.toLowerCase() === authUser.toLowerCase() : false,
-  });
   return `${owner}/${repo}`;
 }

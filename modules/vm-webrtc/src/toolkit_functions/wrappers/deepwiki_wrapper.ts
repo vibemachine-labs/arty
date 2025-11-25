@@ -42,13 +42,14 @@ async function validateRepoName(params: any): Promise<any> {
       repoName: validatedRepoName,
     };
   } catch (error) {
-    log.error('[DeepWikiWrapper] Repository validation failed', {}, {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log.debug('[DeepWikiWrapper] Could not uniquely identify repository', {}, {
       originalRepoName,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     });
-    // Return user-friendly error message
+    // Pass through the detailed error message from lookupGithubRepo
     throw new Error(
-      `No repository could be located for "${originalRepoName}". Can you specify the org name or double check the spelling?`
+      `Could not find unique repository for "${originalRepoName}". ${errorMessage}`
     );
   }
 }

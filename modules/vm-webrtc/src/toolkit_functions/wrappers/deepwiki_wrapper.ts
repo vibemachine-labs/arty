@@ -79,10 +79,29 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
         sessionContextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
       });
 
+      // Validate and resolve repository name
+      let validatedParams: any;
       try {
-        // Validate and resolve repository name
-        const validatedParams = await validateRepoName(params);
+        validatedParams = await validateRepoName(params);
+      } catch (error) {
+        // Log validation error
+        log.warn('[DeepWikiWrapper] Invalid params for tool, skipping tool call', {}, {
+          groupName,
+          toolName,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        }, error instanceof Error ? error : new Error(String(error)));
 
+        // Return a ToolkitResult with the error message
+        const repoName = params.repoName || 'unknown';
+        const errorMessage = error instanceof Error ? error.message : `Could not locate repository for "${repoName}". Can you specify the org name or double check the spelling?`;
+
+        return {
+          result: errorMessage,
+          updatedToolSessionContext: {},
+        };
+      }
+
+      try {
         // Execute the original function with validated params
         const result = await originalFunction(validatedParams, context_params, toolSessionContext);
 

@@ -35,9 +35,28 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
   let oct: Octokit;
   let authUser: string | null = null;
 
+  // Create custom logger for Octokit that forwards all logs at debug level
+  const octokitLogger = {
+    debug: (message: string, ...args: any[]) => {
+      log.debug('[Octokit]', {}, { message, args });
+    },
+    info: (message: string, ...args: any[]) => {
+      log.debug('[Octokit]', {}, { message, args });
+    },
+    warn: (message: string, ...args: any[]) => {
+      log.debug('[Octokit]', {}, { message, args });
+    },
+    error: (message: string, ...args: any[]) => {
+      log.debug('[Octokit]', {}, { message, args });
+    },
+  };
+
   if (token) {
     log.info('[GithubHelper] Using authenticated Octokit instance', {});
-    oct = new Octokit({ auth: token });
+    oct = new Octokit({
+      auth: token,
+      log: octokitLogger,
+    });
     try {
       const { data: udata } = await oct.rest.users.getAuthenticated();
       authUser = udata.login;
@@ -50,7 +69,9 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     }
   } else {
     log.info('[GithubHelper] No token found - using unauthenticated Octokit instance (public-only)', {});
-    oct = new Octokit(); // no auth
+    oct = new Octokit({
+      log: octokitLogger,
+    }); // no auth
   }
 
   // Expose globally for compatibility with other tools

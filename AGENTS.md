@@ -4,6 +4,7 @@
 - Always use Apple Human Interface Guidelines (HIG) and known UI / UX best practices, as you are an iOS swift superstar developer
 - When logging, default to logging full values and not substrings.  Later we can prune as needed, but right now there is an observability crisis.
 - Certain swift objects like AVAudioPlayerDelegate should have serialized access when called from multiple threads. Consider protecting shared state with a serial DispatchQueue or ensuring all method calls dispatch to the main queue.
+- Prefer convention over configuration, this keeps things light, de-coupled, and avoids needless boilerplate.
 
 Always use expo libraries, for example:
 

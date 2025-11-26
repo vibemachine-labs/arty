@@ -133,6 +133,13 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     searchTerm,
     totalCount: data.total_count,
     resultCount: data.items?.length || 0,
+    allResults: data.items?.map(item => ({
+      fullName: item.full_name,
+      name: item.name,
+      owner: item.owner?.login,
+      stars: item.stargazers_count,
+      description: item.description?.substring(0, 100),
+    })) || [],
   });
 
   if (!data.items || data.items.length === 0) {
@@ -145,10 +152,25 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     (item) => item.name.toLowerCase() === searchTerm.toLowerCase()
   );
 
+  const filteredOut = data.items.filter(
+    (item) => item.name.toLowerCase() !== searchTerm.toLowerCase()
+  );
+
   log.info('[GithubHelper] Filtered for exact name matches', {}, {
     searchTerm,
     originalCount: data.items.length,
     exactMatchCount: exactMatches.length,
+    filteredOutCount: filteredOut.length,
+    exactMatches: exactMatches.map(item => ({
+      fullName: item.full_name,
+      stars: item.stargazers_count,
+    })),
+    filteredOut: filteredOut.map(item => ({
+      fullName: item.full_name,
+      name: item.name,
+      stars: item.stargazers_count,
+      reason: 'name_mismatch',
+    })),
   });
 
   if (exactMatches.length === 0) {
@@ -165,11 +187,25 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     (item) => (item.stargazers_count || 0) >= MIN_STARS
   );
 
+  const belowThreshold = exactMatches.filter(
+    (item) => (item.stargazers_count || 0) < MIN_STARS
+  );
+
   log.info('[GithubHelper] Filtered for popularity threshold', {}, {
     searchTerm,
     minStars: MIN_STARS,
     beforeFilterCount: exactMatches.length,
     afterFilterCount: popularMatches.length,
+    belowThresholdCount: belowThreshold.length,
+    popularMatches: popularMatches.map(item => ({
+      fullName: item.full_name,
+      stars: item.stargazers_count,
+    })),
+    belowThreshold: belowThreshold.map(item => ({
+      fullName: item.full_name,
+      stars: item.stargazers_count,
+      reason: `below_${MIN_STARS}_stars`,
+    })),
   });
 
   if (popularMatches.length === 0) {
@@ -224,24 +260,30 @@ export async function lookupGithubRepo(params: GithubRepoLookupParams): Promise<
     const isExactOwnerMatch = owner.toLowerCase() === ownerLower;
 
     log.info('[GithubHelper] Found repository from owner/repo search', {}, {
+      originalInput: repoIdentifier,
       originalOwner,
       matchedOwner: owner,
       repo,
       isExactOwnerMatch,
       stars: matchedRepo.stargazers_count,
       fullName: `${owner}/${repo}`,
+      finalResult: `${owner}/${repo}`,
+      searchPath: 'direct_lookup_failed -> search_fallback -> exact_match_filter -> star_threshold_filter -> single_match',
     });
   } else {
     // Check if authenticated user owns this repo
     const isAuthenticatedUserRepo = authUser ? owner.toLowerCase() === authUser.toLowerCase() : false;
 
     log.info('[GithubHelper] Found repository from name-only search', {}, {
+      originalInput: repoIdentifier,
       owner,
       repo,
       stars: matchedRepo.stargazers_count,
       fullName: `${owner}/${repo}`,
+      finalResult: `${owner}/${repo}`,
       isAuthenticatedUserRepo,
       authenticatedUser: authUser || 'none',
+      searchPath: 'name_only_search -> exact_match_filter -> star_threshold_filter -> single_match',
     });
   }
 

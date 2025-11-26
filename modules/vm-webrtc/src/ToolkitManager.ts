@@ -17,6 +17,7 @@ import { exportToolDefinition } from './VmWebrtc.types';
 import { MCPClient, type RequestOptions } from './mcp_client/client';
 import type { Tool } from './mcp_client/types';
 import { registerMcpTool, type ToolSessionContext } from './toolkit_functions/toolkit_functions';
+import { getWrapperForGroup } from './toolkit_functions/wrappers/ToolkitFunctionWrapper';
 
 // Event emitted when connector settings change
 export const CONNECTOR_SETTINGS_CHANGED_EVENT = 'connector_settings_changed';
@@ -516,14 +517,20 @@ function setDynamicToolkitDefinitionsForServer(serverUrl: string, definitions: T
 }
 
 function registerMcpToolsForServer(
-  toolkitGroup: string,
+  toolkit: RemoteMcpToolkitDefinition,
   serverUrl: string,
   tools: RemoteToolkitCacheEntry['tools'],
   client: MCPClient,
   discoveryOptions: RequestOptions
 ): void {
+  const toolkitGroup = toolkit.group;
+
+  // Get wrapper if configured
+  const wrapper = toolkit.function_call_wrapper ? getWrapperForGroup(toolkitGroup) : null;
+
   for (const tool of tools) {
-    registerMcpTool(toolkitGroup, tool.name, async (args: any, context_params?: any, toolSessionContext?: ToolSessionContext) => {
+    // Create the base tool function
+    const baseToolFunction = async (args: any, context_params?: any, toolSessionContext?: ToolSessionContext) => {
       log.info('[ToolkitManager] Executing cached MCP tool', {}, {
         group: toolkitGroup,
         toolName: tool.name,
@@ -541,7 +548,22 @@ function registerMcpToolsForServer(
         result: JSON.stringify(result, null, 2),
         updatedToolSessionContext: {},
       };
-    });
+    };
+
+    // Apply wrapper if configured
+    const finalToolFunction = wrapper
+      ? wrapper.wrap(toolkitGroup, tool.name, baseToolFunction)
+      : baseToolFunction;
+
+    registerMcpTool(toolkitGroup, tool.name, finalToolFunction);
+
+    if (wrapper) {
+      log.info('[ToolkitManager] Registered MCP tool with wrapper', {}, {
+        group: toolkitGroup,
+        toolName: tool.name,
+        wrapperName: toolkit.function_call_wrapper,
+      });
+    }
   }
 }
 
@@ -580,7 +602,7 @@ async function fetchAndCacheRemoteToolkitDefinitions(
   }
 
   const cachedTools = await convertToolsForCache(result.tools, toolkit.group);
-  registerMcpToolsForServer(toolkit.group, serverUrl, cachedTools, client, discoveryOptions);
+  registerMcpToolsForServer(toolkit, serverUrl, cachedTools, client, discoveryOptions);
   setDynamicToolkitDefinitionsForServer(
     serverUrl,
     cachedTools.map((entry) => entry.definition)
@@ -674,7 +696,7 @@ async function loadRemoteToolkitDefinitions(toolkit: RemoteMcpToolkitDefinition)
     });
 
     // Register tools and update cache
-    registerMcpToolsForServer(toolkit.group, serverUrl, cached.tools, client, REMOTE_TOOLKIT_DISCOVERY_OPTIONS);
+    registerMcpToolsForServer(toolkit, serverUrl, cached.tools, client, REMOTE_TOOLKIT_DISCOVERY_OPTIONS);
     const definitions = cached.tools.map((entry) => entry.definition);
     setDynamicToolkitDefinitionsForServer(serverUrl, definitions);
 

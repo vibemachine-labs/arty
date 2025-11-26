@@ -238,12 +238,15 @@ final class WebRTCEventHandler {
   /// Mark that a response.create was sent. Called after successfully sending response.create.
   func didSendResponseCreate(trigger: String) {
     responseStateQueue.async {
+      let wasInProgress = self.responseInProgress
       self.responseInProgress = true
       self.logger.log(
         "[ResponseStateMachine] Response create sent, marking response in progress",
         attributes: logAttributes(for: .debug, metadata: [
           "trigger": trigger,
-          "responseInProgress": true,
+          "wasInProgress": wasInProgress,
+          "nowInProgress": true,
+          "threadId": Thread.current.description,
           "timestamp": ISO8601DateFormatter().string(from: Date())
         ])
       )

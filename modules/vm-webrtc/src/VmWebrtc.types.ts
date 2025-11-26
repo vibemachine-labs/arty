@@ -94,6 +94,7 @@ export type RemoteMcpToolkitDefinition = ToolkitDefinitionBase & {
     protocol: 'sse' | 'stdio' | 'websocket';
   };
   extra?: Record<string, string>;
+  function_call_wrapper?: string;
 };
 
 export type ToolkitDefinition = FunctionToolkitDefinition | RemoteMcpToolkitDefinition;

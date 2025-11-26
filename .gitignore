@@ -46,4 +46,5 @@ docs/design_doc_obsidian.md
 
 .env*
 
-hackernews-arty-demo.mp4*.ipa
+hackernews-arty-demo.mp4
+*.ipa

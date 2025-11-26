@@ -720,7 +720,22 @@ extension OpenAIWebRTCClient: ToolCallResponder {
 
       // Check state machine before sending response.create
       let trigger = "tool_call_result:\(callId)"
-      if eventHandler.checkResponseInProgress() {
+      let responseInProgress = eventHandler.checkResponseInProgress()
+      let audioStreaming = eventHandler.checkAssistantAudioStreaming()
+
+      self.logger.log(
+        "🔍 [RESPONSE_CREATE_CHECK] Checking state before sending response.create",
+        attributes: logAttributes(for: .debug, metadata: [
+          "trigger": "tool_call_result",
+          "callId": callId,
+          "responseInProgress": responseInProgress,
+          "audioStreaming": audioStreaming,
+          "timestamp": ISO8601DateFormatter().string(from: Date()),
+          "threadId": Thread.current.description
+        ])
+      )
+
+      if responseInProgress {
 
         // Continue conversation
         self.logger.log(
@@ -728,6 +743,8 @@ extension OpenAIWebRTCClient: ToolCallResponder {
           attributes: logAttributes(for: .warn, metadata: [
             "trigger": "tool_call_result",
             "callId": callId,
+            "responseInProgress": responseInProgress,
+            "audioStreaming": audioStreaming,
             "timestamp": ISO8601DateFormatter().string(from: Date())
           ])
         )
@@ -742,7 +759,10 @@ extension OpenAIWebRTCClient: ToolCallResponder {
           attributes: logAttributes(for: .info, metadata: [
             "trigger": "tool_call_result",
             "callId": callId,
-            "timestamp": ISO8601DateFormatter().string(from: Date())
+            "responseInProgress": responseInProgress,
+            "audioStreaming": audioStreaming,
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "threadId": Thread.current.description
           ])
         )
 
@@ -835,21 +855,48 @@ extension OpenAIWebRTCClient: ToolCallResponder {
       return  // Don't send response.create if error output failed
     }
 
+    // Check state machine before sending response.create
+    let trigger = "tool_call_error:\(callId)"
+    let responseInProgress = eventHandler.checkResponseInProgress()
+    let audioStreaming = eventHandler.checkAssistantAudioStreaming()
+
     self.logger.log(
-      "📤 [RESPONSE_CREATE] Triggering response.create after tool error",
-      attributes: logAttributes(for: .info, metadata: [
+      "🔍 [RESPONSE_CREATE_CHECK] Checking state before sending response.create after tool error",
+      attributes: logAttributes(for: .debug, metadata: [
         "trigger": "tool_call_error",
         "callId": callId,
-        "timestamp": ISO8601DateFormatter().string(from: Date())
+        "responseInProgress": responseInProgress,
+        "audioStreaming": audioStreaming,
+        "timestamp": ISO8601DateFormatter().string(from: Date()),
+        "threadId": Thread.current.description
       ])
     )
 
-    // Check state machine before sending response.create
-    let trigger = "tool_call_error:\(callId)"
-    if eventHandler.checkResponseInProgress() {
+    if responseInProgress {
+      self.logger.log(
+        "⚠️ Already have a response in progress; queuing response.create after tool error",
+        attributes: logAttributes(for: .warn, metadata: [
+          "trigger": "tool_call_error",
+          "callId": callId,
+          "responseInProgress": responseInProgress,
+          "audioStreaming": audioStreaming,
+          "timestamp": ISO8601DateFormatter().string(from: Date())
+        ])
+      )
       // Queue for later - will be sent when current response completes
       eventHandler.queueResponseCreate(trigger: trigger)
     } else {
+      self.logger.log(
+        "📤 [RESPONSE_CREATE] Sending response.create after tool error",
+        attributes: logAttributes(for: .info, metadata: [
+          "trigger": "tool_call_error",
+          "callId": callId,
+          "responseInProgress": responseInProgress,
+          "audioStreaming": audioStreaming,
+          "timestamp": ISO8601DateFormatter().string(from: Date()),
+          "threadId": Thread.current.description
+        ])
+      )
       let responseCreateSent = sendEvent(["type": "response.create"])
       if responseCreateSent {
         eventHandler.didSendResponseCreate(trigger: trigger)

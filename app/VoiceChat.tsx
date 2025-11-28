@@ -18,6 +18,7 @@ import { log } from "../lib/logger";
 import { composeMainPrompt } from "../lib/mainPrompt";
 import { TokenUsageTracker } from "../lib/tokenUsageTracker";
 import { loadTranscriptionPreference } from "../lib/transcriptionPreference";
+import type { TransportType } from "../lib/transportTypePreference";
 import type { VadMode } from "../lib/vadPreference";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
@@ -50,6 +51,7 @@ type VoiceChatProps = {
   retentionRatio: number;
   maxConversationTurns: number;
   selectedLanguage: string;
+  selectedTransportType: TransportType;
 };
 
 export function VoiceChat({
@@ -62,6 +64,7 @@ export function VoiceChat({
   retentionRatio,
   maxConversationTurns,
   selectedLanguage,
+  selectedTransportType,
 }: VoiceChatProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -312,6 +315,16 @@ export function VoiceChat({
       return;
     }
 
+    if (selectedTransportType === "websocket") {
+      log.warn("Attempted to start voice session with WebSocket transport", {});
+      Alert.alert(
+        "WebSocket Not Supported",
+        "WebSocket transport is not yet supported. Please change to WebRTC in Advanced Configuration > Transport Type.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     try {
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
@@ -436,6 +449,7 @@ export function VoiceChat({
     maxConversationTurns,
     retentionRatio,
     selectedLanguage,
+    selectedTransportType,
   ]);
 
   const handleStopVoiceSession = useCallback(async () => {

@@ -359,14 +359,6 @@ export default function Index() {
 
   const handleSelectTransportType = useCallback(
     (type: TransportType) => {
-      if (type === "websocket") {
-        Alert.alert(
-          "WebSocket Not Supported",
-          "WebSocket transport is not yet supported. Please use WebRTC for now.",
-          [{ text: "OK" }]
-        );
-        return;
-      }
       setSelectedTransportType(type);
       void saveTransportTypePreference(type);
       log.info("Transport type preference updated and saved", {}, { transportType: type });
@@ -493,6 +485,7 @@ export default function Index() {
         retentionRatio={retentionRatio}
         maxConversationTurns={maxConversationTurns}
         selectedLanguage={selectedLanguage}
+        selectedTransportType={selectedTransportType}
       />
     ) : (
       <TextChat mainPromptAddition={mainPromptAddition} />

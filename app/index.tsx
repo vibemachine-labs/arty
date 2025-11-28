@@ -16,6 +16,7 @@ import { ConfigureLanguage } from "../components/settings/ConfigureLanguage";
 import { ConfigureMainPromptModal } from "../components/settings/ConfigureMainPromptModal";
 import { ConfigureToolsSheet } from "../components/settings/ConfigureToolsSheet";
 import { ConfigureTranscription } from "../components/settings/ConfigureTranscription";
+import { ConfigureTransportType } from "../components/settings/ConfigureTransportType";
 import { ConfigureVad } from "../components/settings/ConfigureVad";
 import { ConfigureVoice } from "../components/settings/ConfigureVoice";
 import { ConnectorsConfig } from "../components/settings/ConnectorsConfig";
@@ -34,6 +35,7 @@ import { log } from "../lib/logger";
 import { loadMainPromptAddition } from "../lib/mainPrompt";
 import { getApiKey } from "../lib/secure-storage";
 import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
+import { DEFAULT_TRANSPORT_TYPE, loadTransportTypePreference, saveTransportTypePreference, type TransportType } from "../lib/transportTypePreference";
 import { DEFAULT_VAD_MODE, loadVadPreference, saveVadPreference, type VadMode } from "../lib/vadPreference";
 import { DEFAULT_VOICE, loadVoicePreference, saveVoicePreference } from "../lib/voicePreference";
 import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
@@ -98,6 +100,8 @@ export default function Index() {
   const [maxConversationTurns, setMaxConversationTurns] = useState<number>(DEFAULT_MAX_CONVERSATION_TURNS);
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(DEFAULT_TRANSCRIPTION_ENABLED);
   const [transcriptionSheetVisible, setTranscriptionSheetVisible] = useState(false);
+  const [selectedTransportType, setSelectedTransportType] = useState<TransportType>(DEFAULT_TRANSPORT_TYPE);
+  const [transportTypeSheetVisible, setTransportTypeSheetVisible] = useState(false);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
@@ -229,6 +233,25 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const hydrateTransportTypePreference = async () => {
+      const stored = await loadTransportTypePreference();
+      if (!isMounted) {
+        return;
+      }
+      setSelectedTransportType(stored);
+      log.info("Transport type preference loaded from storage", {}, { transportType: stored });
+    };
+
+    hydrateTransportTypePreference();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     let isActive = true;
 
     const evaluateOnboardingStatus = async () => {
@@ -330,6 +353,24 @@ export default function Index() {
       setTranscriptionEnabled(enabled);
       void saveTranscriptionPreference(enabled);
       log.info("Transcription preference updated and saved", {}, { transcriptionEnabled: enabled });
+    },
+    []
+  );
+
+  const handleSelectTransportType = useCallback(
+    (type: TransportType) => {
+      if (type === "websocket") {
+        Alert.alert(
+          "WebSocket Not Supported",
+          "WebSocket transport is not yet supported. Please use WebRTC for now.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+      setSelectedTransportType(type);
+      void saveTransportTypePreference(type);
+      log.info("Transport type preference updated and saved", {}, { transportType: type });
+      setTransportTypeSheetVisible(false);
     },
     []
   );
@@ -506,6 +547,7 @@ export default function Index() {
         onConfigureVad={() => setVadSheetVisible(true)}
         onConfigureContextWindow={() => setContextWindowVisible(true)}
         onConfigureTranscription={() => setTranscriptionSheetVisible(true)}
+        onConfigureTransportType={() => setTransportTypeSheetVisible(true)}
         onConfigureTools={() => setConfigureToolsVisible(true)}
       />
       <ConfigureContextWindow
@@ -521,6 +563,12 @@ export default function Index() {
         transcriptionEnabled={transcriptionEnabled}
         onToggleTranscription={handleToggleTranscription}
         onClose={() => setTranscriptionSheetVisible(false)}
+      />
+      <ConfigureTransportType
+        visible={transportTypeSheetVisible}
+        selectedType={selectedTransportType}
+        onSelectType={handleSelectTransportType}
+        onClose={() => setTransportTypeSheetVisible(false)}
       />
       <ConfigureToolsSheet
         visible={configureToolsVisible}

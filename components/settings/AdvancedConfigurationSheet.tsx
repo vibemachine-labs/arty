@@ -13,10 +13,11 @@ interface AdvancedConfigurationSheetProps {
   onConfigureVad: () => void;
   onConfigureContextWindow: () => void;
   onConfigureTranscription: () => void;
+  onConfigureTransportType: () => void;
 }
 
 type AdvancedAction = {
-  id: "mainPrompt" | "tools" | "vad" | "contextWindow" | "transcription" | "clearSecrets";
+  id: "mainPrompt" | "tools" | "vad" | "contextWindow" | "transcription" | "transportType" | "clearSecrets";
   title: string;
   subtitle: string;
   onPress?: () => void;
@@ -32,6 +33,7 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
   onConfigureVad,
   onConfigureContextWindow,
   onConfigureTranscription,
+  onConfigureTransportType,
 }) => {
   const handleClearStoredSecrets = useCallback(() => {
     Alert.alert(
@@ -107,6 +109,15 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
       onPress: () => {
         onClose();
         onConfigureTranscription();
+      },
+    },
+    {
+      id: "transportType",
+      title: "Transport Type",
+      subtitle: "Choose between WebRTC or WebSocket for voice sessions.",
+      onPress: () => {
+        onClose();
+        onConfigureTransportType();
       },
     },
     {

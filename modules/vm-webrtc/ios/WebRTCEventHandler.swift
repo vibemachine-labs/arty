@@ -687,7 +687,7 @@ final class WebRTCEventHandler {
 
       self.logger.log(
         "[FunctionCall] Arguments streaming (delta)",
-        attributes: logAttributes(for: .debug, metadata: [
+        attributes: logAttributes(for: .trace, metadata: [
           "callId": callId,
           "itemId": itemId as Any,
           "outputIndex": outputIndex as Any,
@@ -1938,6 +1938,9 @@ final class WebRTCEventHandler {
 
     Try to preserve any navigation related metadata that could be related to tool
     state, for example which page of results the tool is currently on.
+
+    For the daily_papers tool in particular, the papers_seen=[] list is crucial
+    to preserve since it has the paper ids that will be used in future tool calls.
 
     Conversation:
     \(transcript)

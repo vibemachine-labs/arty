@@ -128,8 +128,14 @@ final class OpenAIWebRTCClient: NSObject {
   var toolDefinitions: [[String: Any]] = []
   private var apiKey: String?
   lazy var eventHandler = WebRTCEventHandler()
-  lazy var inboundAudioMonitor: InboundAudioStatsMonitor = {
-    InboundAudioStatsMonitor(
+
+  // Track whether lazy monitors have been initialized to prevent deinit issues
+  private var _inboundAudioMonitor: InboundAudioStatsMonitor?
+  var inboundAudioMonitor: InboundAudioStatsMonitor {
+    if let existing = _inboundAudioMonitor {
+      return existing
+    }
+    let monitor = InboundAudioStatsMonitor(
       peerConnectionProvider: { [weak self] in
         self?.peerConnection
       },
@@ -147,9 +153,16 @@ final class OpenAIWebRTCClient: NSObject {
         self?.eventHandler.recordRemoteSpeakingActivity()
       }
     )
-  }()
-  lazy var outboundAudioMonitor: OutboundAudioStatsMonitor = {
-    OutboundAudioStatsMonitor(
+    _inboundAudioMonitor = monitor
+    return monitor
+  }
+
+  private var _outboundAudioMonitor: OutboundAudioStatsMonitor?
+  var outboundAudioMonitor: OutboundAudioStatsMonitor {
+    if let existing = _outboundAudioMonitor {
+      return existing
+    }
+    let monitor = OutboundAudioStatsMonitor(
       peerConnectionProvider: { [weak self] in
         self?.peerConnection
       },
@@ -170,7 +183,10 @@ final class OpenAIWebRTCClient: NSObject {
         }
       }
     )
-  }()
+    _outboundAudioMonitor = monitor
+    return monitor
+  }
+
   private var moduleEventEmitter: ((String, [String: Any]) -> Void)?
 
   func makeEventHandlerContext() -> WebRTCEventHandler.ToolContext {
@@ -371,8 +387,9 @@ final class OpenAIWebRTCClient: NSObject {
   deinit {
     connectionTimeoutTask?.cancel()
     iceGatheringTimeoutTask?.cancel()
-    inboundAudioMonitor.stop()
-    outboundAudioMonitor.stop()
+    // Only stop monitors if they were initialized (prevents lazy init during deinit)
+    _inboundAudioMonitor?.stop()
+    _outboundAudioMonitor?.stop()
     peerConnection?.close()
     if isMonitoringAudioRoute {
       RTCAudioSession.sharedInstance().remove(self)

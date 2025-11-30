@@ -4,7 +4,7 @@ const RETENTION_RATIO_KEY = "@vibemachine/retentionRatio";
 const MAX_CONVERSATION_TURNS_KEY = "@vibemachine/maxConversationTurns";
 
 export const DEFAULT_RETENTION_RATIO = 0.8;
-export const DEFAULT_MAX_CONVERSATION_TURNS = 7;
+export const DEFAULT_MAX_CONVERSATION_TURNS = 10;
 
 export interface ContextWindowPreferences {
   retentionRatio: number;

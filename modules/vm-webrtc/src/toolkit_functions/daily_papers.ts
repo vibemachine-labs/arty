@@ -1,12 +1,12 @@
 import { log } from '../../../../lib/logger';
 import type { ToolSessionContext, ToolkitResult } from './types';
-import { fetchWithSsrfProtection } from './web';
 
 // MARK: - Types
 
 // Constants for default values
 const DEFAULT_PAGE = 0;
 const DEFAULT_LIMIT = 5;
+const COMMENTS_FETCH_TIMEOUT_MS = 45000; // 45 seconds
 
 export interface ShowDailyPapersParams {
   page?: number;
@@ -43,6 +43,39 @@ export interface SearchDailyPapersParams {
 
 export interface GetCommentsForPaperParams {
   arxiv_id: string;
+}
+
+export interface PaperInfo {
+  paper_id: string;
+  paper_title: string;
+}
+
+export interface HFCommentAuthor {
+  name?: string;
+  fullname?: string;
+}
+
+export interface HFCommentData {
+  latest?: {
+    raw?: string;
+    html?: string;
+  };
+  numEdits?: number;
+}
+
+export interface HFComment {
+  id: string;
+  author?: HFCommentAuthor;
+  createdAt?: string;
+  data?: HFCommentData;
+}
+
+export interface ProcessedComment {
+  id: string;
+  author: string;
+  createdAt: string;
+  text: string;
+  numEdits: number;
 }
 
 // MARK: - Helper Functions
@@ -102,122 +135,6 @@ function postprocessDailyPapersResponse(data: any): any {
   });
 }
 
-/**
- * Strips HTML tags from a string in a simple, memory-efficient way.
- */
-function stripHtmlTags(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/**
- * Fetches web content and extracts Hugging Face paper comments in a memory-efficient streaming fashion.
- * Scans HTML chunks for comment blocks between <!-- HTML_TAG_START --> and <!-- HTML_TAG_END --> markers.
- */
-async function getWebContentExtractComments(url: string): Promise<string[]> {
-  log.info('[daily_papers] getWebContentExtractComments starting', {}, { url });
-
-  // Use shared SSRF-protected fetch helper with 15 second timeout
-  const response = await fetchWithSsrfProtection(url, 15000);
-
-  if (!response.body) {
-    throw new Error('Response body not available');
-  }
-
-  // Stream and scan for comment blocks
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const comments: string[] = [];
-  
-  let buffer = '';
-  const START_MARKER = '<!-- HTML_TAG_START -->';
-  const END_MARKER = '<!-- HTML_TAG_END -->';
-  const MAX_BUFFER_SIZE = 500000; // 500KB sliding window
-  const MAX_TOTAL_BYTES = 10000000; // 10MB hard limit
-  let totalBytesRead = 0;
-  let commentCount = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) {
-        log.info('[daily_papers] Stream complete', {}, { 
-          totalBytesRead, 
-          commentsFound: commentCount 
-        });
-        break;
-      }
-
-      totalBytesRead += value.length;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Hard limit check
-      if (totalBytesRead >= MAX_TOTAL_BYTES) {
-        log.warn('[daily_papers] Reached max total bytes limit', {}, { totalBytesRead });
-        break;
-      }
-
-      // Scan buffer for complete comment blocks
-      let startIdx = 0;
-      while (true) {
-        const commentStart = buffer.indexOf(START_MARKER, startIdx);
-        if (commentStart === -1) break;
-
-        const commentEnd = buffer.indexOf(END_MARKER, commentStart + START_MARKER.length);
-        if (commentEnd === -1) {
-          // Incomplete block, keep in buffer
-          break;
-        }
-
-        // Extract and process the comment block
-        const commentHtml = buffer.substring(
-          commentStart + START_MARKER.length,
-          commentEnd
-        );
-        
-        const commentText = stripHtmlTags(commentHtml);
-        if (commentText.length > 0) {
-          comments.push(commentText);
-          commentCount++;
-        }
-
-        // Move past this comment block
-        startIdx = commentEnd + END_MARKER.length;
-      }
-
-      // Trim processed content from buffer, keep unprocessed tail
-      if (startIdx > 0) {
-        buffer = buffer.substring(startIdx);
-      }
-
-      // If buffer grows too large without finding complete blocks, trim it
-      if (buffer.length > MAX_BUFFER_SIZE) {
-        // Keep last portion that might contain incomplete marker
-        const keepSize = Math.max(START_MARKER.length + END_MARKER.length + 10000, 50000);
-        buffer = buffer.substring(buffer.length - keepSize);
-        log.debug('[daily_papers] Buffer trimmed', {}, { newBufferSize: buffer.length });
-      }
-    }
-
-    log.info('[daily_papers] Comment extraction complete', {}, { 
-      totalComments: comments.length,
-      totalBytesRead 
-    });
-
-    return comments;
-
-  } finally {
-    try {
-      reader.releaseLock();
-    } catch {
-      // Lock may already be released
-    }
-  }
-}
-
 // MARK: - Functions
 
 /**
@@ -249,6 +166,17 @@ export async function showDailyPapers(
 
   log.info('[daily_papers] showDailyPapers called', {}, { page, limit, date, week, month, submitter, sort, allParams: params, toolSessionContext });
 
+  // Extract previous papers_seen from toolSessionContext (stored as JSON string)
+  const previousPapersSeen: PaperInfo[] = toolSessionContext?.papers_seen
+    ? JSON.parse(toolSessionContext.papers_seen)
+    : [];
+
+  log.debug('[daily_papers] Previous papers seen', {}, {
+    count: previousPapersSeen.length,
+    papers: JSON.stringify(previousPapersSeen),
+    toolSessionContext
+  });
+
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/daily_papers');
@@ -276,7 +204,12 @@ export async function showDailyPapers(
     // Add sort parameter
     url.searchParams.set('sort', sort);
 
-    log.info('[daily_papers] Fetching from API', {}, { url: url.toString() });
+    log.info('[daily_papers] Fetching from API', {}, {
+      url: url.toString(),
+      page,
+      limit,
+      toolSessionContext
+    });
 
     const response = await fetch(url.toString());
 
@@ -289,6 +222,35 @@ export async function showDailyPapers(
     // Postprocess to reduce response size
     const processedData = postprocessDailyPapersResponse(data);
 
+    // Extract paper IDs and titles from current results
+    // Note: API returns nested structure with paper.id, so check paper.paper?.id first
+    const currentPapers: PaperInfo[] = processedData.map((paper: any) => ({
+      paper_id: paper.paper?.id || paper.id || 'unknown',
+      paper_title: paper.paper?.title || paper.title || 'Untitled'
+    }));
+
+    // Merge with previous papers_seen (avoid duplicates by paper_id)
+    const papersSeen = [...previousPapersSeen];
+    const seenIds = new Set(papersSeen.map(p => p.paper_id));
+
+    for (const paper of currentPapers) {
+      if (!seenIds.has(paper.paper_id)) {
+        papersSeen.push(paper);
+        seenIds.add(paper.paper_id);
+      }
+    }
+
+    log.debug('[daily_papers] Papers tracking (showDailyPapers)', {}, {
+      previousCount: previousPapersSeen.length,
+      currentCount: currentPapers.length,
+      totalSeenCount: papersSeen.length,
+      newPapersAdded: papersSeen.length - previousPapersSeen.length,
+      previousPapersSeen: JSON.stringify(previousPapersSeen),
+      currentPapers: JSON.stringify(currentPapers),
+      allPapersSeen: JSON.stringify(papersSeen),
+      toolSessionContext
+    });
+
     const result = {
       success: true,
       filters: { date, week, month, submitter, sort },
@@ -297,11 +259,21 @@ export async function showDailyPapers(
       timestamp: new Date().toISOString()
     };
 
+    const updatedContext = {
+      ...exportParamsToDict(params),
+      papers_seen: JSON.stringify(papersSeen)
+    };
+
     log.debug('[daily_papers] showDailyPapers result', {}, result);
+    log.info('[daily_papers] Returning updated context', {}, {
+      updatedToolSessionContext: updatedContext,
+      paperCount: papersSeen.length,
+      contextKeys: Object.keys(updatedContext)
+    });
 
     return {
       result: JSON.stringify(result),
-      updatedToolSessionContext: exportParamsToDict(params),
+      updatedToolSessionContext: updatedContext,
     };
   } catch (error) {
     log.error('[daily_papers] Error fetching daily papers', {}, { error });
@@ -313,6 +285,7 @@ export async function showDailyPapers(
       }),
       updatedToolSessionContext: {
         error: error instanceof Error ? error.message : 'Unknown error',
+        papers_seen: JSON.stringify(previousPapersSeen), // Preserve existing papers_seen on error
       },
     };
   }
@@ -328,14 +301,30 @@ export async function searchDailyPapers(
 ): Promise<ToolkitResult> {
   const { q, limit = 5 } = params;
 
-  log.info('[daily_papers] searchDailyPapers called', {}, { q, limit, allParams: params });
+  log.info('[daily_papers] searchDailyPapers called', {}, { q, limit, allParams: params, toolSessionContext });
+
+  // Extract previous papers_seen from toolSessionContext (stored as JSON string)
+  const previousPapersSeen: PaperInfo[] = toolSessionContext?.papers_seen
+    ? JSON.parse(toolSessionContext.papers_seen)
+    : [];
+
+  log.debug('[daily_papers] Previous papers seen (searchDailyPapers)', {}, {
+    count: previousPapersSeen.length,
+    papers: JSON.stringify(previousPapersSeen),
+    toolSessionContext
+  });
 
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/papers/search');
     url.searchParams.set('q', q);
 
-    log.info('[daily_papers] Searching papers from API', {}, { url: url.toString() });
+    log.info('[daily_papers] Searching papers from API', {}, {
+      url: url.toString(),
+      query: q,
+      limit,
+      toolSessionContext
+    });
 
     const response = await fetch(url.toString());
 
@@ -348,6 +337,37 @@ export async function searchDailyPapers(
     // API doesn't support limit, so we limit client-side to avoid overwhelming LLM
     const limitedData = Array.isArray(data) ? data.slice(0, limit) : data;
 
+    // Extract paper IDs and titles from search results
+    // Note: API may return nested structure, so check both paper.id and nested paper.paper?.id
+    const currentPapers: PaperInfo[] = Array.isArray(limitedData)
+      ? limitedData.map((paper: any) => ({
+          paper_id: paper.paper?.id || paper.id || 'unknown',
+          paper_title: paper.paper?.title || paper.title || 'Untitled'
+        }))
+      : [];
+
+    // Merge with previous papers_seen (avoid duplicates by paper_id)
+    const papersSeen = [...previousPapersSeen];
+    const seenIds = new Set(papersSeen.map(p => p.paper_id));
+
+    for (const paper of currentPapers) {
+      if (!seenIds.has(paper.paper_id)) {
+        papersSeen.push(paper);
+        seenIds.add(paper.paper_id);
+      }
+    }
+
+    log.debug('[daily_papers] Papers tracking (searchDailyPapers)', {}, {
+      previousCount: previousPapersSeen.length,
+      currentCount: currentPapers.length,
+      totalSeenCount: papersSeen.length,
+      newPapersAdded: papersSeen.length - previousPapersSeen.length,
+      previousPapersSeen: JSON.stringify(previousPapersSeen),
+      currentPapers: JSON.stringify(currentPapers),
+      allPapersSeen: JSON.stringify(papersSeen),
+      toolSessionContext
+    });
+
     const result = {
       success: true,
       query: q,
@@ -358,11 +378,20 @@ export async function searchDailyPapers(
       timestamp: new Date().toISOString()
     };
 
+    const updatedContext = {
+      papers_seen: JSON.stringify(papersSeen)
+    };
+
     log.debug('[daily_papers] searchDailyPapers result', {}, result);
+    log.info('[daily_papers] Returning updated context (searchDailyPapers)', {}, {
+      updatedToolSessionContext: updatedContext,
+      paperCount: papersSeen.length,
+      contextKeys: Object.keys(updatedContext)
+    });
 
     return {
       result: JSON.stringify(result),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: updatedContext,
     };
   } catch (error) {
     log.error('[daily_papers] Error searching daily papers', {}, { error, query: q });
@@ -373,14 +402,16 @@ export async function searchDailyPapers(
         query: q,
         timestamp: new Date().toISOString()
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        papers_seen: JSON.stringify(previousPapersSeen), // Preserve existing papers_seen on error
+      },
     };
   }
 }
 
 /**
- * Get comments for a paper by fetching the HTML from the paper's Hugging Face page.
- * Uses memory-efficient streaming to extract comments without loading entire HTML into memory.
+ * Get comments for a paper using the Hugging Face API.
+ * Fetches comments from https://huggingface.co/api/papers/{arxiv_id}?field=comments
  */
 export async function getCommentsForPaper(
   params: GetCommentsForPaperParams,
@@ -389,23 +420,99 @@ export async function getCommentsForPaper(
 ): Promise<ToolkitResult> {
   const { arxiv_id } = params;
 
-  log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params });
+  log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params, toolSessionContext });
+
+  // Log raw context to debug propagation
+  log.info('[daily_papers] Received toolSessionContext', {}, {
+    hasContext: !!toolSessionContext,
+    contextKeys: toolSessionContext ? JSON.stringify(Object.keys(toolSessionContext)) : '[]',
+    rawContext: toolSessionContext ? JSON.stringify(toolSessionContext) : '{}',
+    papers_seen_exists: !!toolSessionContext?.papers_seen,
+    papers_seen_value: toolSessionContext?.papers_seen || 'undefined'
+  });
+
+  // Extract previous papers_seen from toolSessionContext to preserve it
+  const previousPapersSeen: PaperInfo[] = toolSessionContext?.papers_seen
+    ? JSON.parse(toolSessionContext.papers_seen)
+    : [];
+
+  log.debug('[daily_papers] Papers seen context (getCommentsForPaper)', {}, {
+    papersSeen: JSON.stringify(previousPapersSeen),
+    count: previousPapersSeen.length,
+    requestedPaperId: arxiv_id,
+    toolSessionContext
+  });
 
   try {
-    // Construct the Hugging Face paper URL
-    const url = `https://huggingface.co/papers/${arxiv_id}`;
+    // Construct the Hugging Face API URL for fetching comments
+    const url = `https://huggingface.co/api/papers/${arxiv_id}?field=comments`;
 
-    log.info('[daily_papers] Fetching paper comments from URL', {}, { url });
+    log.info('[daily_papers] Fetching paper comments from API', {}, {
+      url,
+      timeout: COMMENTS_FETCH_TIMEOUT_MS,
+      arxiv_id,
+      toolSessionContext
+    });
 
-    // Use memory-efficient streaming extraction
-    const comments = await getWebContentExtractComments(url);
+    // Set up timeout using AbortController
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), COMMENTS_FETCH_TIMEOUT_MS);
+
+    let data;
+    try {
+      const response = await fetch(url, { signal: abortController.signal });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorMsg = `API request failed: ${response.status} ${response.statusText}`;
+        log.warn('[daily_papers] API returned error status', {}, {
+          arxiv_id,
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        throw new Error(errorMsg);
+      }
+
+      data = await response.json();
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+
+      // Check if the error is due to timeout
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        const timeoutMsg = `Request timed out after ${COMMENTS_FETCH_TIMEOUT_MS / 1000} seconds`;
+        log.warn('[daily_papers] Request timeout', {}, {
+          arxiv_id,
+          url,
+          timeout: COMMENTS_FETCH_TIMEOUT_MS
+        });
+        throw new Error(timeoutMsg);
+      }
+
+      // Re-throw other errors (will be caught by outer catch block)
+      throw fetchError;
+    }
+
+    // Extract comments from the response
+    const commentsArray: HFComment[] = data?.comments || [];
+
+    // Process comments to extract useful information
+    const processedComments: ProcessedComment[] = commentsArray.map((comment: HFComment) => ({
+      id: comment.id,
+      author: comment.author?.name || comment.author?.fullname || 'Unknown',
+      createdAt: comment.createdAt || '',
+      text: comment.data?.latest?.raw || comment.data?.latest?.html || '',
+      numEdits: comment.data?.numEdits || 0
+    }));
 
     const result = {
       success: true,
       arxiv_id,
       url,
-      commentsCount: comments.length,
-      comments: comments.length > 0 ? comments : ['No comments found'],
+      commentsCount: processedComments.length,
+      comments: processedComments, // Always return array of ProcessedComment objects
       timestamp: new Date().toISOString()
     };
 
@@ -413,18 +520,36 @@ export async function getCommentsForPaper(
 
     return {
       result: JSON.stringify(result),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        papers_seen: JSON.stringify(previousPapersSeen), // Preserve papers_seen
+      },
     };
   } catch (error) {
-    log.error('[daily_papers] Error fetching paper comments', {}, { error, arxiv_id });
+    // Log detailed error information for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+
+    log.error('[daily_papers] Error fetching paper comments', {}, {
+      arxiv_id,
+      url: `https://huggingface.co/api/papers/${arxiv_id}?field=comments`,
+      errorMessage,
+      errorName,
+      errorStack,
+      errorType: typeof error,
+      timeout: COMMENTS_FETCH_TIMEOUT_MS
+    });
+
     return {
       result: JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         arxiv_id,
         timestamp: new Date().toISOString()
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: {
+        papers_seen: JSON.stringify(previousPapersSeen), // Preserve papers_seen on error
+      },
     };
   }
 }

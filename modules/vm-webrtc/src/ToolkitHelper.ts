@@ -159,9 +159,18 @@ export class ToolkitHelper {
         };
       }
 
-      // Get the current session context for this tool
-      const toolKey = `${groupName}__${toolName}`;
+      // Get the current session context for this GROUP (shared across all tools in the group)
+      const toolKey = groupName; // Per-group, not per-tool
       const currentSessionContext = this.toolSessionContexts.get(toolKey) || {};
+
+      log.info(`[${this.toolName}] 📋 Retrieved session context`, {}, {
+        groupName,
+        toolName,
+        toolKey,
+        hasContext: Object.keys(currentSessionContext).length > 0,
+        currentSessionContext: JSON.stringify(currentSessionContext),
+        allStoredKeys: Array.from(this.toolSessionContexts.keys()),
+      });
 
       // Route to the appropriate toolkit function
       const toolkitResult = await executeToolkitFunction(
@@ -189,6 +198,7 @@ export class ToolkitHelper {
         callId,
         resultLength: finalResult.length,
         result: finalResult,
+        updatedToolSessionContext: toolkitResult.updatedToolSessionContext,
         sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
       });
 

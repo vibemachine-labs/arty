@@ -187,7 +187,7 @@ export async function showTopStories(
         tool: 'showTopStories',
         error,
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {}, // Preserve context on validation error
     };
   }
 
@@ -391,7 +391,7 @@ export async function searchStories(
         error: errorMessage,
         timestamp: new Date().toISOString(),
       }),
-      updatedToolSessionContext: {},
+      updatedToolSessionContext: toolSessionContext || {}, // Preserve context on validation error
     };
   }
 

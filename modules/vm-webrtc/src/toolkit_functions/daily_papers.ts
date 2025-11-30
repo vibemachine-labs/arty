@@ -143,7 +143,11 @@ export async function showDailyPapers(
     ? JSON.parse(toolSessionContext.papers_seen)
     : [];
 
-  log.debug('[daily_papers] Previous papers seen', {}, { count: previousPapersSeen.length, papers: previousPapersSeen });
+  log.debug('[daily_papers] Previous papers seen', {}, {
+    count: previousPapersSeen.length,
+    papers: JSON.stringify(previousPapersSeen),
+    toolSessionContext
+  });
 
   try {
     // Build API URL
@@ -172,7 +176,12 @@ export async function showDailyPapers(
     // Add sort parameter
     url.searchParams.set('sort', sort);
 
-    log.info('[daily_papers] Fetching from API', {}, { url: url.toString() });
+    log.info('[daily_papers] Fetching from API', {}, {
+      url: url.toString(),
+      page,
+      limit,
+      toolSessionContext
+    });
 
     const response = await fetch(url.toString());
 
@@ -186,9 +195,10 @@ export async function showDailyPapers(
     const processedData = postprocessDailyPapersResponse(data);
 
     // Extract paper IDs and titles from current results
+    // Note: API returns nested structure with paper.id, so check paper.paper?.id first
     const currentPapers: PaperInfo[] = processedData.map((paper: any) => ({
-      paper_id: paper.id || paper.paper?.id || 'unknown',
-      paper_title: paper.title || paper.paper?.title || 'Untitled'
+      paper_id: paper.paper?.id || paper.id || 'unknown',
+      paper_title: paper.paper?.title || paper.title || 'Untitled'
     }));
 
     // Merge with previous papers_seen (avoid duplicates by paper_id)
@@ -207,9 +217,10 @@ export async function showDailyPapers(
       currentCount: currentPapers.length,
       totalSeenCount: papersSeen.length,
       newPapersAdded: papersSeen.length - previousPapersSeen.length,
-      previousPapersSeen,
-      currentPapers,
-      allPapersSeen: papersSeen
+      previousPapersSeen: JSON.stringify(previousPapersSeen),
+      currentPapers: JSON.stringify(currentPapers),
+      allPapersSeen: JSON.stringify(papersSeen),
+      toolSessionContext
     });
 
     const result = {
@@ -220,14 +231,21 @@ export async function showDailyPapers(
       timestamp: new Date().toISOString()
     };
 
+    const updatedContext = {
+      ...exportParamsToDict(params),
+      papers_seen: JSON.stringify(papersSeen)
+    };
+
     log.debug('[daily_papers] showDailyPapers result', {}, result);
+    log.info('[daily_papers] Returning updated context', {}, {
+      updatedToolSessionContext: updatedContext,
+      paperCount: papersSeen.length,
+      contextKeys: Object.keys(updatedContext)
+    });
 
     return {
       result: JSON.stringify(result),
-      updatedToolSessionContext: {
-        ...exportParamsToDict(params),
-        papers_seen: JSON.stringify(papersSeen)
-      },
+      updatedToolSessionContext: updatedContext,
     };
   } catch (error) {
     log.error('[daily_papers] Error fetching daily papers', {}, { error });
@@ -262,14 +280,23 @@ export async function searchDailyPapers(
     ? JSON.parse(toolSessionContext.papers_seen)
     : [];
 
-  log.debug('[daily_papers] Previous papers seen', {}, { count: previousPapersSeen.length });
+  log.debug('[daily_papers] Previous papers seen (searchDailyPapers)', {}, {
+    count: previousPapersSeen.length,
+    papers: JSON.stringify(previousPapersSeen),
+    toolSessionContext
+  });
 
   try {
     // Build API URL
     const url = new URL('https://huggingface.co/api/papers/search');
     url.searchParams.set('q', q);
 
-    log.info('[daily_papers] Searching papers from API', {}, { url: url.toString() });
+    log.info('[daily_papers] Searching papers from API', {}, {
+      url: url.toString(),
+      query: q,
+      limit,
+      toolSessionContext
+    });
 
     const response = await fetch(url.toString());
 
@@ -283,10 +310,11 @@ export async function searchDailyPapers(
     const limitedData = Array.isArray(data) ? data.slice(0, limit) : data;
 
     // Extract paper IDs and titles from search results
+    // Note: API may return nested structure, so check both paper.id and nested paper.paper?.id
     const currentPapers: PaperInfo[] = Array.isArray(limitedData)
       ? limitedData.map((paper: any) => ({
-          paper_id: paper.id || 'unknown',
-          paper_title: paper.title || 'Untitled'
+          paper_id: paper.paper?.id || paper.id || 'unknown',
+          paper_title: paper.paper?.title || paper.title || 'Untitled'
         }))
       : [];
 
@@ -306,9 +334,10 @@ export async function searchDailyPapers(
       currentCount: currentPapers.length,
       totalSeenCount: papersSeen.length,
       newPapersAdded: papersSeen.length - previousPapersSeen.length,
-      previousPapersSeen,
-      currentPapers,
-      allPapersSeen: papersSeen
+      previousPapersSeen: JSON.stringify(previousPapersSeen),
+      currentPapers: JSON.stringify(currentPapers),
+      allPapersSeen: JSON.stringify(papersSeen),
+      toolSessionContext
     });
 
     const result = {
@@ -321,13 +350,20 @@ export async function searchDailyPapers(
       timestamp: new Date().toISOString()
     };
 
+    const updatedContext = {
+      papers_seen: JSON.stringify(papersSeen)
+    };
+
     log.debug('[daily_papers] searchDailyPapers result', {}, result);
+    log.info('[daily_papers] Returning updated context (searchDailyPapers)', {}, {
+      updatedToolSessionContext: updatedContext,
+      paperCount: papersSeen.length,
+      contextKeys: Object.keys(updatedContext)
+    });
 
     return {
       result: JSON.stringify(result),
-      updatedToolSessionContext: {
-        papers_seen: JSON.stringify(papersSeen)
-      },
+      updatedToolSessionContext: updatedContext,
     };
   } catch (error) {
     log.error('[daily_papers] Error searching daily papers', {}, { error, query: q });
@@ -358,22 +394,37 @@ export async function getCommentsForPaper(
 
   log.info('[daily_papers] getCommentsForPaper called', {}, { arxiv_id, allParams: params, toolSessionContext });
 
+  // Log raw context to debug propagation
+  log.info('[daily_papers] Received toolSessionContext', {}, {
+    hasContext: !!toolSessionContext,
+    contextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
+    rawContext: toolSessionContext,
+    papers_seen_exists: !!toolSessionContext?.papers_seen,
+    papers_seen_value: toolSessionContext?.papers_seen
+  });
+
   // Extract previous papers_seen from toolSessionContext to preserve it
   const previousPapersSeen: PaperInfo[] = toolSessionContext?.papers_seen
     ? JSON.parse(toolSessionContext.papers_seen)
     : [];
 
   log.debug('[daily_papers] Papers seen context (getCommentsForPaper)', {}, {
-    papersSeen: previousPapersSeen,
+    papersSeen: JSON.stringify(previousPapersSeen),
     count: previousPapersSeen.length,
-    requestedPaperId: arxiv_id
+    requestedPaperId: arxiv_id,
+    toolSessionContext
   });
 
   try {
     // Construct the Hugging Face API URL for fetching comments
     const url = `https://huggingface.co/api/papers/${arxiv_id}?field=comments`;
 
-    log.info('[daily_papers] Fetching paper comments from API', {}, { url, timeout: COMMENTS_FETCH_TIMEOUT_MS });
+    log.info('[daily_papers] Fetching paper comments from API', {}, {
+      url,
+      timeout: COMMENTS_FETCH_TIMEOUT_MS,
+      arxiv_id,
+      toolSessionContext
+    });
 
     // Set up timeout using AbortController
     const abortController = new AbortController();

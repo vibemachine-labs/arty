@@ -687,7 +687,7 @@ final class WebRTCEventHandler {
 
       self.logger.log(
         "[FunctionCall] Arguments streaming (delta)",
-        attributes: logAttributes(for: .debug, metadata: [
+        attributes: logAttributes(for: .trace, metadata: [
           "callId": callId,
           "itemId": itemId as Any,
           "outputIndex": outputIndex as Any,

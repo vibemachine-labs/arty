@@ -434,6 +434,32 @@
           }
         }
       ]
+    },
+    "github_legacy": {
+      "name": "github_legacy",
+      "toolkits": [
+        {
+          "type": "legacy_connector",
+          "name": "github_connector",
+          "group": "github_legacy",
+          "description": "Legacy GitHub connector - disabled by default. Enable in connector settings to use.",
+          "supported_auth": "token",
+          "extra": {}
+        }
+      ]
+    },
+    "gdrive_legacy": {
+      "name": "gdrive_legacy",
+      "toolkits": [
+        {
+          "type": "legacy_connector",
+          "name": "gdrive_connector",
+          "group": "gdrive_legacy",
+          "description": "Legacy Google Drive connector - disabled by default. Enable in connector settings to use.",
+          "supported_auth": "oauth",
+          "extra": {}
+        }
+      ]
     }
   }
 }

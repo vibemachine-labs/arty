@@ -37,31 +37,38 @@ function getConnectorStorageKey(groupName: string): string {
 
 /**
  * Check if a toolkit group is enabled based on stored settings.
- * Returns true by default if no setting is found.
+ * Returns true by default if no setting is found, except for legacy connectors which default to false.
  */
 async function isToolkitGroupEnabled(groupName: string): Promise<boolean> {
   const storageKey = getConnectorStorageKey(groupName);
 
+  // Legacy connectors default to disabled
+  const isLegacyConnector = groupName === 'github_legacy' || groupName === 'gdrive_legacy';
+  const defaultEnabled = !isLegacyConnector;
+
   try {
     const enabledValue = await AsyncStorage.getItem(storageKey);
-    // Default to true if not set (backward compatibility)
-    const isEnabled = enabledValue === null ? true : enabledValue === 'true';
+    // Use default based on connector type if not set
+    const isEnabled = enabledValue === null ? defaultEnabled : enabledValue === 'true';
 
     log.debug('[ToolkitManager] Toolkit group enabled status loaded', {}, {
       groupName,
       storageKey,
       enabledValue,
       isEnabled,
+      isLegacyConnector,
+      defaultEnabled,
     });
 
     return isEnabled;
   } catch (error) {
-    log.error('[ToolkitManager] Failed to load toolkit group enabled status, defaulting to enabled', {}, {
+    log.error('[ToolkitManager] Failed to load toolkit group enabled status, using default', {}, {
       groupName,
       storageKey,
+      defaultEnabled,
       error: error instanceof Error ? error.message : String(error),
     }, error instanceof Error ? error : new Error(String(error)));
-    return true;
+    return defaultEnabled;
   }
 }
 
@@ -186,14 +193,31 @@ async function buildStaticToolkitDefinitions(): Promise<ToolDefinition[]> {
 
   for (const group of groups.list) {
     for (const toolkit of group.toolkits) {
-      if (toolkit.type !== 'remote_mcp_server') {
+      if (toolkit.type === 'function') {
         const toolDefinition = await exportToolDefinition(toolkit, true);
         staticTools.push(toolDefinition);
+      } else if (toolkit.type === 'legacy_connector') {
+        // Import legacy connector definitions dynamically
+        const legacyToolDef = await getLegacyConnectorDefinition(toolkit.name);
+        if (legacyToolDef) {
+          staticTools.push(legacyToolDef);
+        }
       }
     }
   }
 
   return staticTools;
+}
+
+async function getLegacyConnectorDefinition(toolName: string): Promise<ToolDefinition | null> {
+  if (toolName === 'github_connector') {
+    const { githubConnectorDefinition } = await import('./ToolGithubConnector');
+    return githubConnectorDefinition;
+  } else if (toolName === 'gdrive_connector') {
+    const { gdriveConnectorDefinition } = await import('./ToolGDriveConnector');
+    return gdriveConnectorDefinition;
+  }
+  return null;
 }
 
 // Cache for static toolkit definitions

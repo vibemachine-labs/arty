@@ -50,6 +50,34 @@ export interface PaperInfo {
   paper_title: string;
 }
 
+export interface HFCommentAuthor {
+  name?: string;
+  fullname?: string;
+}
+
+export interface HFCommentData {
+  latest?: {
+    raw?: string;
+    html?: string;
+  };
+  numEdits?: number;
+}
+
+export interface HFComment {
+  id: string;
+  author?: HFCommentAuthor;
+  createdAt?: string;
+  data?: HFCommentData;
+}
+
+export interface ProcessedComment {
+  id: string;
+  author: string;
+  createdAt: string;
+  text: string;
+  numEdits: number;
+}
+
 // MARK: - Helper Functions
 
 /**
@@ -468,13 +496,13 @@ export async function getCommentsForPaper(
     }
 
     // Extract comments from the response
-    const commentsArray = data?.comments || [];
+    const commentsArray: HFComment[] = data?.comments || [];
 
     // Process comments to extract useful information
-    const processedComments = commentsArray.map((comment: any) => ({
+    const processedComments: ProcessedComment[] = commentsArray.map((comment: HFComment) => ({
       id: comment.id,
       author: comment.author?.name || comment.author?.fullname || 'Unknown',
-      createdAt: comment.createdAt,
+      createdAt: comment.createdAt || '',
       text: comment.data?.latest?.raw || comment.data?.latest?.html || '',
       numEdits: comment.data?.numEdits || 0
     }));
@@ -484,7 +512,7 @@ export async function getCommentsForPaper(
       arxiv_id,
       url,
       commentsCount: processedComments.length,
-      comments: processedComments.length > 0 ? processedComments : ['No comments found'],
+      comments: processedComments, // Always return array of ProcessedComment objects
       timestamp: new Date().toISOString()
     };
 

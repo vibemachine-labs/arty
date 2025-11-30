@@ -91,6 +91,9 @@ export async function executeToolkitFunction(
     groupName,
     toolName,
     params,
+    toolSessionContext: toolSessionContext ? JSON.stringify(toolSessionContext) : 'undefined',
+    hasToolSessionContext: !!toolSessionContext,
+    contextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
   });
 
   // Check if group exists

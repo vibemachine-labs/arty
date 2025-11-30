@@ -397,10 +397,10 @@ export async function getCommentsForPaper(
   // Log raw context to debug propagation
   log.info('[daily_papers] Received toolSessionContext', {}, {
     hasContext: !!toolSessionContext,
-    contextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
-    rawContext: toolSessionContext,
+    contextKeys: toolSessionContext ? JSON.stringify(Object.keys(toolSessionContext)) : '[]',
+    rawContext: toolSessionContext ? JSON.stringify(toolSessionContext) : '{}',
     papers_seen_exists: !!toolSessionContext?.papers_seen,
-    papers_seen_value: toolSessionContext?.papers_seen
+    papers_seen_value: toolSessionContext?.papers_seen || 'undefined'
   });
 
   // Extract previous papers_seen from toolSessionContext to preserve it

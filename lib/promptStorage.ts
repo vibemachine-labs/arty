@@ -15,7 +15,7 @@ export const loadPromptAddition = async (storageKey: string): Promise<string> =>
   try {
     const stored = await AsyncStorage.getItem(storageKey);
     const addition = stored?.trim() ?? "";
-    log.info("Loaded prompt addition", {}, {
+    log.trace("Loaded prompt addition", {}, {
       storageKey,
       hasAddition: addition.length > 0,
       length: addition.length,

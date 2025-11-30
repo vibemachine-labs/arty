@@ -213,7 +213,7 @@
           "type": "function",
           "name": "getCommentsForPaper",
           "group": "daily_papers",
-          "description": "Get the comments for a paper.",
+          "description": "Retrieve comments and discussion for a specific paper from Hugging Face. Use this when you want to see what the community is saying about a paper. The arxiv_id is returned in the daily papers results.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
@@ -221,7 +221,7 @@
             "properties": {
               "arxiv_id": {
                 "type": "string",
-                "description": "The arxiv id of the paper to get comments for.  It looks like 2511.15661.  And is returned as the paper id in the daily papers tool."
+                "description": "The arXiv ID of the paper (e.g., '2511.15661'). This is returned as the paper id in the showDailyPapers and searchDailyPapers tools."
               }
             },
             "required": ["arxiv_id"]

@@ -292,7 +292,15 @@ export async function getCommentsForPaper(
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        const errorMsg = `API request failed: ${response.status} ${response.statusText}`;
+        log.warn('[daily_papers] API returned error status', {}, {
+          arxiv_id,
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        throw new Error(errorMsg);
       }
 
       data = await response.json();
@@ -301,9 +309,16 @@ export async function getCommentsForPaper(
 
       // Check if the error is due to timeout
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        throw new Error(`Request timed out after ${COMMENTS_FETCH_TIMEOUT_MS / 1000} seconds`);
+        const timeoutMsg = `Request timed out after ${COMMENTS_FETCH_TIMEOUT_MS / 1000} seconds`;
+        log.warn('[daily_papers] Request timeout', {}, {
+          arxiv_id,
+          url,
+          timeout: COMMENTS_FETCH_TIMEOUT_MS
+        });
+        throw new Error(timeoutMsg);
       }
 
+      // Re-throw other errors (will be caught by outer catch block)
       throw fetchError;
     }
 
@@ -335,11 +350,25 @@ export async function getCommentsForPaper(
       updatedToolSessionContext: {},
     };
   } catch (error) {
-    log.error('[daily_papers] Error fetching paper comments', {}, { error, arxiv_id });
+    // Log detailed error information for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+
+    log.error('[daily_papers] Error fetching paper comments', {}, {
+      arxiv_id,
+      url: `https://huggingface.co/api/papers/${arxiv_id}?field=comments`,
+      errorMessage,
+      errorName,
+      errorStack,
+      errorType: typeof error,
+      timeout: COMMENTS_FETCH_TIMEOUT_MS
+    });
+
     return {
       result: JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         arxiv_id,
         timestamp: new Date().toISOString()
       }),

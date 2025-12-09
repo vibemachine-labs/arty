@@ -21,6 +21,8 @@ import { WebConnectorInfo } from "./WebConnectorInfo";
 import { HackerNewsConnectorInfo } from "./HackerNewsConnectorInfo";
 import { DeepwikiConnectorInfo } from "./DeepwikiConnectorInfo";
 import { DailyPapersConnectorInfo } from "./DailyPapersConnectorInfo";
+import { GithubLegacyConnectorInfo } from "./GithubLegacyConnectorInfo";
+import { GDriveLegacyConnectorInfo } from "./GDriveLegacyConnectorInfo";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -38,6 +40,8 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const [hackerNewsInfoVisible, setHackerNewsInfoVisible] = useState(false);
   const [deepwikiInfoVisible, setDeepwikiInfoVisible] = useState(false);
   const [dailyPapersInfoVisible, setDailyPapersInfoVisible] = useState(false);
+  const [githubLegacyInfoVisible, setGithubLegacyInfoVisible] = useState(false);
+  const [gdriveLegacyInfoVisible, setGDriveLegacyInfoVisible] = useState(false);
 
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
@@ -52,6 +56,10 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       setDeepwikiInfoVisible(true);
     } else if (connectorId === "daily_papers") {
       setDailyPapersInfoVisible(true);
+    } else if (connectorId === "github_legacy") {
+      setGithubLegacyInfoVisible(true);
+    } else if (connectorId === "gdrive_legacy") {
+      setGDriveLegacyInfoVisible(true);
     }
   };
 
@@ -156,6 +164,16 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       <DailyPapersConnectorInfo
         visible={dailyPapersInfoVisible}
         onClose={() => setDailyPapersInfoVisible(false)}
+      />
+
+      <GithubLegacyConnectorInfo
+        visible={githubLegacyInfoVisible}
+        onClose={() => setGithubLegacyInfoVisible(false)}
+      />
+
+      <GDriveLegacyConnectorInfo
+        visible={gdriveLegacyInfoVisible}
+        onClose={() => setGDriveLegacyInfoVisible(false)}
       />
     </Modal>
   );

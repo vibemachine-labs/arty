@@ -97,7 +97,12 @@ export type RemoteMcpToolkitDefinition = ToolkitDefinitionBase & {
   function_call_wrapper?: string;
 };
 
-export type ToolkitDefinition = FunctionToolkitDefinition | RemoteMcpToolkitDefinition;
+export type LegacyConnectorToolkitDefinition = ToolkitDefinitionBase & {
+  type: 'legacy_connector';
+  extra?: Record<string, string>;
+};
+
+export type ToolkitDefinition = FunctionToolkitDefinition | RemoteMcpToolkitDefinition | LegacyConnectorToolkitDefinition;
 
 export type ToolkitGroup = {
   name: string;

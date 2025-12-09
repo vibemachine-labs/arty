@@ -278,7 +278,7 @@
           "name": "keyword_search",
           "group": "google_drive",
           "description": "Search for files in Google Drive by keyword.",
-          "supported_auth": "oauth",
+          "supported_auth": "oauth2",
           "extra": {},
           "parameters": {
             "type": "object",
@@ -296,7 +296,7 @@
           "name": "search_documents",
           "group": "google_drive",
           "description": "Search for documents in the user's Google Drive.",
-          "supported_auth": "oauth",
+          "supported_auth": "oauth2",
           "extra": {},
           "parameters": {
             "type": "object",
@@ -362,7 +362,7 @@
           "name": "list_drive_folder_children",
           "group": "google_drive",
           "description": "List children of a Google Drive folder (or root if no folder_id provided).",
-          "supported_auth": "oauth",
+          "supported_auth": "oauth2",
           "extra": {},
           "parameters": {
             "type": "object",
@@ -389,7 +389,7 @@
           "name": "get_gdrive_file_content",
           "group": "google_drive",
           "description": "Get the content of a Google Drive file. Supports Google Docs (exports as plain text), PDFs (converts to temporary Google Doc then exports as text), and plain text files. Returns an error for unsupported file types.",
-          "supported_auth": "oauth",
+          "supported_auth": "oauth2",
           "extra": {},
           "parameters": {
             "type": "object",
@@ -443,8 +443,13 @@
           "name": "github_connector",
           "group": "github_legacy",
           "description": "Legacy GitHub connector - disabled by default. Enable in connector settings to use.",
-          "supported_auth": "token",
-          "extra": {}
+          "supported_auth": "api_key",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
         }
       ]
     },
@@ -456,8 +461,13 @@
           "name": "gdrive_connector",
           "group": "gdrive_legacy",
           "description": "Legacy Google Drive connector - disabled by default. Enable in connector settings to use.",
-          "supported_auth": "oauth",
-          "extra": {}
+          "supported_auth": "oauth2",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
         }
       ]
     }

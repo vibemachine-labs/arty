@@ -4,6 +4,7 @@ import type { ToolkitFunction, ToolkitResult } from '../toolkit_functions';
 import type { ToolSessionContext } from '../types';
 import type { ToolkitFunctionWrapper } from './ToolkitFunctionWrapper';
 import { lookupGithubRepo } from '../github_helper';
+import { summarizeContent, MAX_CONTENT_LENGTH } from './summarizer';
 
 /**
  * Validate and resolve a repository name parameter.
@@ -113,6 +114,32 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
           resultLength: result.result.length,
           sessionContextKeys: Object.keys(result.updatedToolSessionContext),
         });
+
+        // Check if result exceeds max length and needs summarization
+        if (typeof result.result === 'string' && result.result.length > MAX_CONTENT_LENGTH) {
+          log.info('[DeepWikiWrapper] Result exceeds max length, initiating summarization', {}, {
+            groupName,
+            toolName,
+            originalLength: result.result.length,
+            maxLength: MAX_CONTENT_LENGTH,
+          });
+
+          // Summarize the result using OpenAI
+          const summarizedResult = await summarizeContent(result.result);
+
+          log.info('[DeepWikiWrapper] Summarization complete', {}, {
+            groupName,
+            toolName,
+            originalLength: result.result.length,
+            summarizedLength: summarizedResult.length,
+            reductionPercent: Math.round((1 - summarizedResult.length / result.result.length) * 100),
+          });
+
+          return {
+            result: summarizedResult,
+            updatedToolSessionContext: result.updatedToolSessionContext,
+          };
+        }
 
         return result;
       } catch (error) {

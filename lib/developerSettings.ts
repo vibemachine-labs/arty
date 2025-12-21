@@ -25,9 +25,14 @@ export const loadShowRealtimeErrorAlerts = async (): Promise<boolean> => {
   }
 };
 
-export const saveShowRealtimeErrorAlerts = async (value: boolean): Promise<void> => {
+export const saveShowRealtimeErrorAlerts = async (
+  value: boolean,
+): Promise<void> => {
   try {
-    await AsyncStorage.setItem(SHOW_REALTIME_ERROR_ALERTS_KEY, value ? "true" : "false");
+    await AsyncStorage.setItem(
+      SHOW_REALTIME_ERROR_ALERTS_KEY,
+      value ? "true" : "false",
+    );
   } catch (error) {
     warn("Failed to persist realtime error alert preference", error);
   }
@@ -37,18 +42,23 @@ export const loadLogRedactionDisabled = async (): Promise<boolean> => {
   try {
     const stored = await AsyncStorage.getItem(DISABLE_LOG_REDACTION_KEY);
     if (stored === null) {
-      return false;
+      return true;
     }
     return stored === "true";
   } catch (error) {
     warn("Failed to load log redaction preference", error);
-    return false;
+    return true;
   }
 };
 
-export const saveLogRedactionDisabled = async (value: boolean): Promise<void> => {
+export const saveLogRedactionDisabled = async (
+  value: boolean,
+): Promise<void> => {
   try {
-    await AsyncStorage.setItem(DISABLE_LOG_REDACTION_KEY, value ? "true" : "false");
+    await AsyncStorage.setItem(
+      DISABLE_LOG_REDACTION_KEY,
+      value ? "true" : "false",
+    );
   } catch (error) {
     warn("Failed to persist log redaction preference", error);
   }

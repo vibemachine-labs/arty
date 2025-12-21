@@ -270,6 +270,75 @@ bunx expo run:ios
 
 </details>
 
+## 📦 Expo Build 
+
+### Additional Deps
+
+```
+brew install fastlane
+```
+
+### Expo login
+
+```
+bunx eas login
+```
+
+### Setup Apple Dev Account 
+
+```
+bunx eas credentials
+```
+
+### Run build wizard
+
+```
+bun run wizard
+```
+
+Choose appropriate build:
+
+```
+
+$ bun ./wizard.ts
+
+=== Arty Build Wizard ===
+
+1) Start Expo Server
+   Run TypeScript check, then start Expo server
+   Flag: bun run wizard start-expo
+
+2) Patch WebRTC Headers
+   Patch WebRTC-lib headers for iOS
+   Flag: bun run wizard patch-webrtc
+
+3) EAS Build Dev
+   Build iOS app with dev_self_contained profile
+   Flag: bun run wizard eas-build-dev
+
+4) EAS Build Dev Local
+   Build iOS app locally with dev_self_contained profile
+   Flag: bun run wizard eas-build-dev-local
+
+5) EAS Update Dev
+   Push an OTA update to dev_self_contained branch
+   Flag: bun run wizard eas-update-dev
+
+6) Clean Build
+   Clean prebuild for iOS
+   Flag: bun run wizard clean-build
+
+7) EAS Build Prod
+   Build and submit iOS app to App Store
+   Flag: bun run wizard eas-build-prod
+
+0) Exit
+
+Select an option: 4
+```
+
+
+
 
 ## ⚙️ Technical Details
 
@@ -306,15 +375,6 @@ OpenAI is currently the only supported backend. Adding support for multiple prov
 1. Add support for alternative voice providers ([Unmute.sh](https://unmute.sh/), [Speaches.ai](https://speaches.ai), self-hosted)
 1. Remote MCP integration
 1. TypeScript MCP plugin support
-
-## 💼 Business Model
-
-**The app itself will remain completely open source, with no restrictions or limitations.**
-
-**Business model TBD.** Likely a managed backend service using either:
-
-* Azure OpenAI realtime APIs
-* Fully open-source stack — possibly [Unmute.sh](https://unmute.sh/) or [Speaches.ai](https://speaches.ai)
 
 ## 🤝 How You Can Help
 

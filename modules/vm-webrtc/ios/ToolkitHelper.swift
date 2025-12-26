@@ -350,8 +350,11 @@ public class ToolkitHelper: BaseTool {
             ]
         )
 
-        // Set up timeout
-        setupStringTimeout(for: requestId, errorMessage: "Toolkit operation timed out")
+        // NOTE: Timeout disabled because it doesn't integrate with state machine.
+        // When toolkit eventually returns after timeout, it causes confusing UX where
+        // we tell the user the operation failed, but then it actually succeeds.
+        // TODO: Integrate timeout with state machine to properly handle long-running operations.
+        // setupStringTimeout(for: requestId, errorMessage: "Toolkit operation timed out")
     }
 
     /// Register a callback for a string result
@@ -369,55 +372,5 @@ public class ToolkitHelper: BaseTool {
                 "pendingCallbacks": stringCallbacks.count,
             ]
         )
-    }
-
-    /// Set up a timeout for a toolkit operation
-    /// - Parameters:
-    ///   - requestId: The unique request identifier
-    ///   - errorMessage: Error message to use if timeout occurs
-    private func setupStringTimeout(for requestId: String, errorMessage: String) {
-        self.logger.log(
-            "🔧 [ToolkitHelper] ⏱️ Scheduling timeout",
-            attributes: [
-                "requestId": requestId,
-                "timeoutSeconds": 60,
-            ]
-        )
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 60.0) { [weak self] in
-            guard let self = self else { return }
-
-            // Check if callback has already been used
-            let usageCount = self.callbackUsageCount[requestId] ?? 0
-
-            if let callback = self.stringCallbacks[requestId], usageCount == 0 {
-                self.logger.log(
-                    "🔧 [ToolkitHelper] ⏰ Request timed out",
-                    attributes: [
-                        "requestId": requestId,
-                        "usageCount": usageCount,
-                    ]
-                )
-                let error = NSError(
-                    domain: "ToolkitHelper",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: errorMessage]
-                )
-
-                // Mark as used before calling callback
-                self.callbackUsageCount[requestId] = 1
-
-                callback(nil, error)
-                // Don't remove the callback - keep it to track usage patterns
-            } else if usageCount > 0 {
-                self.logger.log(
-                    "🔧 [ToolkitHelper] ⏰ Timeout fired but callback already used",
-                    attributes: [
-                        "requestId": requestId,
-                        "usageCount": usageCount,
-                    ]
-                )
-            }
-        }
     }
 }

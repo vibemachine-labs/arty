@@ -34,7 +34,28 @@ final class InboundAudioStatsMonitor {
         static let energyDeltaActive: Double = 1e-6
         static let energyDeltaInactive: Double = 5e-7
         static let requiredActiveTicks = 2
-        static let inactiveHoldDuration: TimeInterval = 2.0
+
+        /// Duration of continuous silence required before marking speech as ended.
+        ///
+        /// This value represents a compromise between responsiveness and accuracy:
+        ///
+        /// - **Too short (< 0.5s)**: Risk of false "stopped speaking" triggers during natural
+        ///   speech pauses (humans typically pause 0.3-0.7s between sentences) or brief
+        ///   network jitter gaps.
+        ///
+        /// - **Too long (> 1.5s)**: UI feels sluggish — the "assistant speaking" indicator
+        ///   stays on well after audio has audibly stopped, creating a poor user experience.
+        ///
+        /// **1.0 second** was chosen because:
+        /// 1. It exceeds typical intra-sentence pauses (0.3-0.7s), avoiding false triggers
+        /// 2. It accounts for WebRTC jitter buffer delays (~100-200ms)
+        /// 3. It provides reasonably responsive UI feedback after speech actually ends
+        /// 4. It allows ~0.3s margin above worst-case natural pauses
+        ///
+        /// If you experience issues, consider adjusting:
+        /// - Reduce to 0.75s for faster UI response (may false-trigger on slow speakers)
+        /// - Increase to 1.5s for more conservative detection (sluggier UI)
+        static let inactiveHoldDuration: TimeInterval = 1.0
     }
 
     private let peerConnectionProvider: PeerConnectionProvider

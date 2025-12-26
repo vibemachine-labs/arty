@@ -6,6 +6,13 @@ final class NativeLogger {
     private let tracerName = LogfireTracingManager.Constants.defaultTracerName
     private weak var tracingManager: LogfireTracingManager?
 
+    /// ISO 8601 date formatter with millisecond precision for log timestamps
+    private static let timestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
     init(category: String, tracingManager: LogfireTracingManager?) {
         let trimmedCategory = category.trimmingCharacters(in: .whitespacesAndNewlines)
         self.category = trimmedCategory.isEmpty ? "VmWebrtc" : trimmedCategory
@@ -29,11 +36,13 @@ final class NativeLogger {
         let severityText = resolvedSeverity.severityText
         let severityNumber = resolvedSeverity.severityNumber
 
+        let timestamp = Self.timestampFormatter.string(from: Date())
+
         print(
-            "[NativeLogger] severityText=\(severityText) severityNumber=\(severityNumber) message=\(trimmedMessage)"
+            "[\(timestamp)][NativeLogger] severityText=\(severityText) severityNumber=\(severityNumber) message=\(trimmedMessage)"
         )
 
-        var consoleMessage = "[\(category)] \(trimmedMessage)"
+        var consoleMessage = "[\(timestamp)][\(category)] \(trimmedMessage)"
         if let attributes, !attributes.isEmpty {
             let attributeSummary = attributes.map { "\($0.key)=\($0.value)" }.joined(
                 separator: ", ")

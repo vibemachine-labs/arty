@@ -62,7 +62,7 @@ async function validateRepoName(params: any): Promise<any> {
     );
     // Pass through the detailed error message from lookupGithubRepo
     throw new Error(
-      `Could not find unique repository for "${originalRepoName}". ${errorMessage}`,
+      `Could not find unique repository for "${originalRepoName}". ${errorMessage}. Try spelling it out loud in case it differed from my spelling: ${originalRepoName}`,
     );
   }
 }

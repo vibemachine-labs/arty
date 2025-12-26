@@ -300,7 +300,9 @@ export class ToolGithubConnector {
         );
       },
       error: (message: string, ...args: any[]) => {
-        log.error(
+        // Use warn instead of error - Octokit logs 404s as errors, but they're expected
+        // during repo lookup fallback and shouldn't show up as errors in the app
+        log.warn(
           `🔧 [Octokit] ${message}`,
           {},
           { args: args.length > 0 ? JSON.stringify(args) : undefined },

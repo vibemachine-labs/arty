@@ -1,8 +1,8 @@
-import { fetch } from 'expo/fetch';
-import striptags from 'striptags';
-import { log } from '../../../../lib/logger';
-import { getApiKey } from '../../../../lib/secure-storage';
-import type { ToolSessionContext, ToolkitResult } from './types';
+import { fetch } from "expo/fetch";
+import striptags from "striptags";
+import { log } from "../../../../lib/logger";
+import { getApiKey } from "../../../../lib/secure-storage";
+import type { ToolSessionContext, ToolkitResult } from "./types";
 
 /**
  * Fetches a URL with SSRF protection, timeout, and content-type validation.
@@ -14,26 +14,34 @@ import type { ToolSessionContext, ToolkitResult } from './types';
  */
 export async function fetchWithSsrfProtection(
   url: string,
-  timeoutMs: number = 10000
+  timeoutMs: number = 10000,
 ): Promise<Response> {
   // Validate URL format and protocol
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(url);
-    log.debug('[web] URL parsed successfully', {}, {
-      protocol: parsedUrl.protocol,
-      hostname: parsedUrl.hostname,
-      pathname: parsedUrl.pathname,
-    });
+    log.debug(
+      "[web] URL parsed successfully",
+      {},
+      {
+        protocol: parsedUrl.protocol,
+        hostname: parsedUrl.hostname,
+        pathname: parsedUrl.pathname,
+      },
+    );
   } catch (error) {
-    log.error('[web] Invalid URL format', {}, { url, error });
-    throw new Error('Invalid URL format');
+    log.error("[web] Invalid URL format", {}, { url, error });
+    throw new Error("Invalid URL format");
   }
 
   // Only allow HTTP and HTTPS protocols
-  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-    log.error('[web] Unsupported protocol', {}, { protocol: parsedUrl.protocol });
-    throw new Error('Only HTTP and HTTPS protocols are supported');
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    log.error(
+      "[web] Unsupported protocol",
+      {},
+      { protocol: parsedUrl.protocol },
+    );
+    throw new Error("Only HTTP and HTTPS protocols are supported");
   }
 
   // Block private IP ranges and localhost to prevent SSRF
@@ -49,53 +57,68 @@ export async function fetchWithSsrfProtection(
     /^fc00:/, // IPv6 private
   ];
 
-  if (blockedPatterns.some(pattern => pattern.test(hostname))) {
-    log.error('[web] Blocked private/internal URL', {}, { hostname });
-    throw new Error('Access to private/internal URLs is not allowed');
+  if (blockedPatterns.some((pattern) => pattern.test(hostname))) {
+    log.error("[web] Blocked private/internal URL", {}, { hostname });
+    throw new Error("Access to private/internal URLs is not allowed");
   }
 
   // Fetch with timeout
   const abortController = new AbortController();
   const timeoutId = setTimeout(() => {
-    log.warn('[web] Timeout reached, aborting fetch', {}, { url, timeoutMs });
+    log.warn("[web] Timeout reached, aborting fetch", {}, { url, timeoutMs });
     abortController.abort();
   }, timeoutMs);
 
   try {
-    log.info('[web] Starting fetch request', {}, { url, timeoutMs });
+    log.info("[web] Starting fetch request", {}, { url, timeoutMs });
     const response = await fetch(url, { signal: abortController.signal });
     clearTimeout(timeoutId);
-    
-    log.info('[web] Fetch completed', {}, {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-    });
 
-    if (!response.ok) {
-      log.error('[web] HTTP error', {}, {
-        url,
+    log.info(
+      "[web] Fetch completed",
+      {},
+      {
         status: response.status,
         statusText: response.statusText,
-      });
+        ok: response.ok,
+      },
+    );
+
+    if (!response.ok) {
+      log.error(
+        "[web] HTTP error",
+        {},
+        {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+        },
+      );
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     // Validate Content-Type
-    const contentType = response.headers.get('content-type') || '';
-    log.debug('[web] Checking content type', {}, { contentType });
-    const allowedTypes = ['text/', 'application/json', 'application/xml', 'application/xhtml'];
+    const contentType = response.headers.get("content-type") || "";
+    log.debug("[web] Checking content type", {}, { contentType });
+    const allowedTypes = [
+      "text/",
+      "application/json",
+      "application/xml",
+      "application/xhtml",
+    ];
 
-    if (!allowedTypes.some(type => contentType.toLowerCase().includes(type))) {
-      log.error('[web] Unsupported content type', {}, { contentType });
+    if (
+      !allowedTypes.some((type) => contentType.toLowerCase().includes(type))
+    ) {
+      log.error("[web] Unsupported content type", {}, { contentType });
       throw new Error(`Unsupported content type: ${contentType}`);
     }
 
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request timeout');
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Request timeout");
     }
     throw error;
   }
@@ -106,10 +129,14 @@ export async function fetchWithSsrfProtection(
  */
 export async function getContentsFromUrl(
   params: { url: string },
-  context_params?: { maxLength?: number; minHtmlForBody?: number; maxRawBytes?: number },
-  toolSessionContext?: ToolSessionContext
+  context_params?: {
+    maxLength?: number;
+    minHtmlForBody?: number;
+    maxRawBytes?: number;
+  },
+  toolSessionContext?: ToolSessionContext,
 ): Promise<ToolkitResult> {
-  log.info('[web] getContentsFromUrl starting', {}, { url: params.url });
+  log.info("[web] getContentsFromUrl starting", {}, { url: params.url });
 
   try {
     const { url } = params;
@@ -118,26 +145,26 @@ export async function getContentsFromUrl(
     const response = await fetchWithSsrfProtection(url, 10000);
 
     // Fetch content in chunks until we have enough stripped text
-    log.info('[web] Starting chunked content reading', {}, {});
+    log.info("[web] Starting chunked content reading", {}, {});
 
     // Provide default values if context_params is undefined
     const {
       maxLength = 1500,
       minHtmlForBody = 15000,
-      maxRawBytes = 10000000
+      maxRawBytes = 10000000,
     } = context_params || {};
 
     if (!response.body) {
-      log.error('[web] Response body not available', {}, { url });
+      log.error("[web] Response body not available", {}, { url });
       return {
-        result: 'Error: Response body is not available',
+        result: "Error: Response body is not available",
         updatedToolSessionContext: {},
       };
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    let rawHtml = '';
+    let rawHtml = "";
     let totalBytesRead = 0;
     let chunkCount = 0;
 
@@ -147,178 +174,255 @@ export async function getContentsFromUrl(
         chunkCount++;
 
         if (done) {
-          log.info('[web] Stream finished', {}, {
-            totalChunks: chunkCount,
-            totalBytes: totalBytesRead,
-            rawHtmlLength: rawHtml.length,
-          });
+          log.info(
+            "[web] Stream finished",
+            {},
+            {
+              totalChunks: chunkCount,
+              totalBytes: totalBytesRead,
+              rawHtmlLength: rawHtml.length,
+            },
+          );
           break;
         }
 
         totalBytesRead += value.length;
         rawHtml += decoder.decode(value, { stream: true });
 
-        log.trace('[web] Chunk received', {}, {
-          chunkNumber: chunkCount,
-          chunkSize: value.length,
-          totalBytesRead,
-          rawHtmlLength: rawHtml.length,
-        });
+        log.trace(
+          "[web] Chunk received",
+          {},
+          {
+            chunkNumber: chunkCount,
+            chunkSize: value.length,
+            totalBytesRead,
+            rawHtmlLength: rawHtml.length,
+          },
+        );
 
         // Check if we have enough HTML to find body content
-        const hasBodyTag = rawHtml.includes('<body');
-        const hasClosingBodyTag = rawHtml.includes('</body>');
+        const hasBodyTag = rawHtml.includes("<body");
+        const hasClosingBodyTag = rawHtml.includes("</body>");
 
         // Safety limit: stop if we've read too much raw HTML
         // But make sure we've read at least minHtmlForBody or found the closing body tag
         if (totalBytesRead >= maxRawBytes) {
-          log.warn('[web] Reached max raw bytes limit', {}, { totalBytesRead, maxRawBytes });
+          log.warn(
+            "[web] Reached max raw bytes limit",
+            {},
+            { totalBytesRead, maxRawBytes },
+          );
           break;
         }
 
         // If we've read minimum amount and have complete body, we can stop
-        if (totalBytesRead >= minHtmlForBody && hasBodyTag && hasClosingBodyTag) {
-          log.info('[web] Have complete body content, stopping read', {}, {
-            totalBytesRead,
-            hasBodyTag,
-            hasClosingBodyTag,
-          });
+        if (
+          totalBytesRead >= minHtmlForBody &&
+          hasBodyTag &&
+          hasClosingBodyTag
+        ) {
+          log.info(
+            "[web] Have complete body content, stopping read",
+            {},
+            {
+              totalBytesRead,
+              hasBodyTag,
+              hasClosingBodyTag,
+            },
+          );
           break;
         }
       }
 
       // Simple, robust approach: Remove unwanted content with regex, then strip all HTML
       // This works with any HTML structure, including malformed HTML
-      log.debug('[web] Removing unwanted content', {}, {
-        htmlLength: rawHtml.length,
-      });
+      log.debug(
+        "[web] Removing unwanted content",
+        {},
+        {
+          htmlLength: rawHtml.length,
+        },
+      );
 
       // codacy-disable Security/DetectUnsafeHTML
       let cleaned = rawHtml;
 
       // Remove script tags and their content
-      cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      log.debug('[web] Removed scripts', {}, { length: cleaned.length });
+      cleaned = cleaned.replace(
+        /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+        "",
+      );
+      log.debug("[web] Removed scripts", {}, { length: cleaned.length });
 
       // Remove style tags and their content
-      cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-      log.debug('[web] Removed styles', {}, { length: cleaned.length });
+      cleaned = cleaned.replace(
+        /<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,
+        "",
+      );
+      log.debug("[web] Removed styles", {}, { length: cleaned.length });
 
       // Remove other non-content tags (head, nav, header, footer, etc.)
-      cleaned = cleaned.replace(/<(head|nav|header|footer|aside|noscript)\b[^<]*(?:(?!<\/\1>)<[^<]*)*<\/\1>/gi, '');
-      log.debug('[web] Removed structural elements', {}, { length: cleaned.length });
+      cleaned = cleaned.replace(
+        /<(head|nav|header|footer|aside|noscript)\b[^<]*(?:(?!<\/\1>)<[^<]*)*<\/\1>/gi,
+        "",
+      );
+      log.debug(
+        "[web] Removed structural elements",
+        {},
+        { length: cleaned.length },
+      );
 
       // Remove self-closing non-content tags (meta, link, svg, iframe)
-      cleaned = cleaned.replace(/<(meta|link|svg|iframe)\b[^>]*\/?>/gi, '');
-      log.debug('[web] Removed self-closing tags', {}, { length: cleaned.length });
+      cleaned = cleaned.replace(/<(meta|link|svg|iframe)\b[^>]*\/?>/gi, "");
+      log.debug(
+        "[web] Removed self-closing tags",
+        {},
+        { length: cleaned.length },
+      );
 
       // Strip all remaining HTML tags to get plain text
-      log.debug('[web] About to strip remaining HTML tags', {}, {
-        cleanedLength: cleaned.length,
-        cleanedType: typeof cleaned,
-        cleanedPreview: cleaned.substring(0, 500),
-        containsHtml: cleaned.includes('<'),
-      });
-      
+      log.debug(
+        "[web] About to strip remaining HTML tags",
+        {},
+        {
+          cleanedLength: cleaned.length,
+          cleanedType: typeof cleaned,
+          cleanedPreview: cleaned.substring(0, 500),
+          containsHtml: cleaned.includes("<"),
+        },
+      );
+
       const stripHtmlStartTime = Date.now();
       const cleanedText = striptags(cleaned).trim();
       const stripHtmlDuration = Date.now() - stripHtmlStartTime;
       // codacy-enable Security/DetectUnsafeHTML
 
-      log.debug('[web] Completed striptags call', {}, {
-        durationMs: stripHtmlDuration,
-        inputLength: cleaned.length,
-        outputLength: cleanedText.length,
-        outputType: typeof cleanedText,
-      });
+      log.debug(
+        "[web] Completed striptags call",
+        {},
+        {
+          durationMs: stripHtmlDuration,
+          inputLength: cleaned.length,
+          outputLength: cleanedText.length,
+          outputType: typeof cleanedText,
+        },
+      );
 
-      log.debug('[web] Completed text cleaning', {}, {
-        totalChunks: chunkCount,
-        totalBytes: totalBytesRead,
-        cleanedTextLength: cleanedText.length,
-        cleanedTextType: typeof cleanedText,
-        preview: cleanedText.substring(0, 200),
-        isEmpty: cleanedText.length === 0,
-      });
+      log.debug(
+        "[web] Completed text cleaning",
+        {},
+        {
+          totalChunks: chunkCount,
+          totalBytes: totalBytesRead,
+          cleanedTextLength: cleanedText.length,
+          cleanedTextType: typeof cleanedText,
+          preview: cleanedText.substring(0, 200),
+          isEmpty: cleanedText.length === 0,
+        },
+      );
 
       // Check if we got any content
       if (cleanedText.length === 0) {
-        log.warn('[web] No content extracted from page', {}, {
-          url,
-          htmlLength: rawHtml.length,
-          cleanedLength: cleaned.length,
-        });
+        log.warn(
+          "[web] No content extracted from page",
+          {},
+          {
+            url,
+            htmlLength: rawHtml.length,
+            cleanedLength: cleaned.length,
+          },
+        );
         return {
-          result: 'Error: No readable content found on page',
+          result: "Error: No readable content found on page",
           updatedToolSessionContext: {},
         };
       }
 
       // Truncate if necessary
       if (cleanedText.length > maxLength) {
-        const truncated = cleanedText.substring(0, maxLength) + '... (truncated)';
-        log.debug('[web] Truncating content', {}, {
-          originalLength: cleanedText.length,
-          truncatedLength: truncated.length,
-        });
+        const truncated =
+          cleanedText.substring(0, maxLength) + "... (truncated)";
+        log.debug(
+          "[web] Truncating content",
+          {},
+          {
+            originalLength: cleanedText.length,
+            truncatedLength: truncated.length,
+          },
+        );
         return {
           result: truncated,
           updatedToolSessionContext: {},
         };
       }
 
-      log.info('[web] Returning full content', {}, { length: cleanedText.length });
+      log.info(
+        "[web] Returning full content",
+        {},
+        { length: cleanedText.length },
+      );
       return {
         result: cleanedText,
         updatedToolSessionContext: {},
       };
     } catch (streamError) {
       // Handle streaming errors
-      log.error('[web] Stream error', {}, {
-        url,
-        error: streamError instanceof Error ? streamError.message : String(streamError),
-        stack: streamError instanceof Error ? streamError.stack : undefined,
-      });
+      log.error(
+        "[web] Stream error",
+        {},
+        {
+          url,
+          error:
+            streamError instanceof Error
+              ? streamError.message
+              : String(streamError),
+          stack: streamError instanceof Error ? streamError.stack : undefined,
+        },
+      );
       throw streamError;
     } finally {
       // Only release lock if we still have it
       try {
-        log.debug('[web] Releasing reader lock', {}, {});
+        log.debug("[web] Releasing reader lock", {}, {});
         reader.releaseLock();
       } catch {
         // Lock may already be released, which is fine
-        log.info('[web] Reader lock already released', {}, {});
+        log.info("[web] Reader lock already released", {}, {});
       }
     }
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      log.error('[web] Request timeout', {}, { url: params.url });
+    if (error instanceof Error && error.name === "AbortError") {
+      log.error("[web] Request timeout", {}, { url: params.url });
       return {
-        result: 'Error fetching URL: Request timeout',
+        result: "Error fetching URL: Request timeout",
         updatedToolSessionContext: {},
       };
     }
     if (error instanceof Error) {
-      log.error('[web] Error occurred', {}, {
-        url: params.url,
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
+      log.error(
+        "[web] Error occurred",
+        {},
+        {
+          url: params.url,
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+      );
       return {
         result: `Error fetching URL: ${error.message}`,
         updatedToolSessionContext: {},
       };
     }
-    log.error('[web] Unknown error', {}, { url: params.url, error });
+    log.error("[web] Unknown error", {}, { url: params.url, error });
     return {
-      result: 'Error fetching URL: Unknown error',
+      result: "Error fetching URL: Unknown error",
       updatedToolSessionContext: {},
     };
   }
 }
 
-const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
 type OpenAIResponse = {
   output_text?: string;
@@ -334,17 +438,17 @@ const extractOutputText = (resp: OpenAIResponse): string => {
     return resp.output_text;
   }
 
-  let combined = '';
+  let combined = "";
   for (const outItem of resp.output ?? []) {
     if (Array.isArray(outItem.content)) {
       for (const segment of outItem.content) {
-        if (segment && typeof segment.text === 'string') {
+        if (segment && typeof segment.text === "string") {
           combined += segment.text;
         }
       }
     }
     const directText = (outItem as any)?.text;
-    if (typeof directText === 'string') {
+    if (typeof directText === "string") {
       combined += directText;
     }
   }
@@ -365,14 +469,16 @@ const tryParseJson = <T>(value: string): T | null => {
 export async function web_search(
   params: { query: string },
   context_params?: any,
-  toolSessionContext?: ToolSessionContext
+  toolSessionContext?: ToolSessionContext,
 ): Promise<ToolkitResult> {
   const query = params.query.trim();
-  log.info('[web] web_search starting', {}, { query: query });
+  log.info("[web] web_search starting", {}, { query: query });
 
   if (!query) {
     return {
-      result: JSON.stringify({ error: 'Web search requires a non-empty query.' }),
+      result: JSON.stringify({
+        error: "Web search requires a non-empty query.",
+      }),
       updatedToolSessionContext: {},
     };
   }
@@ -380,68 +486,87 @@ export async function web_search(
   // Get API key from secure-storage
   const apiKey = await getApiKey({ forceSecureStore: true });
   if (!apiKey) {
-    log.info('[web] OpenAI API key not configured', {});
+    log.info("[web] OpenAI API key not configured", {});
     return {
       result: JSON.stringify({
         query,
-        error: 'OpenAI API key not configured',
+        error: "OpenAI API key not configured",
       }),
       updatedToolSessionContext: {},
     };
   }
 
   const payload = {
-    model: 'gpt-4o',
+    model: "gpt-5.2",
     input: [
       {
-        role: 'system',
-        content: [{
-          type: 'input_text',
-          text: 'You have been instructed to search web and give good results. Pretend you\'re competing with perplexity. Use live web search to answer comprehensively with citations when available.'
-        }],
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: "You have been instructed to search web and give good results. Pretend you're competing with perplexity. Use live web search to answer comprehensively with citations when available.",
+          },
+        ],
       },
       {
-        role: 'user',
-        content: [{ type: 'input_text', text: query }],
+        role: "user",
+        content: [{ type: "input_text", text: query }],
       },
     ],
-    tools: [{ type: 'web_search' }],
-    tool_choice: 'auto' as const,
+    tools: [{ type: "web_search" }],
+    tool_choice: "auto" as const,
   };
 
-  log.info('[web] Sending payload to OpenAI', {}, {
-    model: payload.model,
-    query: query,
-  });
+  log.info(
+    "[web] Sending payload to OpenAI",
+    {},
+    {
+      model: payload.model,
+      query: query,
+    },
+  );
 
   let response: Response;
   try {
     response = await fetch(OPENAI_RESPONSES_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
     });
   } catch (networkError) {
-    log.info('[web] Network error calling OpenAI Responses API', {}, networkError);
+    log.info(
+      "[web] Network error calling OpenAI Responses API",
+      {},
+      networkError,
+    );
     return {
-      result: JSON.stringify({ error: 'Failed to reach OpenAI Responses API for web search.' }),
+      result: JSON.stringify({
+        error: "Failed to reach OpenAI Responses API for web search.",
+      }),
       updatedToolSessionContext: {},
     };
   }
 
   const rawText = await response.text();
-  log.info('[web] OpenAI response received', {}, {
-    status: response.status,
-    ok: response.ok,
-    rawText: rawText,
-  });
+  log.info(
+    "[web] OpenAI response received",
+    {},
+    {
+      status: response.status,
+      ok: response.ok,
+      rawText: rawText,
+    },
+  );
 
   if (!response.ok) {
     return {
-      result: JSON.stringify({ error: `OpenAI Responses API error ${response.status}`, rawText: rawText}),
+      result: JSON.stringify({
+        error: `OpenAI Responses API error ${response.status}`,
+        rawText: rawText,
+      }),
       updatedToolSessionContext: {},
     };
   }
@@ -449,7 +574,7 @@ export async function web_search(
   const parsed = tryParseJson<OpenAIResponse>(rawText);
   if (!parsed) {
     return {
-      result: JSON.stringify({ error: 'Failed to parse OpenAI response JSON' }),
+      result: JSON.stringify({ error: "Failed to parse OpenAI response JSON" }),
       updatedToolSessionContext: {},
     };
   }
@@ -457,7 +582,9 @@ export async function web_search(
   const answer = extractOutputText(parsed).trim();
   if (!answer) {
     return {
-      result: JSON.stringify({ error: 'OpenAI response did not include any text output' }),
+      result: JSON.stringify({
+        error: "OpenAI response did not include any text output",
+      }),
       updatedToolSessionContext: {},
     };
   }
@@ -467,10 +594,14 @@ export async function web_search(
     answer,
   });
 
-  log.info('[web] Returning web search result', {}, {
-    resultLength: result.length,
-    answer: answer,
-  });
+  log.info(
+    "[web] Returning web search result",
+    {},
+    {
+      resultLength: result.length,
+      answer: answer,
+    },
+  );
 
   return {
     result,

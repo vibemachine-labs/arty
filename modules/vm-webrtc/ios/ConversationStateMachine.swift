@@ -218,6 +218,9 @@ actor ConversationStateMachine {
                 log(
                     "Response.create would REPLACE queued",
                     metadata: [
+                        "eventType": "response.create",
+                        "eventDescription":
+                            "A new response.create request is replacing a previously queued request because assistant is still responding",
                         "trigger": trigger,
                         "replacedTrigger": existing.trigger,
                         "currentPhase": responsePhase.description,
@@ -227,6 +230,9 @@ actor ConversationStateMachine {
                 log(
                     "Response.create would be QUEUED",
                     metadata: [
+                        "eventType": "response.create",
+                        "eventDescription":
+                            "A response.create request is being queued because assistant is currently responding",
                         "trigger": trigger,
                         "currentPhase": responsePhase.description,
                         "decision": "QUEUE",
@@ -241,6 +247,9 @@ actor ConversationStateMachine {
             log(
                 "Response.create would be SENT",
                 metadata: [
+                    "eventType": "response.create",
+                    "eventDescription":
+                        "A response.create request is being sent immediately because assistant is idle",
                     "trigger": trigger,
                     "previousPhase": previousPhase.description,
                     "newPhase": responsePhase.description,
@@ -267,6 +276,9 @@ actor ConversationStateMachine {
         log(
             "response.created received",
             metadata: [
+                "eventType": "response.created",
+                "eventDescription":
+                    "Server confirmed response creation - assistant is now preparing to respond",
                 "responseId": responseId ?? "nil",
                 "previousPhase": previousPhase.description,
                 "newPhase": responsePhase.description,
@@ -279,6 +291,9 @@ actor ConversationStateMachine {
             log(
                 "Tool audio would STOP (response starting)",
                 metadata: [
+                    "eventType": "response.created",
+                    "eventDescription":
+                        "Tool audio playback would stop because assistant is starting a new response",
                     "callId": callId,
                     "toolName": toolName,
                 ])
@@ -297,6 +312,9 @@ actor ConversationStateMachine {
             log(
                 "Audio streaming STARTED (audio.delta)",
                 metadata: [
+                    "eventType": "response.audio.delta",
+                    "eventDescription":
+                        "Assistant audio streaming has started - receiving audio chunks from the server",
                     "responseId": responseId ?? "nil",
                     "previousPhase": previousPhase.description,
                     "newPhase": responsePhase.description,
@@ -308,6 +326,9 @@ actor ConversationStateMachine {
                 log(
                     "Tool audio would STOP (assistant speaking)",
                     metadata: [
+                        "eventType": "response.audio.delta",
+                        "eventDescription":
+                            "Tool audio playback would stop because assistant started speaking",
                         "callId": callId,
                         "toolName": toolName,
                     ])
@@ -334,6 +355,9 @@ actor ConversationStateMachine {
             log(
                 "Audio streaming STARTED (buffer.started)",
                 metadata: [
+                    "eventType": "output_audio_buffer.started",
+                    "eventDescription":
+                        "Assistant audio output buffer started - audio playback is beginning",
                     "previousPhase": previousPhase.description,
                     "newPhase": responsePhase.description,
                 ])
@@ -344,6 +368,9 @@ actor ConversationStateMachine {
                 log(
                     "Tool audio would STOP (assistant speaking)",
                     metadata: [
+                        "eventType": "output_audio_buffer.started",
+                        "eventDescription":
+                            "Tool audio playback would stop because assistant audio buffer started",
                         "callId": callId,
                         "toolName": toolName,
                     ])
@@ -371,6 +398,9 @@ actor ConversationStateMachine {
         log(
             "Audio streaming STOPPED (audio.done)",
             metadata: [
+                "eventType": "response.audio.done",
+                "eventDescription":
+                    "Server finished sending audio data for this response - audio streaming complete",
                 "previousPhase": previousPhase.description,
                 "newPhase": responsePhase.description,
             ])
@@ -380,6 +410,9 @@ actor ConversationStateMachine {
             log(
                 "Tool audio would RETRY now",
                 metadata: [
+                    "eventType": "response.audio.done",
+                    "eventDescription":
+                        "Tool audio that was blocked can now retry playback since assistant stopped speaking",
                     "callId": callId,
                     "toolName": toolName,
                     "reason": "assistant stopped streaming",
@@ -409,6 +442,9 @@ actor ConversationStateMachine {
         log(
             "Audio streaming STOPPED (buffer.done)",
             metadata: [
+                "eventType": "output_audio_buffer.done",
+                "eventDescription":
+                    "Assistant audio output buffer completed - audio playback has finished",
                 "previousPhase": previousPhase.description,
                 "newPhase": responsePhase.description,
             ])
@@ -418,6 +454,9 @@ actor ConversationStateMachine {
             log(
                 "Tool audio would RETRY now",
                 metadata: [
+                    "eventType": "output_audio_buffer.done",
+                    "eventDescription":
+                        "Tool audio that was blocked can now retry playback since assistant audio buffer completed",
                     "callId": callId,
                     "toolName": toolName,
                     "reason": "assistant stopped streaming (buffer.done)",
@@ -444,6 +483,9 @@ actor ConversationStateMachine {
         log(
             "response.done received",
             metadata: [
+                "eventType": "response.done",
+                "eventDescription":
+                    "Response streaming complete - assistant has finished this response entirely",
                 "responseId": responseId ?? "nil",
                 "status": status ?? "nil",
                 "previousPhase": previousPhase.description,
@@ -459,6 +501,9 @@ actor ConversationStateMachine {
                 log(
                     "Queued response EXPIRED",
                     metadata: [
+                        "eventType": "response.done",
+                        "eventDescription":
+                            "A previously queued response.create request expired because it waited too long",
                         "trigger": queued.trigger,
                         "age": Date().timeIntervalSince(queued.timestamp),
                         "ttl": queuedResponseTTL,
@@ -467,6 +512,9 @@ actor ConversationStateMachine {
                 log(
                     "Queued response would be SENT now",
                     metadata: [
+                        "eventType": "response.done",
+                        "eventDescription":
+                            "A previously queued response.create request is now being sent since assistant finished responding",
                         "trigger": queued.trigger,
                         "age": Date().timeIntervalSince(queued.timestamp),
                     ])
@@ -491,6 +539,9 @@ actor ConversationStateMachine {
             log(
                 "Tool audio would STOP (response cancelled)",
                 metadata: [
+                    "eventType": "response.cancelled",
+                    "eventDescription":
+                        "Tool audio playback would stop because the response was cancelled",
                     "callId": callId,
                     "toolName": toolName,
                 ])
@@ -499,6 +550,9 @@ actor ConversationStateMachine {
         log(
             "response.cancelled received",
             metadata: [
+                "eventType": "response.cancelled",
+                "eventDescription":
+                    "Server cancelled the response - assistant response was interrupted or aborted",
                 "responseId": responseId ?? "nil",
                 "previousPhase": previousPhase.description,
                 "newPhase": responsePhase.description,
@@ -512,7 +566,10 @@ actor ConversationStateMachine {
                 log(
                     "Queued response would be SENT now (after cancel)",
                     metadata: [
-                        "trigger": queued.trigger
+                        "eventType": "response.cancelled",
+                        "eventDescription":
+                            "A previously queued response.create request is now being sent after the previous response was cancelled",
+                        "trigger": queued.trigger,
                     ])
                 responsePhase = .inProgress(responseId: nil)
             }
@@ -534,6 +591,9 @@ actor ConversationStateMachine {
             log(
                 "Tool call received - audio BLOCKED",
                 metadata: [
+                    "eventType": "response.function_call_arguments.done",
+                    "eventDescription":
+                        "Tool call received but audio playback is blocked because assistant is currently speaking",
                     "callId": callId,
                     "toolName": toolName,
                     "previousPhase": previousPhase.description,
@@ -547,6 +607,9 @@ actor ConversationStateMachine {
             log(
                 "Tool call received - audio would START",
                 metadata: [
+                    "eventType": "response.function_call_arguments.done",
+                    "eventDescription":
+                        "Tool call received and audio playback would start immediately since assistant is not speaking",
                     "callId": callId,
                     "toolName": toolName,
                     "previousPhase": previousPhase.description,
@@ -559,6 +622,9 @@ actor ConversationStateMachine {
             log(
                 "⚠️ INCONSISTENCY: Shadow vs actual streaming state at tool call",
                 metadata: [
+                    "eventType": "response.function_call_arguments.done",
+                    "eventDescription":
+                        "Shadow state disagrees with actual state about whether assistant is streaming - potential state tracking bug",
                     "shadowStreaming": responsePhase.isStreaming,
                     "actualStreaming": actualAssistantStreaming,
                     "toolCallPhase": toolCallPhase.description,
@@ -573,6 +639,9 @@ actor ConversationStateMachine {
         log(
             "Tool result ready to send",
             metadata: [
+                "eventType": "conversation.item.create",
+                "eventDescription":
+                    "Tool execution completed and result is ready to be sent back to the server",
                 "callId": callId,
                 "shadowCanSend": canSendImmediately,
                 "actualResponseInProgress": actualResponseInProgress,
@@ -584,7 +653,10 @@ actor ConversationStateMachine {
             log(
                 "⚠️ INCONSISTENCY: Shadow says can send = \(canSendImmediately), actual responseInProgress = \(actualResponseInProgress)",
                 metadata: [
-                    "callId": callId
+                    "eventType": "conversation.item.create",
+                    "eventDescription":
+                        "Shadow state disagrees with actual state about whether tool result can be sent - potential state tracking bug",
+                    "callId": callId,
                 ], level: .warn)
         }
     }
@@ -601,6 +673,9 @@ actor ConversationStateMachine {
             log(
                 "Tool call completed",
                 metadata: [
+                    "eventType": "tool_call.completed",
+                    "eventDescription":
+                        "Tool call execution finished and tool call phase returned to idle",
                     "callId": callId,
                     "previousPhase": previousPhase.description,
                     "newPhase": toolCallPhase.description,
@@ -609,6 +684,9 @@ actor ConversationStateMachine {
             log(
                 "Tool call completed (not current)",
                 metadata: [
+                    "eventType": "tool_call.completed",
+                    "eventDescription":
+                        "A tool call completed but it was not the currently tracked tool call - may indicate overlapping tool calls",
                     "completedCallId": callId,
                     "currentPhase": toolCallPhase.description,
                 ])
@@ -627,6 +705,9 @@ actor ConversationStateMachine {
         log(
             "User speech STARTED",
             metadata: [
+                "eventType": "input_audio_buffer.speech_started",
+                "eventDescription":
+                    "Voice Activity Detection (VAD) detected that the user started speaking",
                 "previousPhase": previousPhase.description,
                 "newPhase": userSpeechPhase.description,
             ])
@@ -644,6 +725,9 @@ actor ConversationStateMachine {
             log(
                 "User speech STOPPED",
                 metadata: [
+                    "eventType": "input_audio_buffer.speech_stopped",
+                    "eventDescription":
+                        "Voice Activity Detection (VAD) detected that the user stopped speaking",
                     "duration": String(format: "%.2fs", duration),
                     "previousPhase": previousPhase.description,
                     "newPhase": userSpeechPhase.description,
@@ -652,6 +736,9 @@ actor ConversationStateMachine {
             log(
                 "User speech STOPPED (was not speaking?)",
                 metadata: [
+                    "eventType": "input_audio_buffer.speech_stopped",
+                    "eventDescription":
+                        "Speech stopped event received but shadow state did not think user was speaking - potential state tracking issue",
                     "previousPhase": previousPhase.description,
                     "newPhase": userSpeechPhase.description,
                 ], level: .warn)
@@ -663,7 +750,10 @@ actor ConversationStateMachine {
         log(
             "Input audio buffer cleared",
             metadata: [
-                "userSpeechPhase": userSpeechPhase.description
+                "eventType": "input_audio_buffer.cleared",
+                "eventDescription":
+                    "The user's input audio buffer was cleared - any uncommitted audio data is discarded",
+                "userSpeechPhase": userSpeechPhase.description,
             ])
     }
 
@@ -678,6 +768,9 @@ actor ConversationStateMachine {
         log(
             "Tool audio start attempted",
             metadata: [
+                "eventType": "audio_mix_player.start_attempted",
+                "eventDescription":
+                    "Attempted to start playing tool audio (e.g., beeps or sound effects during tool execution)",
                 "prefix": prefix,
                 "actuallyBlocked": wasBlocked,
                 "shadowWouldBlock": shadowWouldBlock,
@@ -688,6 +781,9 @@ actor ConversationStateMachine {
             log(
                 "⚠️ INCONSISTENCY: Tool audio blocking mismatch",
                 metadata: [
+                    "eventType": "audio_mix_player.start_attempted",
+                    "eventDescription":
+                        "Shadow state disagrees with actual behavior about whether tool audio should be blocked - potential state tracking bug",
                     "actuallyBlocked": wasBlocked,
                     "shadowWouldBlock": shadowWouldBlock,
                     "actualAssistantStreaming": actualAssistantStreaming,
@@ -701,6 +797,8 @@ actor ConversationStateMachine {
         log(
             "Tool audio stopped",
             metadata: [
+                "eventType": "audio_mix_player.stopped",
+                "eventDescription": "Tool audio playback was stopped",
                 "reason": reason,
                 "toolCallPhase": toolCallPhase.description,
             ])
@@ -721,6 +819,9 @@ actor ConversationStateMachine {
         log(
             "Shadow state RESET",
             metadata: [
+                "eventType": "shadow_state.reset",
+                "eventDescription":
+                    "All shadow state has been reset to initial values - typically happens on disconnect or reconnect",
                 "reason": reason,
                 "previousState": previousSnapshot.description,
             ])
@@ -775,6 +876,9 @@ actor ConversationStateMachine {
             log(
                 "⚠️ INCONSISTENCY: Streaming state mismatch",
                 metadata: [
+                    "eventType": event,
+                    "eventDescription":
+                        "Shadow state's streaming flag disagrees with actual streaming state - indicates state tracking is out of sync",
                     "event": event,
                     "shadowStreaming": shadowStreaming,
                     "actualStreaming": actualStreaming,

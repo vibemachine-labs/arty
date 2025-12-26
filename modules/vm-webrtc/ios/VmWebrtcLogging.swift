@@ -15,8 +15,8 @@ enum VmWebrtcLogging {
     ///   .error  - Errors only
     ///
     /// To reduce log verbosity, uncomment the .debug line and comment the .trace line:
-    static let minimumLogLevel: OpenAIWebRTCClient.NativeLogLevel = .trace
-    // static let minimumLogLevel: OpenAIWebRTCClient.NativeLogLevel = .debug
+    // static let minimumLogLevel: OpenAIWebRTCClient.NativeLogLevel = .trace
+    static let minimumLogLevel: OpenAIWebRTCClient.NativeLogLevel = .debug
 
     static let logger = NativeLogger(category: "VmWebrtc", tracingManager: nil)
 

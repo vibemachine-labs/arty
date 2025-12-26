@@ -3,7 +3,10 @@ import Foundation
 final class WebRTCEventHandler {
 
     // Default inactivity threshold (seconds) before auto-disconnect
-    // Set to 8 minutes because idle timer doesn't integrate with state machine
+    // Set to 8 minutes because idle timer doesn't integrate with state machine.
+    // NOTE: When idle timeout fires, it does NOT inform the rest of the app that
+    // the call has been disconnected (e.g., audio tool sounds will keep playing).
+    // TODO: Integrate with state machine to properly notify all components.
     static let defaultIdleTimeout: TimeInterval = 480
 
     struct ToolContext {

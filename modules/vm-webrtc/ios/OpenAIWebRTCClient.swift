@@ -842,16 +842,22 @@ extension OpenAIWebRTCClient: ToolCallResponder {
             let trigger = "tool_call_result:\(callId)"
             let responseInProgress = eventHandler.checkResponseInProgress()
             let audioStreaming = eventHandler.checkAssistantAudioStreaming()
+            let currentRespId = eventHandler.getCurrentResponseId()
+            let shortCurrentRespId =
+                currentRespId.map { id in id.count > 12 ? "\(id.prefix(12))..." : id } ?? "nil"
 
             self.logger.log(
-                "🔍 [RESPONSE_CREATE_CHECK] Checking state before sending response.create",
+                "🔍 [RESPONSE_CREATE_CHECK] Checking state (currentResp=\(shortCurrentRespId), inProgress=\(responseInProgress))",
                 attributes: logAttributes(
-                    for: .debug,
+                    for: .info,
                     metadata: [
                         "trigger": "tool_call_result",
                         "callId": callId,
                         "responseInProgress": responseInProgress,
+                        "currentResponseId": currentRespId as Any,
                         "audioStreaming": audioStreaming,
+                        "raceConditionNote":
+                            "If OpenAI returns conversation_already_has_active_response, compare blocking ID with currentResponseId",
                         "timestamp": ISO8601DateFormatter().string(from: Date()),
                         "threadId": Thread.current.description,
                     ])
@@ -861,13 +867,14 @@ extension OpenAIWebRTCClient: ToolCallResponder {
 
                 // Continue conversation
                 self.logger.log(
-                    "⚠️ Already have a response in progress; queuing response.create",
+                    "⚠️ Already have a response in progress (\(shortCurrentRespId)); queuing response.create",
                     attributes: logAttributes(
                         for: .warn,
                         metadata: [
                             "trigger": "tool_call_result",
                             "callId": callId,
                             "responseInProgress": responseInProgress,
+                            "currentResponseId": currentRespId as Any,
                             "audioStreaming": audioStreaming,
                             "timestamp": ISO8601DateFormatter().string(from: Date()),
                         ])
@@ -882,14 +889,17 @@ extension OpenAIWebRTCClient: ToolCallResponder {
 
                 // Continue conversation
                 self.logger.log(
-                    "📤 [RESPONSE_CREATE] Going to send response.create to continue conversation",
+                    "📤 [RESPONSE_CREATE] Sending response.create (localState=idle, lastResp=\(shortCurrentRespId))",
                     attributes: logAttributes(
                         for: .info,
                         metadata: [
                             "trigger": "tool_call_result",
                             "callId": callId,
                             "responseInProgress": responseInProgress,
+                            "currentResponseId": currentRespId as Any,
                             "audioStreaming": audioStreaming,
+                            "warning":
+                                "If error occurs, OpenAI may have started a new response we didn't see",
                             "timestamp": ISO8601DateFormatter().string(from: Date()),
                             "threadId": Thread.current.description,
                         ])
@@ -1004,15 +1014,19 @@ extension OpenAIWebRTCClient: ToolCallResponder {
         let trigger = "tool_call_error:\(callId)"
         let responseInProgress = eventHandler.checkResponseInProgress()
         let audioStreaming = eventHandler.checkAssistantAudioStreaming()
+        let currentRespIdErr = eventHandler.getCurrentResponseId()
+        let shortCurrentRespIdErr =
+            currentRespIdErr.map { id in id.count > 12 ? "\(id.prefix(12))..." : id } ?? "nil"
 
         self.logger.log(
-            "🔍 [RESPONSE_CREATE_CHECK] Checking state before sending response.create after tool error",
+            "🔍 [RESPONSE_CREATE_CHECK] Checking state after tool error (currentResp=\(shortCurrentRespIdErr), inProgress=\(responseInProgress))",
             attributes: logAttributes(
-                for: .debug,
+                for: .info,
                 metadata: [
                     "trigger": "tool_call_error",
                     "callId": callId,
                     "responseInProgress": responseInProgress,
+                    "currentResponseId": currentRespIdErr as Any,
                     "audioStreaming": audioStreaming,
                     "timestamp": ISO8601DateFormatter().string(from: Date()),
                     "threadId": Thread.current.description,
@@ -1021,13 +1035,14 @@ extension OpenAIWebRTCClient: ToolCallResponder {
 
         if responseInProgress {
             self.logger.log(
-                "⚠️ Already have a response in progress; queuing response.create after tool error",
+                "⚠️ Already have a response in progress (\(shortCurrentRespIdErr)); queuing response.create after tool error",
                 attributes: logAttributes(
                     for: .warn,
                     metadata: [
                         "trigger": "tool_call_error",
                         "callId": callId,
                         "responseInProgress": responseInProgress,
+                        "currentResponseId": currentRespIdErr as Any,
                         "audioStreaming": audioStreaming,
                         "timestamp": ISO8601DateFormatter().string(from: Date()),
                     ])
@@ -1036,14 +1051,17 @@ extension OpenAIWebRTCClient: ToolCallResponder {
             eventHandler.queueResponseCreate(trigger: trigger)
         } else {
             self.logger.log(
-                "📤 [RESPONSE_CREATE] Sending response.create after tool error",
+                "📤 [RESPONSE_CREATE] Sending response.create after tool error (localState=idle, lastResp=\(shortCurrentRespIdErr))",
                 attributes: logAttributes(
                     for: .info,
                     metadata: [
                         "trigger": "tool_call_error",
                         "callId": callId,
                         "responseInProgress": responseInProgress,
+                        "currentResponseId": currentRespIdErr as Any,
                         "audioStreaming": audioStreaming,
+                        "warning":
+                            "If error occurs, OpenAI may have started a new response we didn't see",
                         "timestamp": ISO8601DateFormatter().string(from: Date()),
                         "threadId": Thread.current.description,
                     ])

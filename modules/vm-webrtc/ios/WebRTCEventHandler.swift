@@ -212,6 +212,15 @@ final class WebRTCEventHandler {
         }
     }
 
+    /// Get the current response ID being tracked.
+    /// Returns nil if no response is in progress.
+    /// Useful for race condition tracing - compare this with error messages from OpenAI.
+    func getCurrentResponseId() -> String? {
+        return responseStateQueue.sync {
+            return currentResponseId
+        }
+    }
+
     /// Check if assistant audio is currently streaming.
     /// This is a more precise indicator than response state, based on lower-level OpenAI events.
     /// Returns true if audio is streaming, false otherwise.
@@ -1046,14 +1055,20 @@ final class WebRTCEventHandler {
         let responseId = response["id"] as? String
         let status = response["status"] as? String
 
+        // Shorten response ID for log message (e.g., "resp_Cr9Qsg8m..." from "resp_Cr9Qsg8mw7CLQ1KOdxzfq")
+        let shortResponseId =
+            responseId.map { id in
+                id.count > 12 ? "\(id.prefix(12))..." : id
+            } ?? "nil"
+
         // Update response state machine
         responseStateQueue.async {
             self.responseInProgress = true
             self.currentResponseId = responseId
             self.logger.log(
-                "[ResponseStateMachine] Response created, now in progress",
+                "🎬 [ResponseStateMachine] Response created (\(shortResponseId)), now in progress",
                 attributes: logAttributes(
-                    for: .debug,
+                    for: .info,
                     metadata: [
                         "responseId": responseId as Any,
                         "status": status as Any,
@@ -1064,9 +1079,9 @@ final class WebRTCEventHandler {
         }
 
         logger.log(
-            "[WebRTCEventHandler] Response created",
+            "🎬 [WebRTCEventHandler] Response created (\(shortResponseId))",
             attributes: logAttributes(
-                for: .debug,
+                for: .info,
                 metadata: [
                     "responseId": responseId as Any,
                     "status": status as Any,
@@ -1123,10 +1138,16 @@ final class WebRTCEventHandler {
                 self.queuedResponseCreate = nil
             }
 
+            // Shorten response ID for log message
+            let shortRespId =
+                responseId.map { id in
+                    id.count > 12 ? "\(id.prefix(12))..." : id
+                } ?? "nil"
+
             self.logger.log(
-                "[ResponseStateMachine] Response done, no longer in progress",
+                "🏁 [ResponseStateMachine] Response done (\(shortRespId)), no longer in progress",
                 attributes: logAttributes(
-                    for: .debug,
+                    for: .info,
                     metadata: [
                         "responseId": responseId as Any,
                         "status": status as Any,
@@ -1688,7 +1709,7 @@ final class WebRTCEventHandler {
         }
 
         logger.log(
-            "[WebRTCEventHandler] Transcript complete (assistant)",
+            "💬 [WebRTCEventHandler] Transcript complete (assistant)",
             attributes: logAttributes(
                 for: .info,
                 metadata: [
@@ -1824,7 +1845,7 @@ final class WebRTCEventHandler {
 
         if !transcriptText.isEmpty {
             logger.log(
-                "[WebRTCEventHandler] Transcript complete (user)",
+                "💬 [WebRTCEventHandler] Transcript complete (user)",
                 attributes: logAttributes(
                     for: .info,
                     metadata: [
@@ -1837,7 +1858,7 @@ final class WebRTCEventHandler {
             )
         } else {
             logger.log(
-                "[WebRTCEventHandler] Transcript complete (user, empty)",
+                "💬 [WebRTCEventHandler] Transcript complete (user, empty)",
                 attributes: logAttributes(
                     for: .debug,
                     metadata: [

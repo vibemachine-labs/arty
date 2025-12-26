@@ -1192,7 +1192,7 @@ final class WebRTCEventHandler {
             if !self.assistantAudioStreaming {
                 self.assistantAudioStreaming = true
                 self.logger.log(
-                    "[Event-SpeakingDetection] Assistant audio streaming started (audio.delta)",
+                    "🖥️✅ [Event-SpeakingDetection] Assistant audio streaming started (audio.delta)",
                     attributes: logAttributes(
                         for: .info,
                         metadata: [
@@ -1212,7 +1212,7 @@ final class WebRTCEventHandler {
         audioStreamingQueue.async {
             self.assistantAudioStreaming = false
             self.logger.log(
-                "[Event-SpeakingDetection] Assistant audio streaming ended (audio.done)",
+                "🖥️🔇 [Event-SpeakingDetection] Assistant audio streaming ended (audio.done)",
                 attributes: logAttributes(
                     for: .info,
                     metadata: [
@@ -1231,7 +1231,7 @@ final class WebRTCEventHandler {
             if !self.assistantAudioStreaming {
                 self.assistantAudioStreaming = true
                 self.logger.log(
-                    "[Event-SpeakingDetection] Assistant audio streaming started (buffer.started)",
+                    "🖥️✅ [Event-SpeakingDetection] Assistant audio streaming started (buffer.started)",
                     attributes: logAttributes(
                         for: .info,
                         metadata: [
@@ -1252,7 +1252,7 @@ final class WebRTCEventHandler {
         audioStreamingQueue.async {
             self.assistantAudioStreaming = false
             self.logger.log(
-                "[Event-SpeakingDetection] Assistant audio streaming ended (buffer.done)",
+                "🖥️🔇 [Event-SpeakingDetection] Assistant audio streaming ended (buffer.done)",
                 attributes: logAttributes(
                     for: .info,
                     metadata: [

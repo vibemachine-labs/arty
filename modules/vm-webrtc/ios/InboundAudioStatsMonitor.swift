@@ -167,7 +167,7 @@ final class InboundAudioStatsMonitor {
                 metadata["audioLevel"] = formattedStatValue(audioLevel)
             }
 
-            logEmitter(.trace, "[RTP-SpeakingDetection] Inbound audio stats", metadata)
+            logEmitter(.trace, "🔊 [RTP-SpeakingDetection] Inbound audio stats", metadata)
         }
     }
 
@@ -238,9 +238,10 @@ final class InboundAudioStatsMonitor {
         speakingState = state
 
         if state.isSpeaking != wasSpeaking {
+            let emoji = state.isSpeaking ? "🔊✅" : "🔊🔇"
             logEmitter(
                 .debug,
-                "[RTP-SpeakingDetection] Remote speaking state changed: \(state.isSpeaking)",
+                "\(emoji) [RTP-SpeakingDetection] Remote speaking state changed: \(state.isSpeaking)",
                 [
                     "detectionType": "RTP-based (signal-level)",
                     "smoothedLevel": state.smoothedLevel,

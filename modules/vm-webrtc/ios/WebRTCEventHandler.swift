@@ -3,7 +3,8 @@ import Foundation
 final class WebRTCEventHandler {
 
     // Default inactivity threshold (seconds) before auto-disconnect
-    static let defaultIdleTimeout: TimeInterval = 60
+    // Set to 8 minutes because idle timer doesn't integrate with state machine
+    static let defaultIdleTimeout: TimeInterval = 480
 
     struct ToolContext {
         let githubConnectorDelegate: BaseTool?

@@ -89,7 +89,7 @@ export function VoiceChat({
         setIsStopping(false);
         setIsConnecting(false);
         setFrequencyBins([]);
-      }
+      },
     );
 
     return () => {
@@ -113,12 +113,16 @@ export function VoiceChat({
           cachedInput: payload.cachedInput ?? 0,
         });
 
-        log.info("💵 Token usage event", {}, {
-          event: payload,
-          totals,
-        });
+        log.info(
+          "💵 Token usage event",
+          {},
+          {
+            event: payload,
+            totals,
+          },
+        );
         setSessionCostUsd(totals.totalUSD);
-      }
+      },
     );
 
     return () => {
@@ -135,29 +139,39 @@ export function VoiceChat({
       "onRealtimeError",
       async (payload: RealtimeErrorEventPayload) => {
         const errorCode = payload?.error?.code;
-        const isItemTruncateError = errorCode === "item_truncate_invalid_item_id";
-        
+        const isItemTruncateError =
+          errorCode === "item_truncate_invalid_item_id";
+
         // Item truncate errors are non-breaking, just log as warning
         if (isItemTruncateError) {
-          log.warn("Realtime voice session warning (non-breaking)", {}, {
+          log.warn(
+            "Realtime voice session warning (non-breaking)",
+            {},
+            {
+              errorType: payload?.error?.type,
+              errorCode: payload?.error?.code,
+              errorMessage: payload?.error?.message,
+              errorEventId: payload?.error?.event_id,
+              fullPayload: payload,
+            },
+          );
+          return; // Don't show alert for this benign error
+        }
+
+        log.error(
+          "Realtime voice session error",
+          {},
+          {
             errorType: payload?.error?.type,
             errorCode: payload?.error?.code,
             errorMessage: payload?.error?.message,
             errorEventId: payload?.error?.event_id,
             fullPayload: payload,
-          });
-          return; // Don't show alert for this benign error
-        }
-
-        log.error("Realtime voice session error", {}, {
-          errorType: payload?.error?.type,
-          errorCode: payload?.error?.code,
-          errorMessage: payload?.error?.message,
-          errorEventId: payload?.error?.event_id,
-          fullPayload: payload,
-        });
+          },
+        );
         const message =
-          typeof payload?.error?.message === "string" && payload.error.message.trim().length > 0
+          typeof payload?.error?.message === "string" &&
+          payload.error.message.trim().length > 0
             ? payload.error.message.trim()
             : "The voice session encountered an unexpected error.";
 
@@ -166,7 +180,7 @@ export function VoiceChat({
         if (shouldShowAlert) {
           Alert.alert("Session Error", message);
         }
-      }
+      },
     );
 
     return () => {
@@ -194,7 +208,7 @@ export function VoiceChat({
           });
           setFrequencyBins(normalized);
         }
-      }
+      },
     );
 
     return () => {
@@ -212,22 +226,30 @@ export function VoiceChat({
       (payload: TranscriptEventPayload) => {
         if (payload.isDone && payload.transcript) {
           // Log complete transcript
-          log.info("Model response transcript", {}, {
-            transcript: payload.transcript,
-            type: payload.type,
-            transcriptLength: payload.transcript.length,
-            responseId: payload.responseId,
-            itemId: payload.itemId,
-          });
+          log.info(
+            "Model response transcript",
+            {},
+            {
+              transcript: payload.transcript,
+              type: payload.type,
+              transcriptLength: payload.transcript.length,
+              responseId: payload.responseId,
+              itemId: payload.itemId,
+            },
+          );
         } else if (payload.delta) {
           // Log transcript delta for debugging
-          log.debug("Model response transcript delta", {}, {
-            type: payload.type,
-            delta: payload.delta,
-            responseId: payload.responseId,
-          });
+          log.debug(
+            "Model response transcript delta",
+            {},
+            {
+              type: payload.type,
+              delta: payload.delta,
+              responseId: payload.responseId,
+            },
+          );
         }
-      }
+      },
     );
 
     return () => {
@@ -243,18 +265,22 @@ export function VoiceChat({
     const subscription = VmWebrtcModule.addListener(
       "onOutboundAudioStats",
       (payload: OutboundAudioStatsEventPayload) => {
-        log.debug("Outbound audio stats", {}, {
-          localSpeaking: payload.localSpeaking,
-          audioLevel: payload.audioLevel,
-          energyDelta: payload.energyDelta,
-          samplesDelta: payload.samplesDelta,
-          totalAudioEnergy: payload.totalAudioEnergy,
-          totalSamplesSent: payload.totalSamplesSent,
-          trackIdentifier: payload.trackIdentifier,
-          statsId: payload.statsId,
-          timestampUs: payload.timestampUs,
-        });
-      }
+        log.debug(
+          "Outbound audio stats",
+          {},
+          {
+            localSpeaking: payload.localSpeaking,
+            audioLevel: payload.audioLevel,
+            energyDelta: payload.energyDelta,
+            samplesDelta: payload.samplesDelta,
+            totalAudioEnergy: payload.totalAudioEnergy,
+            totalSamplesSent: payload.totalSamplesSent,
+            trackIdentifier: payload.trackIdentifier,
+            statsId: payload.statsId,
+            timestampUs: payload.timestampUs,
+          },
+        );
+      },
     );
 
     return () => {
@@ -264,21 +290,32 @@ export function VoiceChat({
 
   // Monitor app state changes to log background behavior during active sessions
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
-      log.info("App state changed", {}, {
-        newState: nextAppState,
-        isSessionActive,
-        platform: Platform.OS,
-      });
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextAppState: AppStateStatus) => {
+        log.info(
+          "App state changed",
+          {},
+          {
+            newState: nextAppState,
+            isSessionActive,
+            platform: Platform.OS,
+          },
+        );
 
-      if (nextAppState === "background" && isSessionActive) {
-        log.info("App moved to background during active voice session", {}, {
-          note: "Background audio mode enabled, session should continue",
-        });
-      } else if (nextAppState === "active" && isSessionActive) {
-        log.info("App returned to foreground with active voice session", {});
-      }
-    });
+        if (nextAppState === "background" && isSessionActive) {
+          log.info(
+            "App moved to background during active voice session",
+            {},
+            {
+              note: "Background audio mode enabled, session should continue",
+            },
+          );
+        } else if (nextAppState === "active" && isSessionActive) {
+          log.info("App returned to foreground with active voice session", {});
+        }
+      },
+    );
 
     return () => {
       subscription.remove();
@@ -287,28 +324,45 @@ export function VoiceChat({
 
   const handleStartVoiceSession = useCallback(async () => {
     if (isSessionActive || isConnecting) {
-      log.debug("Start voice session pressed while busy", {}, {
-        isSessionActive,
-        isConnecting,
-      });
+      log.debug(
+        "Start voice session pressed while busy",
+        {},
+        {
+          isSessionActive,
+          isConnecting,
+        },
+      );
       return;
     }
 
     if (Platform.OS !== "ios") {
-      log.warn("Attempted to start a voice session on an unsupported platform", {}, { platform: Platform.OS });
+      log.warn(
+        "Attempted to start a voice session on an unsupported platform",
+        {},
+        { platform: Platform.OS },
+      );
       Alert.alert("VmWebrtc", "Voice sessions are currently limited to iOS.");
       return;
     }
 
     if (!hasMicPermission) {
       log.error("Microphone permission missing. Aborting voice session.", {});
-      Alert.alert("VmWebrtc", "Please enable microphone access to start a voice session.");
+      Alert.alert(
+        "VmWebrtc",
+        "Please enable microphone access to start a voice session.",
+      );
       return;
     }
 
     if (!baseConnectionOptions) {
-      log.error("Missing OpenAI connection options. API key must be configured before connecting.", {});
-      Alert.alert("VmWebrtc", "Missing EXPO_PUBLIC_OPENAI_API_KEY environment variable.");
+      log.error(
+        "Missing OpenAI connection options. API key must be configured before connecting.",
+        {},
+      );
+      Alert.alert(
+        "VmWebrtc",
+        "Missing EXPO_PUBLIC_OPENAI_API_KEY environment variable.",
+      );
       return;
     }
 
@@ -322,7 +376,7 @@ export function VoiceChat({
       const voiceToolNames = toolManager.getToolNames(toolDefinitions);
 
       const resolvedPrompt = composeMainPrompt(mainPromptAddition);
-      
+
       // Inject language preference into the prompt (always specify language, including English)
       const languageInstruction = `\n\nIMPORTANT: Please respond in ${selectedLanguage || "English"}. All your responses should be in ${selectedLanguage || "English"} unless the user explicitly requests otherwise.`;
       const finalPrompt = resolvedPrompt + languageInstruction;
@@ -330,17 +384,21 @@ export function VoiceChat({
       // Load transcription preference from storage
       const transcriptionEnabled = await loadTranscriptionPreference();
 
-      log.info("Starting OpenAI voice session", {}, {
-        hasBaseUrl: Boolean(baseConnectionOptions.baseUrl),
-        hasModel: Boolean(baseConnectionOptions.model),
-        audioOutput,
-        voice: selectedVoice,
-        hasInstructions: finalPrompt.trim().length > 0,
-        hasCustomAddition: mainPromptAddition.trim().length > 0,
-        toolNames: voiceToolNames,
-        transcriptionEnabled,
-        selectedLanguage,
-      });
+      log.info(
+        "Starting OpenAI voice session",
+        {},
+        {
+          hasBaseUrl: Boolean(baseConnectionOptions.baseUrl),
+          hasModel: Boolean(baseConnectionOptions.model),
+          audioOutput,
+          voice: selectedVoice,
+          hasInstructions: finalPrompt.trim().length > 0,
+          hasCustomAddition: mainPromptAddition.trim().length > 0,
+          toolNames: voiceToolNames,
+          transcriptionEnabled,
+          selectedLanguage,
+        },
+      );
       setIsConnecting(true);
       setIsSessionActive(false);
       setSessionCostUsd(0);
@@ -365,13 +423,27 @@ export function VoiceChat({
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-          log.info("Attempting to connect to OpenAI", {}, { attempt: attempt + 1, maxRetries });
-          const state: OpenAIConnectionState = await openOpenAIConnectionAsync(customConnectionOptions);
-          log.info("OpenAI voice session resolved", {}, { state, attempt: attempt + 1 });
+          log.info(
+            "Attempting to connect to OpenAI",
+            {},
+            { attempt: attempt + 1, maxRetries },
+          );
+          const state: OpenAIConnectionState = await openOpenAIConnectionAsync(
+            customConnectionOptions,
+          );
+          log.info(
+            "OpenAI voice session resolved",
+            {},
+            { state, attempt: attempt + 1 },
+          );
           const connected = state === "connected" || state === "completed";
           setIsSessionActive(connected);
           if (!connected) {
-            log.warn("Voice session resolved without reaching a connected state", {}, { state });
+            log.warn(
+              "Voice session resolved without reaching a connected state",
+              {},
+              { state },
+            );
             setFrequencyBins([]);
           }
           // Success - break out of retry loop
@@ -379,26 +451,35 @@ export function VoiceChat({
           break;
         } catch (error) {
           lastError = error as Error;
-          const is503Error = error instanceof Error && error.message.includes("503");
+          const is503Error =
+            error instanceof Error && error.message.includes("503");
 
           if (is503Error && attempt < maxRetries - 1) {
             const delay = retryDelays[attempt];
-            log.warn("OpenAI connection failed with 503, retrying", {}, {
-              attempt: attempt + 1,
-              maxRetries,
-              retryDelayMs: delay,
-              errorMessage: lastError.message,
-            });
+            log.warn(
+              "OpenAI connection failed with 503, retrying",
+              {},
+              {
+                attempt: attempt + 1,
+                maxRetries,
+                retryDelayMs: delay,
+                errorMessage: lastError.message,
+              },
+            );
             // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise((resolve) => setTimeout(resolve, delay));
           } else {
             // Either not a 503 error, or we've exhausted all retries
-            log.error("OpenAI connection attempt failed", {}, {
-              attempt: attempt + 1,
-              maxRetries,
-              is503Error,
-              errorMessage: lastError.message,
-            });
+            log.error(
+              "OpenAI connection attempt failed",
+              {},
+              {
+                attempt: attempt + 1,
+                maxRetries,
+                is503Error,
+                errorMessage: lastError.message,
+              },
+            );
             throw error;
           }
         }
@@ -409,12 +490,18 @@ export function VoiceChat({
         throw lastError;
       }
     } catch (error) {
-      log.error("Failed to start OpenAI voice session", {}, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        errorName: error instanceof Error ? error.name : undefined,
-      }, error);
-      const message = error instanceof Error ? error.message : "Unexpected error";
+      log.error(
+        "Failed to start OpenAI voice session",
+        {},
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorName: error instanceof Error ? error.name : undefined,
+        },
+        error,
+      );
+      const message =
+        error instanceof Error ? error.message : "Unexpected error";
       Alert.alert("VmWebrtc", message);
       setIsSessionActive(false);
       setFrequencyBins([]);
@@ -440,10 +527,14 @@ export function VoiceChat({
 
   const handleStopVoiceSession = useCallback(async () => {
     if (!isSessionActive || isStopping) {
-      log.debug("Stop voice session pressed without an active session", {}, {
-        isSessionActive,
-        isStopping,
-      });
+      log.debug(
+        "Stop voice session pressed without an active session",
+        {},
+        {
+          isSessionActive,
+          isStopping,
+        },
+      );
       return;
     }
 
@@ -453,15 +544,25 @@ export function VoiceChat({
       const state: OpenAIConnectionState = await closeOpenAIConnectionAsync();
       log.info("OpenAI voice session closed", {}, { state });
       if (state !== "closed") {
-        log.warn("Voice session reported a non-closed state after stop", {}, { state });
+        log.warn(
+          "Voice session reported a non-closed state after stop",
+          {},
+          { state },
+        );
       }
     } catch (error) {
-      log.error("Failed to stop OpenAI voice session", {}, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        errorName: error instanceof Error ? error.name : undefined,
-      }, error);
-      const message = error instanceof Error ? error.message : "Unexpected error";
+      log.error(
+        "Failed to stop OpenAI voice session",
+        {},
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorName: error instanceof Error ? error.name : undefined,
+        },
+        error,
+      );
+      const message =
+        error instanceof Error ? error.message : "Unexpected error";
       Alert.alert("VmWebrtc", message);
     } finally {
       setIsStopping(false);
@@ -493,7 +594,7 @@ export function VoiceChat({
 
   const handleToggleRecording = useCallback((nextValue: boolean) => {
     setIsRecordingEnabled(nextValue);
-    log.info("Recording preference updated", {}, { enabled: nextValue });
+    log.info("📼 Recording preference updated", {}, { enabled: nextValue });
   }, []);
 
   const handleVoiceSpeedChange = useCallback((value: number) => {
@@ -507,12 +608,16 @@ export function VoiceChat({
       return;
     }
 
-    log.info("Voice speed adjustment attempted but not supported yet", {}, {
-      attempted: Number(value.toFixed(2)),
-    });
+    log.info(
+      "Voice speed adjustment attempted but not supported yet",
+      {},
+      {
+        attempted: Number(value.toFixed(2)),
+      },
+    );
     Alert.alert(
       "Voice Speed Coming Soon",
-      "Voice speed adjustments aren't available yet. We'll enable this once OpenAI's realtime API fully supports it."
+      "Voice speed adjustments aren't available yet. We'll enable this once OpenAI's realtime API fully supports it.",
     );
     setVoiceSpeed(DEFAULT_VOICE_SPEED);
   }, []);
@@ -542,7 +647,10 @@ export function VoiceChat({
   }, [isConnecting, isSessionActive, isStopping]);
 
   const sessionButtonTextStyles = useMemo(() => {
-    const base = [styles.buttonText, isSessionActive ? styles.stopButtonText : styles.startButtonText];
+    const base = [
+      styles.buttonText,
+      isSessionActive ? styles.stopButtonText : styles.startButtonText,
+    ];
     if (isSessionButtonDisabled) {
       base.push(styles.disabledButtonText);
     }
@@ -592,13 +700,19 @@ export function VoiceChat({
           } else {
             baseStyles.push(styles.buttonShadow);
             if (pressed) {
-              baseStyles.push(isSessionActive ? styles.stopButtonPressed : styles.startButtonPressed);
+              baseStyles.push(
+                isSessionActive
+                  ? styles.stopButtonPressed
+                  : styles.startButtonPressed,
+              );
             }
           }
 
           return baseStyles;
         }}
-        onPress={isSessionActive ? handleStopVoiceSession : handleStartVoiceSession}
+        onPress={
+          isSessionActive ? handleStopVoiceSession : handleStartVoiceSession
+        }
         disabled={isSessionButtonDisabled}
       >
         <Text style={sessionButtonTextStyles}>{sessionButtonLabel}</Text>
@@ -608,10 +722,15 @@ export function VoiceChat({
         accessibilityRole="button"
         accessibilityLabel="Toggle advanced customization"
         onPress={handleToggleAdvanced}
-        style={({ pressed }) => [styles.advancedToggle, pressed && styles.advancedTogglePressed]}
+        style={({ pressed }) => [
+          styles.advancedToggle,
+          pressed && styles.advancedTogglePressed,
+        ]}
       >
         <Text style={styles.advancedToggleText}>Advanced</Text>
-        <Text style={styles.advancedToggleChevron}>{isAdvancedExpanded ? "⌃" : "⌄"}</Text>
+        <Text style={styles.advancedToggleChevron}>
+          {isAdvancedExpanded ? "⌃" : "⌄"}
+        </Text>
       </Pressable>
 
       {isAdvancedExpanded ? (
@@ -621,7 +740,9 @@ export function VoiceChat({
               <Text style={styles.advancedRowLabel}>Speaker Mode</Text>
             </View>
             <View style={styles.advancedRowControl}>
-              <Text style={styles.advancedRowIcon}>{isSpeakerphone ? "🔊" : "🔈"}</Text>
+              <Text style={styles.advancedRowIcon}>
+                {isSpeakerphone ? "🔊" : "🔈"}
+              </Text>
               <Switch
                 accessibilityLabel="Toggle speakerphone output"
                 value={isSpeakerphone}
@@ -636,7 +757,9 @@ export function VoiceChat({
               <Text style={styles.advancedRowLabel}>Mute</Text>
             </View>
             <View style={styles.advancedRowControl}>
-              <Text style={styles.advancedRowIcon}>{isMuted ? "🔇" : "🎤"}</Text>
+              <Text style={styles.advancedRowIcon}>
+                {isMuted ? "🔇" : "🎤"}
+              </Text>
               <Switch
                 accessibilityLabel="Toggle microphone mute"
                 value={isMuted}
@@ -649,7 +772,9 @@ export function VoiceChat({
           <View style={styles.advancedRow}>
             <View style={styles.advancedRowCopy}>
               <Text style={styles.advancedRowLabel}>Record Voice Session</Text>
-              <Text style={styles.advancedRowSubtitle}>Recordings available in settings / developer</Text>
+              <Text style={styles.advancedRowSubtitle}>
+                Recordings available in settings / developer
+              </Text>
             </View>
             <View style={styles.advancedRowControl}>
               <Text style={styles.advancedRowIcon}>📼</Text>
@@ -679,7 +804,9 @@ export function VoiceChat({
 
       {shouldShowSessionCost ? (
         <View pointerEvents="none" style={styles.sessionCostContainer}>
-          <Text style={styles.sessionCostText}>{`💵 $${formattedSessionCost}`}</Text>
+          <Text
+            style={styles.sessionCostText}
+          >{`💵 $${formattedSessionCost}`}</Text>
         </View>
       ) : null}
 

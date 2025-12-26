@@ -16,6 +16,7 @@ final class LogfireTracingManager {
         case info
         case warn
         case error
+        case fatal
 
         var otelSeverity: OpenTelemetryApi.Severity {
             switch self {
@@ -24,6 +25,7 @@ final class LogfireTracingManager {
             case .info: return .info
             case .warn: return .warn
             case .error: return .error
+            case .fatal: return .fatal
             }
         }
 
@@ -357,8 +359,10 @@ extension LogfireTracingManager.Severity {
             self = .info
         case 13...16:
             self = .warn
-        case 17...24:
+        case 17...20:
             self = .error
+        case 21...24:
+            self = .fatal
         default:
             return nil
         }

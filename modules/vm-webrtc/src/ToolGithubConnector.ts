@@ -276,9 +276,43 @@ export class ToolGithubConnector {
     // Get the GitHub token from secure storage
     const token = await getGithubToken();
 
+    // Create custom logger for Octokit that forwards all logs with the actual message
+    const octokitLogger = {
+      debug: (message: string, ...args: any[]) => {
+        log.debug(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+      info: (message: string, ...args: any[]) => {
+        log.debug(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+      warn: (message: string, ...args: any[]) => {
+        log.warn(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+      error: (message: string, ...args: any[]) => {
+        log.error(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+    };
+
     // Create an authenticated Octokit instance
     // If no token exists, create an anonymous instance (rate-limited)
-    const octokit = token ? new Octokit({ auth: token }) : new Octokit();
+    const octokit = token
+      ? new Octokit({ auth: token, log: octokitLogger })
+      : new Octokit({ log: octokitLogger });
 
     // Fetch authenticated user if token exists
     let authenticatedUser: string | null = null;

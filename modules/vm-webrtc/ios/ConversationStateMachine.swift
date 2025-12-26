@@ -804,6 +804,78 @@ actor ConversationStateMachine {
             ])
     }
 
+    // MARK: - Error Detection
+
+    /// Shadow observer for conversation_already_has_active_response error
+    /// This is a critical error that indicates response.create was sent while another response was still in progress
+    func shadow_didReceiveActiveResponseError(
+        eventId: String?,
+        errorMessage: String?,
+        blockedByResponseId: String?
+    ) {
+        let currentSnapshot = snapshot
+
+        // Extract the blocking response ID from the error message if not provided
+        var blockingResponseId = blockedByResponseId
+        if blockingResponseId == nil, let message = errorMessage {
+            // Parse "resp_xxx" from error message like "...active response in progress: resp_Cr9Qsg8mw7CLQ1KOdxzfq..."
+            if let range = message.range(of: "resp_[A-Za-z0-9]+", options: .regularExpression) {
+                blockingResponseId = String(message[range])
+            }
+        }
+
+        // Detect if our shadow state is inconsistent with reality
+        let shadowThoughtIdle = !responsePhase.isActive
+        let shadowResponseId = responsePhase.responseId
+
+        log(
+            "🚨🚨🚨 CRITICAL ERROR: conversation_already_has_active_response",
+            metadata: [
+                "eventType": "error.conversation_already_has_active_response",
+                "eventDescription":
+                    "OpenAI rejected response.create because a response is already in progress - this is a serious state machine bug that causes conversation failures",
+                "severity": "CRITICAL",
+                "eventId": eventId ?? "unknown",
+                "errorMessage": errorMessage ?? "unknown",
+                "blockingResponseId": blockingResponseId ?? "unknown",
+                "shadowState_responsePhase": responsePhase.description,
+                "shadowState_toolCallPhase": toolCallPhase.description,
+                "shadowState_userSpeechPhase": userSpeechPhase.description,
+                "shadowState_queuedResponse": queuedResponse?.description ?? "none",
+                "shadowState_thoughtIdle": shadowThoughtIdle,
+                "shadowState_trackedResponseId": shadowResponseId ?? "none",
+                "inconsistency_detected": shadowThoughtIdle,
+                "analysis": shadowThoughtIdle
+                    ? "SHADOW STATE BUG: Shadow thought responsePhase was idle but OpenAI had active response \(blockingResponseId ?? "unknown")"
+                    : "Shadow knew response was active but response.create was sent anyway - check queuing logic",
+                "recommendation":
+                    "Review logs leading up to this error to find the response.create that should have been blocked or queued",
+                "transitionCount": transitionCount,
+                "fullSnapshot": currentSnapshot.description,
+            ],
+            level: .error
+        )
+
+        // Attempt to recover by syncing shadow state with reality
+        if let blockingId = blockingResponseId {
+            let previousPhase = responsePhase
+            responsePhase = .inProgress(responseId: blockingId)
+
+            log(
+                "Attempting recovery: syncing shadow state with blocking response",
+                metadata: [
+                    "eventType": "shadow_state.recovery_attempt",
+                    "eventDescription":
+                        "Attempting to recover from active response error by updating shadow state to match the blocking response",
+                    "previousPhase": previousPhase.description,
+                    "newPhase": responsePhase.description,
+                    "blockingResponseId": blockingId,
+                ],
+                level: .warn
+            )
+        }
+    }
+
     // MARK: - Manual Controls
 
     /// Reset all shadow state (e.g., on disconnect)

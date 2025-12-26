@@ -1884,6 +1884,15 @@ final class WebRTCEventHandler {
                     ])
             )
 
+            // Notify shadow state machine about this critical error for analysis and recovery
+            Task {
+                await shadowStateMachine.shadow_didReceiveActiveResponseError(
+                    eventId: eventId as? String,
+                    errorMessage: errorMessage,
+                    blockedByResponseId: currentId
+                )
+            }
+
             // Also emit to module for visibility
             context.emitModuleEvent("onRealtimeError", event)
             return

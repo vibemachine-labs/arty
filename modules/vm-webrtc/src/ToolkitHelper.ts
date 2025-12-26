@@ -1,11 +1,11 @@
-import { log } from '../../../lib/logger';
-import { type ToolNativeModule } from './ToolHelper';
-import { executeToolkitFunction } from './toolkit_functions/toolkit_functions';
+import { log } from "../../../lib/logger";
+import { type ToolNativeModule } from "./ToolHelper";
+import { executeToolkitFunction } from "./toolkit_functions/toolkit_functions";
 import {
   type ToolSessionContext,
   isToolSessionContextEmpty,
   summarizeToolSessionContext,
-} from './toolkit_functions/types';
+} from "./toolkit_functions/types";
 
 // MARK: - Types
 
@@ -30,19 +30,27 @@ export interface ToolkitHelperNativeModule extends ToolNativeModule {
  * Also maintains per-tool session context for stateful tool interactions.
  */
 export class ToolkitHelper {
-  private readonly toolName = 'ToolkitHelper';
-  private readonly requestEventName = 'onToolkitRequest';
+  private readonly toolName = "ToolkitHelper";
+  private readonly requestEventName = "onToolkitRequest";
   private readonly module: ToolkitHelperNativeModule | null;
-  private readonly toolSessionContexts: Map<string, ToolSessionContext> = new Map();
+  private readonly toolSessionContexts: Map<string, ToolSessionContext> =
+    new Map();
 
   constructor(nativeModule: ToolkitHelperNativeModule | null) {
     this.module = nativeModule;
 
     if (this.module) {
-      this.module.addListener(this.requestEventName, this.handleRequest.bind(this));
-      log.info('[ToolkitHelper] Initialized with native module', {}, { eventName: this.requestEventName });
+      this.module.addListener(
+        this.requestEventName,
+        this.handleRequest.bind(this),
+      );
+      log.info(
+        "🔧 [ToolkitHelper] Initialized with native module",
+        {},
+        { eventName: this.requestEventName },
+      );
     } else {
-      log.warn('[ToolkitHelper] Native module unavailable', {});
+      log.warn("🔧 [ToolkitHelper] Native module unavailable", {});
     }
   }
 
@@ -52,16 +60,27 @@ export class ToolkitHelper {
    * Handle a toolkit request from Swift.
    */
   private async handleRequest(event: ToolkitRequestEvent) {
-    const { requestId, callId, groupName, toolName, arguments: argumentsJSON, eventId } = event;
-    log.info(`[${this.toolName}] 📥 Received toolkit request from Swift`, {}, {
+    const {
       requestId,
       callId,
       groupName,
       toolName,
-      eventId,
-      argumentsLength: argumentsJSON?.length || 0,
       arguments: argumentsJSON,
-    });
+      eventId,
+    } = event;
+    log.info(
+      `[${this.toolName}] 📥 Received toolkit request from Swift`,
+      {},
+      {
+        requestId,
+        callId,
+        groupName,
+        toolName,
+        eventId,
+        argumentsLength: argumentsJSON?.length || 0,
+        arguments: argumentsJSON,
+      },
+    );
 
     try {
       // Parse arguments
@@ -70,58 +89,92 @@ export class ToolkitHelper {
         try {
           args = JSON.parse(argumentsJSON);
         } catch (parseError) {
-          log.warn(`[${this.toolName}] Failed to parse arguments JSON`, {}, {
-            requestId,
-            argumentsJSON,
-            error: parseError instanceof Error ? parseError.message : String(parseError),
-          });
+          log.warn(
+            `[${this.toolName}] Failed to parse arguments JSON`,
+            {},
+            {
+              requestId,
+              argumentsJSON,
+              error:
+                parseError instanceof Error
+                  ? parseError.message
+                  : String(parseError),
+            },
+          );
         }
       }
 
       // Execute the toolkit operation (stubbed for now)
-      const result = await this.executeToolkitOperation(groupName, toolName, args, { requestId, callId, eventId });
-
-      log.info(`[${this.toolName}] ✅ Toolkit operation completed`, {}, {
-        requestId,
-        callId,
+      const result = await this.executeToolkitOperation(
         groupName,
         toolName,
-        resultLength: String(result).length,
-        result: result,
-      });
+        args,
+        { requestId, callId, eventId },
+      );
 
-      if (this.module) {
-      this.module.sendToolkitResponse(requestId, result);
-      log.info(`[${this.toolName}] 📤 Sent response to Swift`, {}, {
-        requestId,
-        callId,
-        responseLength: String(result).length,
-        response: result,
-      });
-      } else {
-        log.warn(`[${this.toolName}] ⚠️ Cannot send response; native module missing`, {}, { requestId });
-      }
-    } catch (error) {
-      log.error(`[${this.toolName}] ❌ Toolkit operation failed`, {}, {
-        requestId,
-        callId,
-        groupName,
-        toolName,
-        eventId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        errorName: error instanceof Error ? error.name : undefined,
-      }, error);
-
-      if (this.module) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const errorResult = JSON.stringify({ error: errorMessage });
-        this.module.sendToolkitResponse(requestId, errorResult);
-        log.info(`[${this.toolName}] 📤 Sent error response to Swift`, {}, {
+      log.info(
+        `[${this.toolName}] ✅ Toolkit operation completed`,
+        {},
+        {
           requestId,
           callId,
-          errorMessage,
-        });
+          groupName,
+          toolName,
+          resultLength: String(result).length,
+          result: result,
+        },
+      );
+
+      if (this.module) {
+        this.module.sendToolkitResponse(requestId, result);
+        log.info(
+          `🔧 [${this.toolName}] 📤 Sent response to Swift`,
+          {},
+          {
+            requestId,
+            callId,
+            responseLength: String(result).length,
+            response: result,
+          },
+        );
+      } else {
+        log.warn(
+          `[${this.toolName}] ⚠️ Cannot send response; native module missing`,
+          {},
+          { requestId },
+        );
+      }
+    } catch (error) {
+      log.error(
+        `[${this.toolName}] ❌ Toolkit operation failed`,
+        {},
+        {
+          requestId,
+          callId,
+          groupName,
+          toolName,
+          eventId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorName: error instanceof Error ? error.name : undefined,
+        },
+        error,
+      );
+
+      if (this.module) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        const errorResult = JSON.stringify({ error: errorMessage });
+        this.module.sendToolkitResponse(requestId, errorResult);
+        log.info(
+          `[${this.toolName}] 📤 Sent error response to Swift`,
+          {},
+          {
+            requestId,
+            callId,
+            errorMessage,
+          },
+        );
       }
     }
   }
@@ -135,23 +188,27 @@ export class ToolkitHelper {
     groupName: string,
     toolName: string,
     args: any,
-    context: { requestId: string; callId: string; eventId?: string }
+    context: { requestId: string; callId: string; eventId?: string },
   ): Promise<string> {
     const { requestId, callId, eventId } = context;
 
-    log.info(`[${this.toolName}] 🔧 Executing toolkit operation`, {}, {
-      groupName,
-      toolName,
-      args,
-      requestId,
-      callId,
-      eventId,
-    });
+    log.info(
+      `[${this.toolName}] 🔧 Executing toolkit operation`,
+      {},
+      {
+        groupName,
+        toolName,
+        args,
+        requestId,
+        callId,
+        eventId,
+      },
+    );
 
     try {
       // Prepare context parameters based on the toolkit group
       let context_params;
-      if (groupName === 'web') {
+      if (groupName === "web") {
         context_params = {
           maxLength: 1500,
           minHtmlForBody: 15000,
@@ -163,14 +220,18 @@ export class ToolkitHelper {
       const toolKey = groupName; // Per-group, not per-tool
       const currentSessionContext = this.toolSessionContexts.get(toolKey) || {};
 
-      log.info(`[${this.toolName}] 📋 Retrieved session context`, {}, {
-        groupName,
-        toolName,
-        toolKey,
-        hasContext: Object.keys(currentSessionContext).length > 0,
-        currentSessionContext: JSON.stringify(currentSessionContext),
-        allStoredKeys: Array.from(this.toolSessionContexts.keys()),
-      });
+      log.info(
+        `[${this.toolName}] 📋 Retrieved session context`,
+        {},
+        {
+          groupName,
+          toolName,
+          toolKey,
+          hasContext: Object.keys(currentSessionContext).length > 0,
+          currentSessionContext: JSON.stringify(currentSessionContext),
+          allStoredKeys: Array.from(this.toolSessionContexts.keys()),
+        },
+      );
 
       // Route to the appropriate toolkit function
       const toolkitResult = await executeToolkitFunction(
@@ -178,40 +239,56 @@ export class ToolkitHelper {
         toolName,
         args,
         context_params,
-        currentSessionContext
+        currentSessionContext,
       );
 
       // Store the updated session context for this tool
-      this.toolSessionContexts.set(toolKey, toolkitResult.updatedToolSessionContext);
+      this.toolSessionContexts.set(
+        toolKey,
+        toolkitResult.updatedToolSessionContext,
+      );
 
       // Append session context to result if non-empty
       let finalResult = toolkitResult.result;
       if (!isToolSessionContextEmpty(toolkitResult.updatedToolSessionContext)) {
-        const contextSummary = summarizeToolSessionContext(toolkitResult.updatedToolSessionContext);
+        const contextSummary = summarizeToolSessionContext(
+          toolkitResult.updatedToolSessionContext,
+        );
         finalResult = `${toolkitResult.result}\n\nTool session context: ${contextSummary}`;
       }
 
-      log.info(`[${this.toolName}] ✅ Toolkit function executed successfully`, {}, {
-        groupName,
-        toolName,
-        requestId,
-        callId,
-        resultLength: finalResult.length,
-        result: finalResult,
-        updatedToolSessionContext: toolkitResult.updatedToolSessionContext,
-        sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
-      });
+      log.info(
+        `[${this.toolName}] ✅ Toolkit function executed successfully`,
+        {},
+        {
+          groupName,
+          toolName,
+          requestId,
+          callId,
+          resultLength: finalResult.length,
+          result: finalResult,
+          updatedToolSessionContext: toolkitResult.updatedToolSessionContext,
+          sessionContextKeys: Object.keys(
+            toolkitResult.updatedToolSessionContext,
+          ),
+        },
+      );
 
       return finalResult;
     } catch (error) {
-      log.error(`[${this.toolName}] ❌ Toolkit function execution failed`, {}, {
-        groupName,
-        toolName,
-        requestId,
-        callId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-      }, error);
+      log.error(
+        `[${this.toolName}] ❌ Toolkit function execution failed`,
+        {},
+        {
+          groupName,
+          toolName,
+          requestId,
+          callId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
+        error,
+      );
 
       // Return error as JSON
       return JSON.stringify({
@@ -221,7 +298,7 @@ export class ToolkitHelper {
           groupName,
           toolName,
           timestamp: new Date().toISOString(),
-        }
+        },
       });
     }
   }
@@ -231,10 +308,14 @@ export class ToolkitHelper {
   /**
    * Execute a toolkit operation directly (for testing).
    */
-  async execute(groupName: string, toolName: string, args: any): Promise<string> {
+  async execute(
+    groupName: string,
+    toolName: string,
+    args: any,
+  ): Promise<string> {
     return this.executeToolkitOperation(groupName, toolName, args, {
-      requestId: 'direct-call',
-      callId: 'direct-call',
+      requestId: "direct-call",
+      callId: "direct-call",
     });
   }
 }
@@ -245,9 +326,14 @@ export class ToolkitHelper {
  * Creates a new ToolkitHelper instance with the provided native module.
  * Returns null if the module is not available.
  */
-export const createToolkitHelper = (nativeModule: ToolkitHelperNativeModule | null): ToolkitHelper | null => {
+export const createToolkitHelper = (
+  nativeModule: ToolkitHelperNativeModule | null,
+): ToolkitHelper | null => {
   if (!nativeModule) {
-    log.warn('[ToolkitHelper] Native module not available, toolkit helper will not be initialized', {});
+    log.warn(
+      "🔧 [ToolkitHelper] Native module not available, toolkit helper will not be initialized",
+      {},
+    );
     return null;
   }
   return new ToolkitHelper(nativeModule);

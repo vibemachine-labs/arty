@@ -253,6 +253,7 @@ The audio system has multiple independent but interacting state machines:
 | 🖥️✅ | Audio streaming started | First audio chunk / buffer started |
 | 🖥️🔇 | `response.audio.done` | Server finished sending audio |
 | 🔇🧩 | `response.output_audio.done` | Audio complete with metadata |
+| ✅🏁 | `response.done` | Response streaming complete (always emitted) |
 | 🎤✅ | `input_audio_buffer.speech_started` | User started speaking (VAD) |
 | 🎤🔇 | `input_audio_buffer.speech_stopped` | User stopped speaking (VAD) |
 | 🎤🗑️ | `input_audio_buffer.cleared` | Input buffer cleared |

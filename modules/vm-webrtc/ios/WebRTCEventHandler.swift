@@ -1132,13 +1132,43 @@ final class WebRTCEventHandler {
             }
         }
 
+        // Extract additional response details per OpenAI docs
+        let eventId = event["event_id"] as? String
+        let statusDetails = response["status_details"]
+        let conversationId = response["conversation_id"] as? String
+        let outputModalities = response["output_modalities"] as? [String]
+        let output = response["output"] as? [[String: Any]]
+
+        // Extract transcript from output items if available
+        var transcripts: [String] = []
+        if let outputItems = output {
+            for item in outputItems {
+                if let content = item["content"] as? [[String: Any]] {
+                    for contentItem in content {
+                        if let transcript = contentItem["transcript"] as? String {
+                            transcripts.append(transcript)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Prominent log for response.done event - always emitted when response completes
         logger.log(
-            "[WebRTCEventHandler] Response done",
+            "✅🏁 [WebRTCEventHandler] response.done - Response streaming complete",
             attributes: logAttributes(
-                for: .debug,
+                for: .info,
                 metadata: [
+                    "eventType": "response.done",
+                    "eventId": eventId as Any,
                     "responseId": responseId as Any,
                     "status": status as Any,
+                    "statusDetails": String(describing: statusDetails),
+                    "conversationId": conversationId as Any,
+                    "outputModalities": outputModalities as Any,
+                    "outputItemCount": output?.count as Any,
+                    "transcripts": transcripts,
+                    "timestamp": ISO8601DateFormatter().string(from: Date()),
                 ])
         )
 

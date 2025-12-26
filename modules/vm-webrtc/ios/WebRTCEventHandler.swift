@@ -397,6 +397,12 @@ final class WebRTCEventHandler {
             handleOutputAudioBufferStartedEvent(event, context: context)
         case "output_audio_buffer.done":
             handleOutputAudioBufferDoneEvent(event, context: context)
+        case "input_audio_buffer.speech_started":
+            handleInputAudioBufferSpeechStartedEvent(event, context: context)
+        case "input_audio_buffer.speech_stopped":
+            handleInputAudioBufferSpeechStoppedEvent(event, context: context)
+        case "input_audio_buffer.cleared":
+            handleInputAudioBufferClearedEvent(event, context: context)
         default:
             logger.log(
                 "[WebRTCEventHandler] Unhandled WebRTC event",
@@ -1262,6 +1268,75 @@ final class WebRTCEventHandler {
                     ])
             )
         }
+    }
+
+    // MARK: - Input Audio Buffer Event Handlers
+    // These handlers track user speech detection events from server VAD
+
+    /// Handles input_audio_buffer.speech_started event
+    /// Server detected speech in the audio buffer (server_vad mode)
+    private func handleInputAudioBufferSpeechStartedEvent(
+        _ event: [String: Any], context: ToolContext
+    ) {
+        let eventId = event["event_id"] as? String
+        let itemId = event["item_id"] as? String
+        let audioStartMs = event["audio_start_ms"] as? Int
+
+        logger.log(
+            "🎤✅ [Event-SpeakingDetection] User speech started (server VAD)",
+            attributes: logAttributes(
+                for: .info,
+                metadata: [
+                    "eventType": "input_audio_buffer.speech_started",
+                    "detectionType": "event-based (server VAD)",
+                    "eventId": eventId as Any,
+                    "itemId": itemId as Any,
+                    "audioStartMs": audioStartMs as Any,
+                    "timestamp": ISO8601DateFormatter().string(from: Date()),
+                ])
+        )
+    }
+
+    /// Handles input_audio_buffer.speech_stopped event
+    /// Server detected end of speech in the audio buffer (server_vad mode)
+    private func handleInputAudioBufferSpeechStoppedEvent(
+        _ event: [String: Any], context: ToolContext
+    ) {
+        let eventId = event["event_id"] as? String
+        let itemId = event["item_id"] as? String
+        let audioEndMs = event["audio_end_ms"] as? Int
+
+        logger.log(
+            "🎤🔇 [Event-SpeakingDetection] User speech stopped (server VAD)",
+            attributes: logAttributes(
+                for: .info,
+                metadata: [
+                    "eventType": "input_audio_buffer.speech_stopped",
+                    "detectionType": "event-based (server VAD)",
+                    "eventId": eventId as Any,
+                    "itemId": itemId as Any,
+                    "audioEndMs": audioEndMs as Any,
+                    "timestamp": ISO8601DateFormatter().string(from: Date()),
+                ])
+        )
+    }
+
+    /// Handles input_audio_buffer.cleared event
+    /// Input audio buffer was cleared by the client
+    private func handleInputAudioBufferClearedEvent(_ event: [String: Any], context: ToolContext) {
+        let eventId = event["event_id"] as? String
+
+        logger.log(
+            "🎤🗑️ [Event-SpeakingDetection] Input audio buffer cleared",
+            attributes: logAttributes(
+                for: .info,
+                metadata: [
+                    "eventType": "input_audio_buffer.cleared",
+                    "detectionType": "event-based",
+                    "eventId": eventId as Any,
+                    "timestamp": ISO8601DateFormatter().string(from: Date()),
+                ])
+        )
     }
 
     private func emitTokenUsage(usage: [String: Any], responseId: String?, context: ToolContext) {

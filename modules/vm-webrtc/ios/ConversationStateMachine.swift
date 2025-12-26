@@ -1,0 +1,785 @@
+import Foundation
+
+/// Shadow state machine for observing and validating WebRTC conversation flow.
+///
+/// This Actor observes the same events as the current handlers but does NOT control anything.
+/// It tracks what the state SHOULD be and logs transitions for debugging and validation.
+///
+/// Purpose:
+/// - Validate the proposed unified state model before migration
+/// - Detect inconsistencies between shadow state and actual behavior
+/// - Provide comprehensive logging of conversation flow
+/// - Build confidence in the new architecture
+///
+/// All methods are prefixed with `shadow_` to make it clear they are observational only.
+actor ConversationStateMachine {
+
+    // MARK: - Types
+
+    /// The phase of assistant response
+    enum ResponsePhase: Equatable, CustomStringConvertible {
+        case idle
+        case inProgress(responseId: String?)
+        case streaming(responseId: String?)  // Audio actively streaming
+
+        var description: String {
+            switch self {
+            case .idle:
+                return "idle"
+            case .inProgress(let id):
+                return "inProgress(\(id ?? "nil"))"
+            case .streaming(let id):
+                return "streaming(\(id ?? "nil"))"
+            }
+        }
+
+        var isActive: Bool {
+            switch self {
+            case .idle: return false
+            case .inProgress, .streaming: return true
+            }
+        }
+
+        var isStreaming: Bool {
+            if case .streaming = self { return true }
+            return false
+        }
+
+        var responseId: String? {
+            switch self {
+            case .idle: return nil
+            case .inProgress(let id), .streaming(let id): return id
+            }
+        }
+    }
+
+    /// Tool call execution state
+    enum ToolCallPhase: Equatable, CustomStringConvertible {
+        case idle
+        case executing(callId: String, toolName: String)
+        case awaitingAudioStart(callId: String, toolName: String)  // Blocked, waiting for assistant to stop
+        case playingAudio(callId: String, toolName: String)
+
+        var description: String {
+            switch self {
+            case .idle:
+                return "idle"
+            case .executing(let id, let name):
+                return "executing(\(name):\(id.prefix(8)))"
+            case .awaitingAudioStart(let id, let name):
+                return "awaitingAudioStart(\(name):\(id.prefix(8)))"
+            case .playingAudio(let id, let name):
+                return "playingAudio(\(name):\(id.prefix(8)))"
+            }
+        }
+
+        var isExecuting: Bool {
+            switch self {
+            case .idle: return false
+            default: return true
+            }
+        }
+
+        var callId: String? {
+            switch self {
+            case .idle: return nil
+            case .executing(let id, _),
+                .awaitingAudioStart(let id, _),
+                .playingAudio(let id, _):
+                return id
+            }
+        }
+
+        var toolName: String? {
+            switch self {
+            case .idle: return nil
+            case .executing(_, let name),
+                .awaitingAudioStart(_, let name),
+                .playingAudio(_, let name):
+                return name
+            }
+        }
+    }
+
+    /// User speech state
+    enum UserSpeechPhase: Equatable, CustomStringConvertible {
+        case idle
+        case speaking(startedAt: Date)
+
+        var description: String {
+            switch self {
+            case .idle:
+                return "idle"
+            case .speaking(let startedAt):
+                let duration = Date().timeIntervalSince(startedAt)
+                return "speaking(\(String(format: "%.1fs", duration)))"
+            }
+        }
+
+        var isSpeaking: Bool {
+            if case .speaking = self { return true }
+            return false
+        }
+    }
+
+    /// Queued response request
+    struct QueuedResponse: Equatable, CustomStringConvertible {
+        let trigger: String
+        let timestamp: Date
+
+        var description: String {
+            let age = Date().timeIntervalSince(timestamp)
+            return "QueuedResponse(\(trigger), age: \(String(format: "%.1fs", age)))"
+        }
+
+        func isExpired(ttl: TimeInterval) -> Bool {
+            Date().timeIntervalSince(timestamp) > ttl
+        }
+    }
+
+    /// Snapshot of current state for logging
+    struct StateSnapshot: CustomStringConvertible {
+        let response: ResponsePhase
+        let toolCall: ToolCallPhase
+        let userSpeech: UserSpeechPhase
+        let queuedResponse: QueuedResponse?
+        let timestamp: Date
+
+        var description: String {
+            var parts = [
+                "response: \(response)",
+                "toolCall: \(toolCall)",
+                "userSpeech: \(userSpeech)",
+            ]
+            if let queued = queuedResponse {
+                parts.append("queued: \(queued.trigger)")
+            }
+            return "State(\(parts.joined(separator: ", ")))"
+        }
+
+        var canSendResponseCreate: Bool {
+            !response.isActive
+        }
+
+        var canAddConversationItem: Bool {
+            !response.isActive
+        }
+
+        var isAssistantSpeaking: Bool {
+            response.isStreaming
+        }
+
+        var shouldToolAudioBeBlocked: Bool {
+            response.isStreaming
+        }
+    }
+
+    // MARK: - State
+
+    private(set) var responsePhase: ResponsePhase = .idle
+    private(set) var toolCallPhase: ToolCallPhase = .idle
+    private(set) var userSpeechPhase: UserSpeechPhase = .idle
+    private var queuedResponse: QueuedResponse? = nil
+
+    private let queuedResponseTTL: TimeInterval = 30.0
+    private let logger = VmWebrtcLogging.logger
+
+    /// Emoji prefix for all shadow logs
+    private let logPrefix = "🔮"
+
+    /// Track transition count for debugging
+    private var transitionCount: Int = 0
+
+    // MARK: - State Queries
+
+    var snapshot: StateSnapshot {
+        StateSnapshot(
+            response: responsePhase,
+            toolCall: toolCallPhase,
+            userSpeech: userSpeechPhase,
+            queuedResponse: queuedResponse,
+            timestamp: Date()
+        )
+    }
+
+    // MARK: - Shadow Event Handlers (Response Lifecycle)
+
+    /// Shadow observer for response.create being sent
+    func shadow_willSendResponseCreate(trigger: String) {
+        transitionCount += 1
+
+        let wouldQueue = responsePhase.isActive
+
+        if wouldQueue {
+            // In the real state machine, this would be queued
+            let hypotheticalQueued = QueuedResponse(trigger: trigger, timestamp: Date())
+
+            if let existing = queuedResponse {
+                log(
+                    "Response.create would REPLACE queued",
+                    metadata: [
+                        "trigger": trigger,
+                        "replacedTrigger": existing.trigger,
+                        "currentPhase": responsePhase.description,
+                        "decision": "QUEUE (replace existing)",
+                    ])
+            } else {
+                log(
+                    "Response.create would be QUEUED",
+                    metadata: [
+                        "trigger": trigger,
+                        "currentPhase": responsePhase.description,
+                        "decision": "QUEUE",
+                    ])
+            }
+
+            queuedResponse = hypotheticalQueued
+        } else {
+            let previousPhase = responsePhase
+            responsePhase = .inProgress(responseId: nil)
+
+            log(
+                "Response.create would be SENT",
+                metadata: [
+                    "trigger": trigger,
+                    "previousPhase": previousPhase.description,
+                    "newPhase": responsePhase.description,
+                    "decision": "SEND",
+                ])
+        }
+    }
+
+    /// Shadow observer for response.created event
+    func shadow_didReceiveResponseCreated(responseId: String?) {
+        transitionCount += 1
+
+        let previousPhase = responsePhase
+        responsePhase = .inProgress(responseId: responseId)
+
+        // Tool call audio should stop
+        let toolAudioWouldStop =
+            toolCallPhase
+            == .playingAudio(
+                callId: toolCallPhase.callId ?? "",
+                toolName: toolCallPhase.toolName ?? ""
+            )
+
+        log(
+            "response.created received",
+            metadata: [
+                "responseId": responseId ?? "nil",
+                "previousPhase": previousPhase.description,
+                "newPhase": responsePhase.description,
+                "toolAudioWouldStop": toolAudioWouldStop,
+            ])
+
+        // Update tool call phase if playing audio
+        if case .playingAudio(let callId, let toolName) = toolCallPhase {
+            toolCallPhase = .executing(callId: callId, toolName: toolName)
+            log(
+                "Tool audio would STOP (response starting)",
+                metadata: [
+                    "callId": callId,
+                    "toolName": toolName,
+                ])
+        }
+    }
+
+    /// Shadow observer for response.audio.delta event
+    func shadow_didReceiveAudioDelta(responseId: String?, actualAssistantStreaming: Bool) {
+        let previousPhase = responsePhase
+        let wasAlreadyStreaming = responsePhase.isStreaming
+
+        if !wasAlreadyStreaming {
+            transitionCount += 1
+            responsePhase = .streaming(responseId: responseId ?? previousPhase.responseId)
+
+            log(
+                "Audio streaming STARTED (audio.delta)",
+                metadata: [
+                    "responseId": responseId ?? "nil",
+                    "previousPhase": previousPhase.description,
+                    "newPhase": responsePhase.description,
+                ])
+
+            // Check for tool audio that should stop
+            if case .playingAudio(let callId, let toolName) = toolCallPhase {
+                toolCallPhase = .executing(callId: callId, toolName: toolName)
+                log(
+                    "Tool audio would STOP (assistant speaking)",
+                    metadata: [
+                        "callId": callId,
+                        "toolName": toolName,
+                    ])
+            }
+        }
+
+        // Consistency check
+        checkConsistency(
+            shadowStreaming: responsePhase.isStreaming,
+            actualStreaming: actualAssistantStreaming,
+            event: "audio.delta"
+        )
+    }
+
+    /// Shadow observer for output_audio_buffer.started event
+    func shadow_didReceiveOutputAudioBufferStarted(actualAssistantStreaming: Bool) {
+        let previousPhase = responsePhase
+        let wasAlreadyStreaming = responsePhase.isStreaming
+
+        if !wasAlreadyStreaming {
+            transitionCount += 1
+            responsePhase = .streaming(responseId: previousPhase.responseId)
+
+            log(
+                "Audio streaming STARTED (buffer.started)",
+                metadata: [
+                    "previousPhase": previousPhase.description,
+                    "newPhase": responsePhase.description,
+                ])
+
+            // Check for tool audio that should stop
+            if case .playingAudio(let callId, let toolName) = toolCallPhase {
+                toolCallPhase = .executing(callId: callId, toolName: toolName)
+                log(
+                    "Tool audio would STOP (assistant speaking)",
+                    metadata: [
+                        "callId": callId,
+                        "toolName": toolName,
+                    ])
+            }
+        }
+
+        checkConsistency(
+            shadowStreaming: responsePhase.isStreaming,
+            actualStreaming: actualAssistantStreaming,
+            event: "buffer.started"
+        )
+    }
+
+    /// Shadow observer for response.audio.done event
+    func shadow_didReceiveAudioDone(actualAssistantStreaming: Bool) {
+        transitionCount += 1
+
+        let previousPhase = responsePhase
+
+        // Transition from streaming back to inProgress
+        if case .streaming(let responseId) = responsePhase {
+            responsePhase = .inProgress(responseId: responseId)
+        }
+
+        log(
+            "Audio streaming STOPPED (audio.done)",
+            metadata: [
+                "previousPhase": previousPhase.description,
+                "newPhase": responsePhase.description,
+            ])
+
+        // Check if blocked tool audio should retry
+        if case .awaitingAudioStart(let callId, let toolName) = toolCallPhase {
+            log(
+                "Tool audio would RETRY now",
+                metadata: [
+                    "callId": callId,
+                    "toolName": toolName,
+                    "reason": "assistant stopped streaming",
+                ])
+            // In real state machine, this would trigger retry
+            // For shadow, we just note it
+            toolCallPhase = .playingAudio(callId: callId, toolName: toolName)
+        }
+
+        checkConsistency(
+            shadowStreaming: responsePhase.isStreaming,
+            actualStreaming: actualAssistantStreaming,
+            event: "audio.done"
+        )
+    }
+
+    /// Shadow observer for output_audio_buffer.done event
+    func shadow_didReceiveOutputAudioBufferDone(actualAssistantStreaming: Bool) {
+        transitionCount += 1
+
+        let previousPhase = responsePhase
+
+        if case .streaming(let responseId) = responsePhase {
+            responsePhase = .inProgress(responseId: responseId)
+        }
+
+        log(
+            "Audio streaming STOPPED (buffer.done)",
+            metadata: [
+                "previousPhase": previousPhase.description,
+                "newPhase": responsePhase.description,
+            ])
+
+        // Check if blocked tool audio should retry
+        if case .awaitingAudioStart(let callId, let toolName) = toolCallPhase {
+            log(
+                "Tool audio would RETRY now",
+                metadata: [
+                    "callId": callId,
+                    "toolName": toolName,
+                    "reason": "assistant stopped streaming (buffer.done)",
+                ])
+            toolCallPhase = .playingAudio(callId: callId, toolName: toolName)
+        }
+
+        checkConsistency(
+            shadowStreaming: responsePhase.isStreaming,
+            actualStreaming: actualAssistantStreaming,
+            event: "buffer.done"
+        )
+    }
+
+    /// Shadow observer for response.done event
+    func shadow_didReceiveResponseDone(responseId: String?, status: String?) {
+        transitionCount += 1
+
+        let previousPhase = responsePhase
+        let hadQueuedResponse = queuedResponse != nil
+
+        responsePhase = .idle
+
+        log(
+            "response.done received",
+            metadata: [
+                "responseId": responseId ?? "nil",
+                "status": status ?? "nil",
+                "previousPhase": previousPhase.description,
+                "newPhase": responsePhase.description,
+                "hadQueuedResponse": hadQueuedResponse,
+            ])
+
+        // Process queued response
+        if let queued = queuedResponse {
+            queuedResponse = nil
+
+            if queued.isExpired(ttl: queuedResponseTTL) {
+                log(
+                    "Queued response EXPIRED",
+                    metadata: [
+                        "trigger": queued.trigger,
+                        "age": Date().timeIntervalSince(queued.timestamp),
+                        "ttl": queuedResponseTTL,
+                    ])
+            } else {
+                log(
+                    "Queued response would be SENT now",
+                    metadata: [
+                        "trigger": queued.trigger,
+                        "age": Date().timeIntervalSince(queued.timestamp),
+                    ])
+                // In real state machine, this would trigger send
+                responsePhase = .inProgress(responseId: nil)
+            }
+        }
+
+        logSnapshot("After response.done")
+    }
+
+    /// Shadow observer for response.cancelled event
+    func shadow_didReceiveResponseCancelled(responseId: String?) {
+        transitionCount += 1
+
+        let previousPhase = responsePhase
+        responsePhase = .idle
+
+        // Stop tool audio
+        if case .playingAudio(let callId, let toolName) = toolCallPhase {
+            toolCallPhase = .executing(callId: callId, toolName: toolName)
+            log(
+                "Tool audio would STOP (response cancelled)",
+                metadata: [
+                    "callId": callId,
+                    "toolName": toolName,
+                ])
+        }
+
+        log(
+            "response.cancelled received",
+            metadata: [
+                "responseId": responseId ?? "nil",
+                "previousPhase": previousPhase.description,
+                "newPhase": responsePhase.description,
+            ])
+
+        // Process queued response (same as response.done)
+        if let queued = queuedResponse {
+            queuedResponse = nil
+
+            if !queued.isExpired(ttl: queuedResponseTTL) {
+                log(
+                    "Queued response would be SENT now (after cancel)",
+                    metadata: [
+                        "trigger": queued.trigger
+                    ])
+                responsePhase = .inProgress(responseId: nil)
+            }
+        }
+    }
+
+    // MARK: - Shadow Event Handlers (Tool Call Lifecycle)
+
+    /// Shadow observer for function_call_arguments.done event
+    func shadow_didReceiveToolCall(callId: String, toolName: String, actualAssistantStreaming: Bool)
+    {
+        transitionCount += 1
+
+        let previousPhase = toolCallPhase
+
+        if responsePhase.isStreaming {
+            // Tool audio would be blocked
+            toolCallPhase = .awaitingAudioStart(callId: callId, toolName: toolName)
+            log(
+                "Tool call received - audio BLOCKED",
+                metadata: [
+                    "callId": callId,
+                    "toolName": toolName,
+                    "previousPhase": previousPhase.description,
+                    "newPhase": toolCallPhase.description,
+                    "reason": "assistant is streaming",
+                    "responsePhase": responsePhase.description,
+                ])
+        } else {
+            // Tool audio would start
+            toolCallPhase = .playingAudio(callId: callId, toolName: toolName)
+            log(
+                "Tool call received - audio would START",
+                metadata: [
+                    "callId": callId,
+                    "toolName": toolName,
+                    "previousPhase": previousPhase.description,
+                    "newPhase": toolCallPhase.description,
+                ])
+        }
+
+        // Consistency check
+        if responsePhase.isStreaming != actualAssistantStreaming {
+            log(
+                "⚠️ INCONSISTENCY: Shadow vs actual streaming state at tool call",
+                metadata: [
+                    "shadowStreaming": responsePhase.isStreaming,
+                    "actualStreaming": actualAssistantStreaming,
+                    "toolCallPhase": toolCallPhase.description,
+                ], level: .warn)
+        }
+    }
+
+    /// Shadow observer for tool result being sent
+    func shadow_willSendToolResult(callId: String, actualResponseInProgress: Bool) {
+        let canSendImmediately = !responsePhase.isActive
+
+        log(
+            "Tool result ready to send",
+            metadata: [
+                "callId": callId,
+                "shadowCanSend": canSendImmediately,
+                "actualResponseInProgress": actualResponseInProgress,
+                "responsePhase": responsePhase.description,
+            ])
+
+        // Consistency check
+        if canSendImmediately == actualResponseInProgress {
+            log(
+                "⚠️ INCONSISTENCY: Shadow says can send = \(canSendImmediately), actual responseInProgress = \(actualResponseInProgress)",
+                metadata: [
+                    "callId": callId
+                ], level: .warn)
+        }
+    }
+
+    /// Shadow observer for tool call completion
+    func shadow_didCompleteToolCall(callId: String) {
+        transitionCount += 1
+
+        let previousPhase = toolCallPhase
+
+        // Only clear if this is the current tool call
+        if toolCallPhase.callId == callId {
+            toolCallPhase = .idle
+            log(
+                "Tool call completed",
+                metadata: [
+                    "callId": callId,
+                    "previousPhase": previousPhase.description,
+                    "newPhase": toolCallPhase.description,
+                ])
+        } else {
+            log(
+                "Tool call completed (not current)",
+                metadata: [
+                    "completedCallId": callId,
+                    "currentPhase": toolCallPhase.description,
+                ])
+        }
+    }
+
+    // MARK: - Shadow Event Handlers (User Speech)
+
+    /// Shadow observer for input_audio_buffer.speech_started event
+    func shadow_didReceiveUserSpeechStarted() {
+        transitionCount += 1
+
+        let previousPhase = userSpeechPhase
+        userSpeechPhase = .speaking(startedAt: Date())
+
+        log(
+            "User speech STARTED",
+            metadata: [
+                "previousPhase": previousPhase.description,
+                "newPhase": userSpeechPhase.description,
+            ])
+    }
+
+    /// Shadow observer for input_audio_buffer.speech_stopped event
+    func shadow_didReceiveUserSpeechStopped() {
+        transitionCount += 1
+
+        let previousPhase = userSpeechPhase
+        userSpeechPhase = .idle
+
+        if case .speaking(let startedAt) = previousPhase {
+            let duration = Date().timeIntervalSince(startedAt)
+            log(
+                "User speech STOPPED",
+                metadata: [
+                    "duration": String(format: "%.2fs", duration),
+                    "previousPhase": previousPhase.description,
+                    "newPhase": userSpeechPhase.description,
+                ])
+        } else {
+            log(
+                "User speech STOPPED (was not speaking?)",
+                metadata: [
+                    "previousPhase": previousPhase.description,
+                    "newPhase": userSpeechPhase.description,
+                ], level: .warn)
+        }
+    }
+
+    /// Shadow observer for input_audio_buffer.cleared event
+    func shadow_didReceiveInputAudioBufferCleared() {
+        log(
+            "Input audio buffer cleared",
+            metadata: [
+                "userSpeechPhase": userSpeechPhase.description
+            ])
+    }
+
+    // MARK: - Shadow Event Handlers (Audio Mix Player)
+
+    /// Shadow observer for AudioMixPlayer.startLoopingRandomBeeps
+    func shadow_didAttemptStartToolAudio(
+        prefix: String, wasBlocked: Bool, actualAssistantStreaming: Bool
+    ) {
+        let shadowWouldBlock = responsePhase.isStreaming
+
+        log(
+            "Tool audio start attempted",
+            metadata: [
+                "prefix": prefix,
+                "actuallyBlocked": wasBlocked,
+                "shadowWouldBlock": shadowWouldBlock,
+                "responsePhase": responsePhase.description,
+            ])
+
+        if wasBlocked != shadowWouldBlock {
+            log(
+                "⚠️ INCONSISTENCY: Tool audio blocking mismatch",
+                metadata: [
+                    "actuallyBlocked": wasBlocked,
+                    "shadowWouldBlock": shadowWouldBlock,
+                    "actualAssistantStreaming": actualAssistantStreaming,
+                    "shadowResponsePhase": responsePhase.description,
+                ], level: .warn)
+        }
+    }
+
+    /// Shadow observer for AudioMixPlayer.stop
+    func shadow_didStopToolAudio(reason: String) {
+        log(
+            "Tool audio stopped",
+            metadata: [
+                "reason": reason,
+                "toolCallPhase": toolCallPhase.description,
+            ])
+    }
+
+    // MARK: - Manual Controls
+
+    /// Reset all shadow state (e.g., on disconnect)
+    func shadow_reset(reason: String) {
+        let previousSnapshot = snapshot
+
+        responsePhase = .idle
+        toolCallPhase = .idle
+        userSpeechPhase = .idle
+        queuedResponse = nil
+        transitionCount = 0
+
+        log(
+            "Shadow state RESET",
+            metadata: [
+                "reason": reason,
+                "previousState": previousSnapshot.description,
+            ])
+    }
+
+    // MARK: - Logging Helpers
+
+    private enum LogLevel {
+        case info
+        case warn
+        case error
+    }
+
+    private func log(_ message: String, metadata: [String: Any] = [:], level: LogLevel = .info) {
+        var fullMetadata = metadata
+        fullMetadata["transitionCount"] = transitionCount
+        fullMetadata["timestamp"] = ISO8601DateFormatter().string(from: Date())
+
+        let levelEmoji: String
+        let logLevel: VmWebrtcLogging.LogLevel
+        switch level {
+        case .info:
+            levelEmoji = ""
+            logLevel = .info
+        case .warn:
+            levelEmoji = "⚠️ "
+            logLevel = .warn
+        case .error:
+            levelEmoji = "❌ "
+            logLevel = .error
+        }
+
+        logger.log(
+            "\(logPrefix) [ShadowState] \(levelEmoji)\(message)",
+            attributes: logAttributes(for: logLevel, metadata: fullMetadata)
+        )
+    }
+
+    private func logSnapshot(_ context: String) {
+        let snap = snapshot
+        log(
+            "\(context): \(snap.description)",
+            metadata: [
+                "canSendResponseCreate": snap.canSendResponseCreate,
+                "isAssistantSpeaking": snap.isAssistantSpeaking,
+                "shouldToolAudioBeBlocked": snap.shouldToolAudioBeBlocked,
+            ])
+    }
+
+    private func checkConsistency(shadowStreaming: Bool, actualStreaming: Bool, event: String) {
+        if shadowStreaming != actualStreaming {
+            log(
+                "⚠️ INCONSISTENCY: Streaming state mismatch",
+                metadata: [
+                    "event": event,
+                    "shadowStreaming": shadowStreaming,
+                    "actualStreaming": actualStreaming,
+                    "responsePhase": responsePhase.description,
+                ], level: .warn)
+        }
+    }
+}

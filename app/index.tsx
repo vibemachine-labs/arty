@@ -1,16 +1,13 @@
 import { Camera } from "expo-camera";
 import { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Alert, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AdvancedConfigurationSheet } from "../components/settings/AdvancedConfigurationSheet";
-import { ConfigureChatMode, type ChatMode } from "../components/settings/ConfigureChatMode";
+import {
+  ConfigureChatMode,
+  type ChatMode,
+} from "../components/settings/ConfigureChatMode";
 import { ConfigureContextWindow } from "../components/settings/ConfigureContextWindow";
 import { ConfigureLanguage } from "../components/settings/ConfigureLanguage";
 import { ConfigureMainPromptModal } from "../components/settings/ConfigureMainPromptModal";
@@ -21,21 +18,41 @@ import { ConfigureVoice } from "../components/settings/ConfigureVoice";
 import { ConnectorsConfig } from "../components/settings/ConnectorsConfig";
 import { DeveloperMode } from "../components/ui/DeveloperMode";
 import { HamburgerButton } from "../components/ui/HamburgerButton";
-import { HamburgerMenu, type MenuSection } from "../components/ui/HamburgerMenu";
+import {
+  HamburgerMenu,
+  type MenuSection,
+} from "../components/ui/HamburgerMenu";
 import {
   DEFAULT_MAX_CONVERSATION_TURNS,
   DEFAULT_RETENTION_RATIO,
   loadContextWindowPreferences,
   saveMaxConversationTurns,
-  saveRetentionRatio
+  saveRetentionRatio,
 } from "../lib/contextWindowPreference";
-import { DEFAULT_LANGUAGE, loadLanguagePreference, saveLanguagePreference } from "../lib/languagePreference";
+import {
+  DEFAULT_LANGUAGE,
+  loadLanguagePreference,
+  saveLanguagePreference,
+} from "../lib/languagePreference";
 import { log } from "../lib/logger";
 import { loadMainPromptAddition } from "../lib/mainPrompt";
 import { getApiKey } from "../lib/secure-storage";
-import { DEFAULT_TRANSCRIPTION_ENABLED, loadTranscriptionPreference, saveTranscriptionPreference } from "../lib/transcriptionPreference";
-import { DEFAULT_VAD_MODE, loadVadPreference, saveVadPreference, type VadMode } from "../lib/vadPreference";
-import { DEFAULT_VOICE, loadVoicePreference, saveVoicePreference } from "../lib/voicePreference";
+import {
+  DEFAULT_TRANSCRIPTION_ENABLED,
+  loadTranscriptionPreference,
+  saveTranscriptionPreference,
+} from "../lib/transcriptionPreference";
+import {
+  DEFAULT_VAD_MODE,
+  loadVadPreference,
+  saveVadPreference,
+  type VadMode,
+} from "../lib/vadPreference";
+import {
+  DEFAULT_VOICE,
+  loadVoicePreference,
+  saveVoicePreference,
+} from "../lib/voicePreference";
 import { ConfigureApiKeyScreen } from "./ConfigureApiKey";
 import { OnboardingWizard } from "./OnboardingWizard";
 import TextChat from "./TextChat";
@@ -43,34 +60,35 @@ import VoiceChat from "./VoiceChat";
 
 import { type BaseOpenAIConnectionOptions } from "../modules/vm-webrtc";
 
-const buildConnectionOptions = async (): Promise<BaseOpenAIConnectionOptions | null> => {
-  // Try to get user-saved API key first
-  let apiKey = await getApiKey({ forceSecureStore: true });
-  
-  if (apiKey) {
-    log.info("Using user-saved API key from secure storage");
-  } else {
-    // Fall back to environment variable
-    apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || null;
+const buildConnectionOptions =
+  async (): Promise<BaseOpenAIConnectionOptions | null> => {
+    // Try to get user-saved API key first
+    let apiKey = await getApiKey({ forceSecureStore: true });
+
     if (apiKey) {
-      log.info("Using API key from environment variable (.env)");
+      log.info("Using user-saved API key from secure storage");
+    } else {
+      // Fall back to environment variable
+      apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY || null;
+      if (apiKey) {
+        log.info("Using API key from environment variable (.env)");
+      }
     }
-  }
 
-  if (!apiKey) {
-    log.warn("No API key available from secure storage or environment");
-    return null;
-  }
+    if (!apiKey) {
+      log.warn("No API key available from secure storage or environment");
+      return null;
+    }
 
-  const envVoice = process.env.EXPO_PUBLIC_OPENAI_REALTIME_VOICE?.trim();
+    const envVoice = process.env.EXPO_PUBLIC_OPENAI_REALTIME_VOICE?.trim();
 
-  return {
-    apiKey,
-    model: process.env.EXPO_PUBLIC_OPENAI_REALTIME_MODEL,
-    baseUrl: process.env.EXPO_PUBLIC_OPENAI_REALTIME_BASE_URL,
-    voice: envVoice && envVoice.length > 0 ? envVoice : "cedar",
+    return {
+      apiKey,
+      model: process.env.EXPO_PUBLIC_OPENAI_REALTIME_MODEL,
+      baseUrl: process.env.EXPO_PUBLIC_OPENAI_REALTIME_BASE_URL,
+      voice: envVoice && envVoice.length > 0 ? envVoice : "cedar",
+    };
   };
-};
 
 export default function Index() {
   const [hasMicPermission, setHasMicPermission] = useState(false);
@@ -81,10 +99,12 @@ export default function Index() {
   const [connectorsConfigVisible, setConnectorsConfigVisible] = useState(false);
   const [advancedConfigVisible, setAdvancedConfigVisible] = useState(false);
   const [configureToolsVisible, setConfigureToolsVisible] = useState(false);
-  const [baseConnectionOptions, setBaseConnectionOptions] = useState<BaseOpenAIConnectionOptions | null>(null);
+  const [baseConnectionOptions, setBaseConnectionOptions] =
+    useState<BaseOpenAIConnectionOptions | null>(null);
   const [selectedVoice, setSelectedVoice] = useState(DEFAULT_VOICE);
   const [voiceSheetVisible, setVoiceSheetVisible] = useState(false);
-  const [selectedVadMode, setSelectedVadMode] = useState<VadMode>(DEFAULT_VAD_MODE);
+  const [selectedVadMode, setSelectedVadMode] =
+    useState<VadMode>(DEFAULT_VAD_MODE);
   const [vadSheetVisible, setVadSheetVisible] = useState(false);
   const [selectedChatMode, setSelectedChatMode] = useState<ChatMode>("voice");
   const [chatModeSheetVisible, setChatModeSheetVisible] = useState(false);
@@ -95,9 +115,14 @@ export default function Index() {
   const [mainPromptAddition, setMainPromptAddition] = useState("");
   const [contextWindowVisible, setContextWindowVisible] = useState(false);
   const [retentionRatio, setRetentionRatio] = useState(DEFAULT_RETENTION_RATIO);
-  const [maxConversationTurns, setMaxConversationTurns] = useState<number>(DEFAULT_MAX_CONVERSATION_TURNS);
-  const [transcriptionEnabled, setTranscriptionEnabled] = useState(DEFAULT_TRANSCRIPTION_ENABLED);
-  const [transcriptionSheetVisible, setTranscriptionSheetVisible] = useState(false);
+  const [maxConversationTurns, setMaxConversationTurns] = useState<number>(
+    DEFAULT_MAX_CONVERSATION_TURNS,
+  );
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(
+    DEFAULT_TRANSCRIPTION_ENABLED,
+  );
+  const [transcriptionSheetVisible, setTranscriptionSheetVisible] =
+    useState(false);
   const [onboardingVisible, setOnboardingVisible] = useState(false);
   const [onboardingCheckToken, setOnboardingCheckToken] = useState(0);
   const [onboardingCompletionToken, setOnboardingCompletionToken] = useState(0);
@@ -178,10 +203,14 @@ export default function Index() {
       }
       setRetentionRatio(stored.retentionRatio);
       setMaxConversationTurns(stored.maxConversationTurns);
-      log.info("Context window preferences loaded from storage", {}, {
-        retentionRatio: stored.retentionRatio,
-        maxConversationTurns: stored.maxConversationTurns,
-      });
+      log.info(
+        "Context window preferences loaded from storage",
+        {},
+        {
+          retentionRatio: stored.retentionRatio,
+          maxConversationTurns: stored.maxConversationTurns,
+        },
+      );
     };
 
     hydrateContextWindowPreferences();
@@ -218,7 +247,11 @@ export default function Index() {
         return;
       }
       setSelectedLanguage(stored);
-      log.info("Language preference loaded from storage", {}, { language: stored });
+      log.info(
+        "Language preference loaded from storage",
+        {},
+        { language: stored },
+      );
     };
 
     hydrateLanguagePreference();
@@ -234,7 +267,8 @@ export default function Index() {
     const evaluateOnboardingStatus = async () => {
       try {
         const storedKey = await getApiKey({ forceSecureStore: true });
-        const hasStoredKey = typeof storedKey === "string" && storedKey.trim().length > 0;
+        const hasStoredKey =
+          typeof storedKey === "string" && storedKey.trim().length > 0;
         if (!isActive) {
           return;
         }
@@ -243,7 +277,11 @@ export default function Index() {
         if (!isActive) {
           return;
         }
-        log.warn("Unable to determine onboarding status from secure storage", {}, error);
+        log.warn(
+          "Unable to determine onboarding status from secure storage",
+          {},
+          error,
+        );
         setOnboardingVisible(true);
       }
     };
@@ -266,73 +304,64 @@ export default function Index() {
     setOnboardingCompletionToken((prev) => prev + 1);
   }, []);
 
-  const handleSelectVoice = useCallback(
-    (voice: string) => {
-      setSelectedVoice(voice);
-      void saveVoicePreference(voice);
-      log.info("Voice preference updated and saved", {}, { voice });
-      setVoiceSheetVisible(false);
-    },
-    []
-  );
+  const handleSelectVoice = useCallback((voice: string) => {
+    setSelectedVoice(voice);
+    void saveVoicePreference(voice);
+    log.info("Voice preference updated and saved", {}, { voice });
+    setVoiceSheetVisible(false);
+  }, []);
 
-  const handleSelectVadMode = useCallback(
-    (mode: VadMode) => {
-      setSelectedVadMode(mode);
-      void saveVadPreference(mode);
-      log.info("VAD preference updated", {}, { mode });
-      setVadSheetVisible(false);
-    },
-    []
-  );
+  const handleSelectVadMode = useCallback((mode: VadMode) => {
+    setSelectedVadMode(mode);
+    void saveVadPreference(mode);
+    log.info("VAD preference updated", {}, { mode });
+    setVadSheetVisible(false);
+  }, []);
 
-  const handleSelectChatMode = useCallback(
-    (mode: ChatMode) => {
-      setSelectedChatMode(mode);
-      log.info("Chat mode preference updated", {}, { mode });
-      setChatModeSheetVisible(false);
-    },
-    []
-  );
+  const handleSelectChatMode = useCallback((mode: ChatMode) => {
+    setSelectedChatMode(mode);
+    log.info("Chat mode preference updated", {}, { mode });
+    setChatModeSheetVisible(false);
+  }, []);
 
-  const handleSelectLanguage = useCallback(
-    (language: string) => {
-      setSelectedLanguage(language);
-      void saveLanguagePreference(language);
-      log.info("Language preference updated and saved", {}, { language });
-      setLanguageSheetVisible(false);
-    },
-    []
-  );
+  const handleSelectLanguage = useCallback((language: string) => {
+    setSelectedLanguage(language);
+    void saveLanguagePreference(language);
+    log.info("Language preference updated and saved", {}, { language });
+    setLanguageSheetVisible(false);
+  }, []);
 
-  const handleMaxConversationTurnsChange = useCallback(
-    (value: number) => {
-      // Enforce range 1-20
-      const clampedValue = Math.max(1, Math.min(20, Math.round(value)));
-      setMaxConversationTurns(clampedValue);
-      void saveMaxConversationTurns(clampedValue);
-      log.info("Max conversation turns preference updated and saved", {}, { maxConversationTurns: clampedValue });
-    },
-    []
-  );
+  const handleMaxConversationTurnsChange = useCallback((value: number) => {
+    // Enforce range 1-20
+    const clampedValue = Math.max(1, Math.min(20, Math.round(value)));
+    setMaxConversationTurns(clampedValue);
+    void saveMaxConversationTurns(clampedValue);
+    log.info(
+      "Max conversation turns preference updated and saved",
+      {},
+      { maxConversationTurns: clampedValue },
+    );
+  }, []);
 
-  const handleRetentionRatioChange = useCallback(
-    (value: number) => {
-      setRetentionRatio(value);
-      void saveRetentionRatio(value);
-      log.info("Retention ratio preference updated and saved", {}, { retentionRatio: value });
-    },
-    []
-  );
+  const handleRetentionRatioChange = useCallback((value: number) => {
+    setRetentionRatio(value);
+    void saveRetentionRatio(value);
+    log.info(
+      "Retention ratio preference updated and saved",
+      {},
+      { retentionRatio: value },
+    );
+  }, []);
 
-  const handleToggleTranscription = useCallback(
-    (enabled: boolean) => {
-      setTranscriptionEnabled(enabled);
-      void saveTranscriptionPreference(enabled);
-      log.info("Transcription preference updated and saved", {}, { transcriptionEnabled: enabled });
-    },
-    []
-  );
+  const handleToggleTranscription = useCallback((enabled: boolean) => {
+    setTranscriptionEnabled(enabled);
+    void saveTranscriptionPreference(enabled);
+    log.info(
+      "Transcription preference updated and saved",
+      {},
+      { transcriptionEnabled: enabled },
+    );
+  }, []);
 
   const handleSelectMenuSection = useCallback(
     (section: MenuSection) => {
@@ -372,7 +401,10 @@ export default function Index() {
         return;
       }
 
-      Alert.alert("Coming Soon", "This configuration section is currently under construction.");
+      Alert.alert(
+        "Coming Soon",
+        "This configuration section is currently under construction.",
+      );
     },
     [
       setVoiceSheetVisible,
@@ -382,12 +414,16 @@ export default function Index() {
       setDeveloperModeVisible,
       mainPromptAddition,
       setAdvancedConfigVisible,
-    ]
+    ],
   );
 
   useEffect(() => {
     if (Platform.OS !== "ios") {
-      log.warn("Skipping microphone permission request on unsupported platform", {}, { platform: Platform.OS });
+      log.warn(
+        "Skipping microphone permission request on unsupported platform",
+        {},
+        { platform: Platform.OS },
+      );
       setHasMicPermission(false);
       return;
     }
@@ -395,11 +431,15 @@ export default function Index() {
     const ensureMicrophonePermission = async () => {
       try {
         const existing = await Camera.getMicrophonePermissionsAsync();
-        log.debug("Checked existing microphone permission", {}, {
-          status: existing.status,
-          granted: existing.granted,
-          canAskAgain: existing.canAskAgain,
-        });
+        log.debug(
+          "Checked existing microphone permission",
+          {},
+          {
+            status: existing.status,
+            granted: existing.granted,
+            canAskAgain: existing.canAskAgain,
+          },
+        );
 
         if (existing.granted || existing.status === "granted") {
           setHasMicPermission(true);
@@ -410,22 +450,31 @@ export default function Index() {
 
         if (!existing.canAskAgain) {
           setHasMicPermission(false);
-          setPermissionError("Microphone access is disabled. Update iOS Settings to enable audio.");
+          setPermissionError(
+            "Microphone access is disabled. Update iOS Settings to enable audio.",
+          );
           log.warn("Microphone permission permanently denied");
           return;
         }
 
         log.debug("Requesting microphone permission at startup");
         const requested = await Camera.requestMicrophonePermissionsAsync();
-        const permissionGranted = requested.granted || requested.status === "granted";
+        const permissionGranted =
+          requested.granted || requested.status === "granted";
         setHasMicPermission(permissionGranted);
         if (!permissionGranted) {
-          setPermissionError("Microphone access is required to start a voice session.");
-          log.warn("Microphone permission denied after prompt", {}, {
-            status: requested.status,
-            granted: requested.granted,
-            canAskAgain: requested.canAskAgain,
-          });
+          setPermissionError(
+            "Microphone access is required to start a voice session.",
+          );
+          log.warn(
+            "Microphone permission denied after prompt",
+            {},
+            {
+              status: requested.status,
+              granted: requested.granted,
+              canAskAgain: requested.canAskAgain,
+            },
+          );
         } else {
           setPermissionError(null);
           log.info("Microphone permission granted after prompt");
@@ -462,7 +511,7 @@ export default function Index() {
       <View style={styles.container}>
         <View style={styles.header}>
           <HamburgerButton onPress={() => setMenuVisible(true)} />
-          <Text style={styles.headerTitle}>✨🕺🏻 Vibemachine</Text>
+          <Text style={styles.headerTitle}>⭐🤖 A.R.T.Y</Text>
           <View style={styles.headerSpacer} />
         </View>
         {renderChatSurface}

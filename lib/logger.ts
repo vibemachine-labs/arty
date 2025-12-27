@@ -1,21 +1,24 @@
-import { initializeLogfire, logfireEvent, registerLogfireLogger } from './otel';
-import { trace } from '@opentelemetry/api';
-import { loadLogRedactionDisabled, saveLogRedactionDisabled } from './developerSettings';
+import { initializeLogfire, logfireEvent, registerLogfireLogger } from "./otel";
+import { trace } from "@opentelemetry/api";
+import {
+  loadLogRedactionDisabled,
+  saveLogRedactionDisabled,
+} from "./developerSettings";
 
-const LOG_PREFIX = 'VmConsoleLog';
-const REDACTED_TEXT = '[REDACTED]';
+const LOG_PREFIX = "VmConsoleLog";
+const REDACTED_TEXT = "[REDACTED]";
 const SENSITIVE_KEYWORDS = [
-  'password',
-  'passwd',
-  'secret',
-  'apikey',
-  'api_key',
-  'credential',
-  'session',
-  'cookie',
-  'auth',
-  'authorization',
-  'bearer',
+  "password",
+  "passwd",
+  "secret",
+  "apikey",
+  "api_key",
+  "credential",
+  "session",
+  "cookie",
+  "auth",
+  "authorization",
+  "bearer",
 ] as const;
 
 const levelPriority = {
@@ -58,11 +61,15 @@ const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
     return value;
   }
 
-  if (typeof value === 'string') {
-    return keyHint && hasSensitiveKeyword(keyHint) ? REDACTED_TEXT : isLikelySensitiveString(value) ? REDACTED_TEXT : value;
+  if (typeof value === "string") {
+    return keyHint && hasSensitiveKeyword(keyHint)
+      ? REDACTED_TEXT
+      : isLikelySensitiveString(value)
+        ? REDACTED_TEXT
+        : value;
   }
 
-  if (typeof value === 'number' || typeof value === 'boolean') {
+  if (typeof value === "number" || typeof value === "boolean") {
     return value;
   }
 
@@ -73,7 +80,9 @@ const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
   if (value instanceof Error) {
     return {
       name: value.name,
-      message: isLikelySensitiveString(value.message) ? REDACTED_TEXT : value.message,
+      message: isLikelySensitiveString(value.message)
+        ? REDACTED_TEXT
+        : value.message,
       stack: value.stack,
     };
   }
@@ -82,10 +91,12 @@ const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
     return value.map((entry) => sanitizeValue(entry));
   }
 
-  if (typeof value === 'object') {
+  if (typeof value === "object") {
     const result: Record<string, unknown> = {};
     Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
-      result[key] = hasSensitiveKeyword(key) ? REDACTED_TEXT : sanitizeValue(val, key);
+      result[key] = hasSensitiveKeyword(key)
+        ? REDACTED_TEXT
+        : sanitizeValue(val, key);
     });
     return result;
   }
@@ -93,27 +104,28 @@ const sanitizeValue = (value: unknown, keyHint?: string): unknown => {
   return REDACTED_TEXT;
 };
 
-const sanitizeMessage = (message: string) => (isLikelySensitiveString(message) ? REDACTED_TEXT : message);
+const sanitizeMessage = (message: string) =>
+  isLikelySensitiveString(message) ? REDACTED_TEXT : message;
 
 const sanitizeArgs = (args: unknown[]) => args.map((arg) => sanitizeValue(arg));
 
 const getMinimumLevel = (): LogLevel => {
   const raw = process.env.EXPO_PUBLIC_LOG_LEVEL?.toLowerCase();
   if (!raw) {
-    return 'debug';
+    return "debug";
   }
 
   if (
-    raw === 'trace' ||
-    raw === 'debug' ||
-    raw === 'info' ||
-    raw === 'warn' ||
-    raw === 'error'
+    raw === "trace" ||
+    raw === "debug" ||
+    raw === "info" ||
+    raw === "warn" ||
+    raw === "error"
   ) {
     return raw;
   }
 
-  return 'debug';
+  return "debug";
 };
 
 let minimumLevel = getMinimumLevel();
@@ -140,7 +152,10 @@ const notifyRedactionListeners = () => {
     try {
       listener(payload);
     } catch (error) {
-      console.error(`[${LOG_PREFIX}] Failed to notify redaction listener`, error);
+      console.error(
+        `[${LOG_PREFIX}] Failed to notify redaction listener`,
+        error,
+      );
     }
   });
 };
@@ -150,19 +165,26 @@ type SetRedactionOptions = {
   silent?: boolean;
 };
 
-const shouldLog = (level: LogLevel) => levelPriority[level] >= levelPriority[minimumLevel];
+const shouldLog = (level: LogLevel) =>
+  levelPriority[level] >= levelPriority[minimumLevel];
 
 export type LogOptions = {
   emit2logfire?: boolean; // defaults to true
   allowSensitiveLogging?: boolean;
 };
 
-const emit = (level: LogLevel, message: string, options: LogOptions, ...args: unknown[]) => {
+const emit = (
+  level: LogLevel,
+  message: string,
+  options: LogOptions,
+  ...args: unknown[]
+) => {
   if (!shouldLog(level)) {
     return;
   }
 
-  const applyRedaction = redactionEnabled && options.allowSensitiveLogging !== true;
+  const applyRedaction =
+    redactionEnabled && options.allowSensitiveLogging !== true;
   const safeMessage = applyRedaction ? sanitizeMessage(message) : message;
   const safeArgs = applyRedaction ? sanitizeArgs(args) : args;
 
@@ -170,19 +192,19 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
   const prefix = `[${LOG_PREFIX}][${level.toUpperCase()}][${timestamp}]`;
 
   switch (level) {
-    case 'trace':
+    case "trace":
       console.trace(prefix, safeMessage, ...safeArgs);
       break;
-    case 'debug':
+    case "debug":
       console.debug(prefix, safeMessage, ...safeArgs);
       break;
-    case 'info':
+    case "info":
       console.info(prefix, safeMessage, ...safeArgs);
       break;
-    case 'warn':
+    case "warn":
       console.warn(prefix, safeMessage, ...safeArgs);
       break;
-    case 'error':
+    case "error":
       console.error(prefix, safeMessage, ...safeArgs);
       break;
     default:
@@ -201,7 +223,7 @@ const emit = (level: LogLevel, message: string, options: LogOptions, ...args: un
     // Add any additional args as attributes
     if (safeArgs.length > 0) {
       safeArgs.forEach((arg, index) => {
-        if (arg && typeof arg === 'object' && !Array.isArray(arg)) {
+        if (arg && typeof arg === "object" && !Array.isArray(arg)) {
           Object.assign(attrs, arg);
         } else {
           attrs[`arg${index}`] = arg;
@@ -223,7 +245,10 @@ const hydrateRedactionPreference = async () => {
     redactionEnabled = !disabled;
     notifyRedactionListeners();
   } catch (error) {
-    console.warn(`[${LOG_PREFIX}] Failed to hydrate log redaction preference`, error);
+    console.warn(
+      `[${LOG_PREFIX}] Failed to hydrate log redaction preference`,
+      error,
+    );
   }
 };
 
@@ -236,7 +261,10 @@ export const log = {
   setLevel(level: LogLevel) {
     minimumLevel = level;
   },
-  async setRedactionEnabled(enabled: boolean, options: SetRedactionOptions = {}) {
+  async setRedactionEnabled(
+    enabled: boolean,
+    options: SetRedactionOptions = {},
+  ) {
     redactionEnabled = enabled;
 
     if (options.silent !== true) {
@@ -247,7 +275,10 @@ export const log = {
       try {
         await saveLogRedactionDisabled(!enabled);
       } catch (error) {
-        console.warn(`[${LOG_PREFIX}] Failed to persist log redaction preference`, error);
+        console.warn(
+          `[${LOG_PREFIX}] Failed to persist log redaction preference`,
+          error,
+        );
       }
     }
   },
@@ -263,27 +294,27 @@ export const log = {
     };
   },
   trace(message: string, options: LogOptions = {}, ...args: unknown[]) {
-    emit('trace', message, options, ...args);
+    emit("trace", message, options, ...args);
   },
   debug(message: string, options: LogOptions = {}, ...args: unknown[]) {
-    emit('debug', message, options, ...args);
+    emit("debug", message, options, ...args);
   },
   info(message: string, options: LogOptions = {}, ...args: unknown[]) {
-    emit('info', message, options, ...args);
+    emit("info", message, options, ...args);
   },
   warn(message: string, options: LogOptions = {}, ...args: unknown[]) {
-    emit('warn', message, options, ...args);
+    emit("warn", message, options, ...args);
   },
   error(message: string, options: LogOptions = {}, ...args: unknown[]) {
-    emit('error', message, options, ...args);
+    emit("error", message, options, ...args);
   },
   // Helper for creating spans for hierarchical tracing
   async withSpan<T>(
     name: string,
     fn: () => Promise<T>,
-    attrs?: Record<string, unknown>
+    attrs?: Record<string, unknown>,
   ): Promise<T> {
-    const tracer = trace.getTracer('vibemachine-tracer');
+    const tracer = trace.getTracer("vibemachine-tracer");
     const span = tracer.startSpan(name);
 
     if (attrs) {

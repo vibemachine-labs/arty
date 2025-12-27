@@ -1,45 +1,50 @@
-import { NativeModule, requireOptionalNativeModule } from 'expo';
+import { NativeModule, requireOptionalNativeModule } from "expo";
 
-import { log } from '../../../lib/logger';
+import { log } from "../../../lib/logger";
 import {
   createGithubConnectorTool,
   type GithubConnectorNativeModule,
-} from './ToolGithubConnector';
-import { gdriveConnectorDefinition } from './ToolGDriveConnector';
+} from "./ToolGithubConnector";
+import { gdriveConnectorDefinition } from "./ToolGDriveConnector";
 import {
   createGPT5GDriveFixerTool,
   type GPT5GDriveFixerNativeModule,
-} from './ToolGPT5GDriveFixer';
+} from "./ToolGPT5GDriveFixer";
 import {
   createGPT5WebSearchTool,
   type GPT5WebSearchNativeModule,
-} from './ToolGPT5WebSearch';
+} from "./ToolGPT5WebSearch";
 import {
   createToolkitHelper,
   type ToolkitHelperNativeModule,
-} from './ToolkitHelper';
-import type { VadMode } from '../../../lib/vadPreference';
-import toolManager from './ToolManager';
+} from "./ToolkitHelper";
+import type { VadMode } from "../../../lib/vadPreference";
+import toolManager from "./ToolManager";
 import {
-    OpenAIConnectionOptions,
-    OpenAIConnectionState,
-    VmWebrtcModuleEvents,
-} from './VmWebrtc.types';
-import { getToolkitDefinitions } from './ToolkitManager';
+  OpenAIConnectionOptions,
+  OpenAIConnectionState,
+  VmWebrtcModuleEvents,
+} from "./VmWebrtc.types";
+import { getToolkitDefinitions } from "./ToolkitManager";
 
-const MODULE_NAME = 'VmWebrtc';
+const MODULE_NAME = "VmWebrtc";
 
 const makeUnavailableError = () =>
-  new Error(`Native module ${MODULE_NAME} is unavailable. Rebuild the iOS app to load native code.`);
+  new Error(
+    `Native module ${MODULE_NAME} is unavailable. Rebuild the iOS app to load native code.`,
+  );
 
-const loadModule = () => requireOptionalNativeModule<VmWebrtcModule>(MODULE_NAME);
+const loadModule = () =>
+  requireOptionalNativeModule<VmWebrtcModule>(MODULE_NAME);
 
 declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   PI: number;
   hello(): string;
   helloFromExpoModule(): string;
   setValueAsync(value: string): Promise<void>;
-  openOpenAIConnectionAsync(options: OpenAIConnectionOptions): Promise<OpenAIConnectionState>;
+  openOpenAIConnectionAsync(
+    options: OpenAIConnectionOptions,
+  ): Promise<OpenAIConnectionState>;
   closeOpenAIConnectionAsync(): Promise<OpenAIConnectionState>;
   githubOperationFromSwift(query: string): Promise<string>;
   sendGithubConnectorResponse(requestId: string, result: string): void;
@@ -50,17 +55,25 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   sendToolkitResponse(requestId: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
-  logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
+  logfireEvent(
+    tracerName: string,
+    spanName: string,
+    attributes?: Record<string, unknown>,
+  ): void;
 }
 
 const module = loadModule();
 
 if (!module) {
-  log.warn(`[${MODULE_NAME}] Native module not found. Did you rebuild the iOS app?`);
+  log.warn(
+    `[${MODULE_NAME}] Native module not found. Did you rebuild the iOS app?`,
+  );
 }
 
 // Initialize github connector tool
-const githubConnectorTool = createGithubConnectorTool(module as unknown as GithubConnectorNativeModule | null);
+const githubConnectorTool = createGithubConnectorTool(
+  module as unknown as GithubConnectorNativeModule | null,
+);
 const gpt5GDriveFixerTool = createGPT5GDriveFixerTool(
   module as unknown as GPT5GDriveFixerNativeModule | null,
   gdriveConnectorDefinition.description,
@@ -70,7 +83,9 @@ const gpt5WebSearchTool = createGPT5WebSearchTool(
 );
 
 // Initialize Gen2 toolkit helper
-const toolkitHelper = createToolkitHelper(module as unknown as ToolkitHelperNativeModule | null);
+const toolkitHelper = createToolkitHelper(
+  module as unknown as ToolkitHelperNativeModule | null,
+);
 
 export const helloFromExpoModule = () => {
   if (!module) {
@@ -81,17 +96,20 @@ export const helloFromExpoModule = () => {
 };
 
 export const openOpenAIConnectionAsync = async (
-  options: OpenAIConnectionOptions
+  options: OpenAIConnectionOptions,
 ) => {
   if (!module) {
     throw makeUnavailableError();
   }
 
   const trimmedVoice = options.voice?.trim();
-  const resolvedVoice = trimmedVoice && trimmedVoice.length > 0 ? trimmedVoice : 'cedar';
+  const resolvedVoice =
+    trimmedVoice && trimmedVoice.length > 0 ? trimmedVoice : "cedar";
   const trimmedInstructions = options.instructions.trim();
   if (trimmedInstructions.length === 0) {
-    throw new Error(`[${MODULE_NAME}] instructions must be a non-empty string.`);
+    throw new Error(
+      `[${MODULE_NAME}] instructions must be a non-empty string.`,
+    );
   }
   // const toolDefinitionsWithPrompts = await toolManager.getAugmentedToolDefinitions(
   //   options.toolDefinitions,
@@ -104,9 +122,13 @@ export const openOpenAIConnectionAsync = async (
   // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
   // This now includes dynamic MCP tools fetched from remote servers
   const toolDefinitionsFromToolkits = await getToolkitDefinitions(); // gen2
-  log.info(`[${MODULE_NAME}] Toolkit definitions resolved`, {}, {
-    definitions: toolDefinitionsFromToolkits,
-  });
+  log.info(
+    `[${MODULE_NAME}] Toolkit definitions resolved`,
+    {},
+    {
+      definitions: toolDefinitionsFromToolkits,
+    },
+  );
 
   // Merge Gen1 and Gen2 tool definitions
   // const mergedToolDefinitions = [
@@ -116,14 +138,19 @@ export const openOpenAIConnectionAsync = async (
 
   const mergedToolDefinitions = toolDefinitionsFromToolkits;
 
-  log.info(`[${MODULE_NAME}] Merged tool definitions`, {}, {
-    definitions: mergedToolDefinitions,
-  });
+  log.info(
+    `[${MODULE_NAME}] Merged tool definitions`,
+    {},
+    {
+      definitions: mergedToolDefinitions,
+    },
+  );
 
-  const resolvedVadMode: VadMode = options.vadMode === 'semantic' ? 'semantic' : 'server';
+  const resolvedVadMode: VadMode =
+    options.vadMode === "semantic" ? "semantic" : "server";
 
   const resolvedAudioSpeed =
-    typeof options.audioSpeed === 'number'
+    typeof options.audioSpeed === "number"
       ? Math.min(Math.max(options.audioSpeed, 0.25), 4)
       : undefined;
 
@@ -136,15 +163,19 @@ export const openOpenAIConnectionAsync = async (
     audioSpeed: resolvedAudioSpeed,
   };
 
-  log.debug(`[${MODULE_NAME}] openOpenAIConnectionAsync invoked`, {}, {
-    hasBaseUrl: Boolean(options.baseUrl),
-    hasModel: Boolean(options.model),
-    audioOutput: options.audioOutput ?? 'handset',
-    audioSpeed: resolvedAudioSpeed ?? 'default',
-    hasInstructions: trimmedInstructions.length > 0,
-    voice: resolvedVoice,
-    vadMode: resolvedVadMode,
-  });
+  log.debug(
+    `[${MODULE_NAME}] openOpenAIConnectionAsync invoked`,
+    {},
+    {
+      hasBaseUrl: Boolean(options.baseUrl),
+      hasModel: Boolean(options.model),
+      audioOutput: options.audioOutput ?? "handset",
+      audioSpeed: resolvedAudioSpeed ?? "default",
+      hasInstructions: trimmedInstructions.length > 0,
+      voice: resolvedVoice,
+      vadMode: resolvedVadMode,
+    },
+  );
 
   return module.openOpenAIConnectionAsync(sanitizedOptions);
 };
@@ -164,13 +195,19 @@ export const muteUnmuteOutgoingAudio = (shouldMute: boolean) => {
     throw makeUnavailableError();
   }
 
-  log.debug(`[${MODULE_NAME}] muteUnmuteOutgoingAudio invoked`, {}, { shouldMute });
+  log.debug(
+    `[${MODULE_NAME}] muteUnmuteOutgoingAudio invoked`,
+    {},
+    { shouldMute },
+  );
   module.muteUnmuteOutgoingAudio(shouldMute);
 };
 
 // Github Connector function that can be called from Swift
 // Uses the Github API
-export const githubConnector = async (params: { self_contained_javascript_octokit_code_snippet: string }): Promise<string> => {
+export const githubConnector = async (params: {
+  self_contained_javascript_octokit_code_snippet: string;
+}): Promise<string> => {
   if (!githubConnectorTool) {
     throw makeUnavailableError();
   }
@@ -179,7 +216,9 @@ export const githubConnector = async (params: { self_contained_javascript_octoki
 };
 
 // Github Connector bridge function - calls JS github connector from Swift
-export const githubOperationFromSwift = async (codeSnippet: string): Promise<string> => {
+export const githubOperationFromSwift = async (
+  codeSnippet: string,
+): Promise<string> => {
   if (!githubConnectorTool) {
     throw makeUnavailableError();
   }
@@ -191,4 +230,4 @@ export const githubOperationFromSwift = async (codeSnippet: string): Promise<str
 export { githubConnectorTool, gpt5GDriveFixerTool, gpt5WebSearchTool };
 
 // This call loads the native module object from the JSI.
-export default (module ?? ({} as VmWebrtcModule));
+export default module ?? ({} as VmWebrtcModule);

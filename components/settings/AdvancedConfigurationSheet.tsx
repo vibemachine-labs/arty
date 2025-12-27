@@ -16,7 +16,13 @@ interface AdvancedConfigurationSheetProps {
 }
 
 type AdvancedAction = {
-  id: "mainPrompt" | "tools" | "vad" | "contextWindow" | "transcription" | "clearSecrets";
+  id:
+    | "mainPrompt"
+    | "tools"
+    | "vad"
+    | "contextWindow"
+    | "transcription"
+    | "clearSecrets";
   title: string;
   subtitle: string;
   onPress?: () => void;
@@ -24,7 +30,9 @@ type AdvancedAction = {
   isDanger?: boolean;
 };
 
-export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProps> = ({
+export const AdvancedConfigurationSheet: React.FC<
+  AdvancedConfigurationSheetProps
+> = ({
   visible,
   onClose,
   onConfigureMainPrompt,
@@ -55,19 +63,19 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
               Alert.alert(
                 "Secrets Cleared",
                 "All stored secrets have been successfully deleted from secure storage.",
-                [{ text: "OK" }]
+                [{ text: "OK" }],
               );
             } catch (error) {
               log.error("Failed to clear stored secrets", {}, error);
               Alert.alert(
                 "Error",
                 "Failed to clear stored secrets. Please try again.",
-                [{ text: "OK" }]
+                [{ text: "OK" }],
               );
             }
           },
         },
-      ]
+      ],
     );
   }, []);
 
@@ -121,14 +129,19 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
     {
       id: "clearSecrets",
       title: "Clear Stored Secrets",
-      subtitle: "Delete all API keys, tokens, and credentials from secure storage.",
+      subtitle:
+        "Delete all API keys, tokens, and credentials from secure storage.",
       onPress: handleClearStoredSecrets,
       isDanger: true,
     },
   ];
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Advanced Configuration">
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Advanced Configuration"
+    >
       <View style={styles.body}>
         <Text style={styles.lead}>
           Tune advanced settings to tailor Vibemachine for your iOS sessions.
@@ -147,7 +160,11 @@ export const AdvancedConfigurationSheet: React.FC<AdvancedConfigurationSheetProp
                 action.isPrimary ? styles.actionCardPrimary : null,
                 action.isDanger ? styles.actionCardDanger : null,
                 !action.onPress ? styles.actionCardDisabled : null,
-                pressed && action.onPress ? (action.isDanger ? styles.actionCardDangerPressed : styles.actionCardPressed) : null,
+                pressed && action.onPress
+                  ? action.isDanger
+                    ? styles.actionCardDangerPressed
+                    : styles.actionCardPressed
+                  : null,
               ]}
             >
               <View style={styles.actionCopy}>

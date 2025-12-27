@@ -10,7 +10,7 @@ export interface TokenUsage {
 }
 
 export interface TokenTotals extends TokenUsage {
-  cachedInput: number;  // Make non-optional in totals since we always initialize it
+  cachedInput: number; // Make non-optional in totals since we always initialize it
   totalUSD: number;
 }
 

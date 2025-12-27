@@ -20,8 +20,8 @@ export const ConfigureTranscription: React.FC<ConfigureTranscriptionProps> = ({
     <BottomSheet visible={visible} onClose={onClose} title="Transcription">
       <View style={styles.body}>
         <Text style={styles.lead}>
-          Enable audio transcription to convert your spoken input into text using Whisper.
-          This helps with logging and debugging conversations.
+          Enable audio transcription to convert your spoken input into text
+          using Whisper. This helps with logging and debugging conversations.
         </Text>
         <View style={styles.optionCard}>
           <View style={styles.optionCopy}>

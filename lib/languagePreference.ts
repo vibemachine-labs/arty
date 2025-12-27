@@ -15,7 +15,9 @@ export const loadLanguagePreference = async (): Promise<string> => {
   }
 };
 
-export const saveLanguagePreference = async (language: string): Promise<void> => {
+export const saveLanguagePreference = async (
+  language: string,
+): Promise<void> => {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, language);
   } catch {

@@ -41,7 +41,9 @@ export const Context7ConnectorInfo: React.FC<Context7ConnectorInfoProps> = ({
       const loadState = async () => {
         try {
           // Load enabled state
-          const enabledValue = await AsyncStorage.getItem("context7_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "context7_connector_enabled",
+          );
           setIsEnabled(enabledValue === null ? true : enabledValue === "true");
 
           // Check if API key exists (don't load the actual value for security)
@@ -58,7 +60,10 @@ export const Context7ConnectorInfo: React.FC<Context7ConnectorInfoProps> = ({
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("context7_connector_enabled", value.toString());
+      await AsyncStorage.setItem(
+        "context7_connector_enabled",
+        value.toString(),
+      );
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -83,7 +88,7 @@ export const Context7ConnectorInfo: React.FC<Context7ConnectorInfoProps> = ({
     } catch (error) {
       Alert.alert(
         "Error",
-        `Failed to save API key: ${error instanceof Error ? error.message : "Unknown error"}`
+        `Failed to save API key: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     } finally {
       setIsSaving(false);
@@ -110,12 +115,12 @@ export const Context7ConnectorInfo: React.FC<Context7ConnectorInfoProps> = ({
             } catch (error) {
               Alert.alert(
                 "Error",
-                `Failed to delete API key: ${error instanceof Error ? error.message : "Unknown error"}`
+                `Failed to delete API key: ${error instanceof Error ? error.message : "Unknown error"}`,
               );
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -157,8 +162,9 @@ export const Context7ConnectorInfo: React.FC<Context7ConnectorInfoProps> = ({
           </View>
 
           <Text style={styles.bodyText}>
-            Access up-to-date, version-specific documentation and code examples for any library.
-            Context7 provides higher rate limits and private repository access with an API key.
+            Access up-to-date, version-specific documentation and code examples
+            for any library. Context7 provides higher rate limits and private
+            repository access with an API key.
           </Text>
 
           <Text style={styles.sectionTitle}>API Key (Optional)</Text>

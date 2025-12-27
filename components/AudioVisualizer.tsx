@@ -9,26 +9,26 @@ import Svg, { Rect } from "react-native-svg";
 type Props = {
   active?: boolean;
   mode?: "user" | "ai";
-  barCount?: number;      // total bars INCLUDING both sides if mirror=false
-  height?: number;        // visual height in px
-  width?: number;         // if not given, stretches to parent width
-  mirror?: boolean;       // center-out mirrored layout (like screenshot)
-  gap?: number;           // px between bars
-  radius?: number;        // bar corner radius
-  smooth?: number;        // 0..1 EMA smoothing (e.g., 0.75)
-  useMic?: boolean;       // requires react-native-sound-level
-  samples?: number[];     // external amplitudes (0..1)
+  barCount?: number; // total bars INCLUDING both sides if mirror=false
+  height?: number; // visual height in px
+  width?: number; // if not given, stretches to parent width
+  mirror?: boolean; // center-out mirrored layout (like screenshot)
+  gap?: number; // px between bars
+  radius?: number; // bar corner radius
+  smooth?: number; // 0..1 EMA smoothing (e.g., 0.75)
+  useMic?: boolean; // requires react-native-sound-level
+  samples?: number[]; // external amplitudes (0..1)
 };
 
 const USER_COLORS = ["#C084FC", "#A855F7", "#7C3AED"]; // 🕺 purple vibes
-const AI_COLORS   = ["#34E4EA", "#4D9DE0", "#7B68EE"];
+const AI_COLORS = ["#34E4EA", "#4D9DE0", "#7B68EE"];
 
 export const MiniVisualizer: React.FC<Props> = ({
   active = true,
   mode = "user",
   barCount = 24,
   height = 60,
-  width,                 // undefined = 100% of container
+  width, // undefined = 100% of container
   mirror = true,
   gap = 3,
   radius = 3,
@@ -36,9 +36,9 @@ export const MiniVisualizer: React.FC<Props> = ({
   useMic = false,
   samples,
 }) => {
-  const [level, setLevel] = useState(0);      // mono level 0..1 (mic)
-  const [bins, setBins] = useState<number[]>(
-    () => Array(Math.max(4, barCount)).fill(0)
+  const [level, setLevel] = useState(0); // mono level 0..1 (mic)
+  const [bins, setBins] = useState<number[]>(() =>
+    Array(Math.max(4, barCount)).fill(0),
   );
   const emaRef = useRef<number[]>(Array(Math.max(4, barCount)).fill(0));
 
@@ -84,7 +84,8 @@ export const MiniVisualizer: React.FC<Props> = ({
       } else if (useMic) {
         // Distribute mono level across bins with slight variance
         for (let i = 0; i < halfCount; i++) {
-          const falloff = 1 - Math.abs((i - (halfCount - 1) / 2)) / ((halfCount - 1) / 2 || 1);
+          const falloff =
+            1 - Math.abs(i - (halfCount - 1) / 2) / ((halfCount - 1) / 2 || 1);
           const jitter = (Math.random() - 0.5) * 0.15;
           next.push(clamp(level * (0.6 + 0.4 * falloff) + jitter, 0, 1));
         }
@@ -128,8 +129,8 @@ export const MiniVisualizer: React.FC<Props> = ({
   // Build a mirrored array if needed
   const drawBins = useMemo(() => {
     if (!mirror) return bins;
-    const right = bins.slice();        // right side
-    const left  = bins.slice().reverse(); // mirror on left
+    const right = bins.slice(); // right side
+    const left = bins.slice().reverse(); // mirror on left
     return left.concat(right);
   }, [bins, mirror]);
 
@@ -145,11 +146,7 @@ export const MiniVisualizer: React.FC<Props> = ({
         justifyContent: "center",
       }}
     >
-      <Svg
-        height={height}
-        width={neededWidth}
-        style={{ alignSelf: "center" }}
-      >
+      <Svg height={height} width={neededWidth} style={{ alignSelf: "center" }}>
         {drawBins.map((v, i) => {
           // Don't render bars with no height (inactive state)
           if (v <= 0) return null;

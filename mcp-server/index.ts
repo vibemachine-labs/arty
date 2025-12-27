@@ -23,17 +23,20 @@ const BUILD_ACTIONS: BuildAction[] = [
   },
   {
     action: "eas-build-dev",
-    command: "eas build --platform ios --profile dev_self_contained --non-interactive",
+    command:
+      "eas build --platform ios --profile dev_self_contained --non-interactive",
     description: "Build iOS app with dev_self_contained profile",
   },
   {
     action: "eas-build-dev-local",
-    command: "eas build --platform ios --profile dev_self_contained --non-interactive --local",
+    command:
+      "eas build --platform ios --profile dev_self_contained --non-interactive --local",
     description: "Build iOS app locally with dev_self_contained profile",
   },
   {
     action: "eas-update-dev",
-    command: 'eas update --platform ios --branch dev_self_contained --message "Update"',
+    command:
+      'eas update --platform ios --branch dev_self_contained --message "Update"',
     description: "Push an OTA update to dev_self_contained branch",
   },
   {
@@ -43,12 +46,15 @@ const BUILD_ACTIONS: BuildAction[] = [
   },
   {
     action: "eas-build-prod",
-    command: "eas build --platform ios --profile production --non-interactive && eas submit --platform ios",
+    command:
+      "eas build --platform ios --profile production --non-interactive && eas submit --platform ios",
     description: "Build and submit iOS app to App Store",
   },
 ];
 
-async function executeCommand(command: string): Promise<{ output: string; exitCode: number }> {
+async function executeCommand(
+  command: string,
+): Promise<{ output: string; exitCode: number }> {
   const proc = spawn({
     cmd: ["sh", "-c", command],
     stdout: "pipe",
@@ -76,12 +82,12 @@ const server = new Server(
     capabilities: {
       tools: {},
     },
-  }
+  },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const actionDescriptions = BUILD_ACTIONS.map(
-    (a) => `- ${a.action}: ${a.description}`
+    (a) => `- ${a.action}: ${a.description}`,
   ).join("\n");
 
   return {
@@ -105,36 +111,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
-  if (request.params.name !== "arty-build-eas-tool") {
-    throw new Error(`Unknown tool: ${request.params.name}`);
-  }
+server.setRequestHandler(
+  CallToolRequestSchema,
+  async (request: CallToolRequest) => {
+    if (request.params.name !== "arty-build-eas-tool") {
+      throw new Error(`Unknown tool: ${request.params.name}`);
+    }
 
-  const action = request.params.arguments?.action as string;
+    const action = request.params.arguments?.action as string;
 
-  if (!action) {
-    throw new Error("Missing required parameter: action");
-  }
+    if (!action) {
+      throw new Error("Missing required parameter: action");
+    }
 
-  const buildAction = BUILD_ACTIONS.find((a) => a.action === action);
+    const buildAction = BUILD_ACTIONS.find((a) => a.action === action);
 
-  if (!buildAction) {
-    throw new Error(
-      `Unknown action: ${action}. Valid actions: ${BUILD_ACTIONS.map((a) => a.action).join(", ")}`
-    );
-  }
+    if (!buildAction) {
+      throw new Error(
+        `Unknown action: ${action}. Valid actions: ${BUILD_ACTIONS.map((a) => a.action).join(", ")}`,
+      );
+    }
 
-  const { output, exitCode } = await executeCommand(buildAction.command);
+    const { output, exitCode } = await executeCommand(buildAction.command);
 
-  return {
-    content: [
-      {
-        type: "text",
-        text: `Action: ${buildAction.action}\nCommand: ${buildAction.command}\n\nExit Code: ${exitCode}\n\nOutput:\n${output}`,
-      },
-    ],
-  };
-});
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Action: ${buildAction.action}\nCommand: ${buildAction.command}\n\nExit Code: ${exitCode}\n\nOutput:\n${output}`,
+        },
+      ],
+    };
+  },
+);
 
 async function main() {
   const transport = new StdioServerTransport();

@@ -18,10 +18,9 @@ type DailyPapersConnectorInfoProps = {
   onClose: () => void;
 };
 
-export const DailyPapersConnectorInfo: React.FC<DailyPapersConnectorInfoProps> = ({
-  visible,
-  onClose,
-}) => {
+export const DailyPapersConnectorInfo: React.FC<
+  DailyPapersConnectorInfoProps
+> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const [isEnabled, setIsEnabled] = useState(true);
 
@@ -30,7 +29,9 @@ export const DailyPapersConnectorInfo: React.FC<DailyPapersConnectorInfoProps> =
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("daily_papers_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "daily_papers_connector_enabled",
+          );
           // Default to true if not set
           setIsEnabled(enabledValue === null ? true : enabledValue === "true");
         } catch {
@@ -44,7 +45,10 @@ export const DailyPapersConnectorInfo: React.FC<DailyPapersConnectorInfoProps> =
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("daily_papers_connector_enabled", value.toString());
+      await AsyncStorage.setItem(
+        "daily_papers_connector_enabled",
+        value.toString(),
+      );
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -80,7 +84,9 @@ export const DailyPapersConnectorInfo: React.FC<DailyPapersConnectorInfoProps> =
           ]}
         >
           <View style={styles.enableSection}>
-            <Text style={styles.enableLabel}>Enable Daily Papers Connector</Text>
+            <Text style={styles.enableLabel}>
+              Enable Daily Papers Connector
+            </Text>
             <Switch
               value={isEnabled}
               onValueChange={handleToggleEnabled}
@@ -90,8 +96,8 @@ export const DailyPapersConnectorInfo: React.FC<DailyPapersConnectorInfoProps> =
           </View>
 
           <Text style={styles.bodyText}>
-            Access daily papers from major publications.
-            No authentication required.
+            Access daily papers from major publications. No authentication
+            required.
           </Text>
         </View>
       </SafeAreaView>

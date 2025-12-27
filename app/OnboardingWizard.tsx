@@ -1,4 +1,11 @@
-import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Linking,
@@ -9,15 +16,18 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { getApiKey } from '../lib/secure-storage';
+} from "react-native";
+import { getApiKey } from "../lib/secure-storage";
 import {
   ConfigureApiKeyActionState,
   ConfigureApiKeyCore,
-} from './ConfigureApiKeyCore';
+} from "./ConfigureApiKeyCore";
 
-type OnboardingStep = 'intro' | 'apiKey' | 'help';
-type ApiKeyActionSnapshot = Pick<ConfigureApiKeyActionState, 'canSubmit' | 'isSubmitting' | 'onSubmit'>;
+type OnboardingStep = "intro" | "apiKey" | "help";
+type ApiKeyActionSnapshot = Pick<
+  ConfigureApiKeyActionState,
+  "canSubmit" | "isSubmitting" | "onSubmit"
+>;
 
 interface OnboardingWizardProps {
   onFinish?: () => void;
@@ -68,10 +78,10 @@ const InfoLink = ({ title, url }: { title: string; url: string }) => {
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Unable to open link');
+        Alert.alert("Unable to open link");
       }
     } catch {
-      Alert.alert('Unable to open link');
+      Alert.alert("Unable to open link");
     }
   }, [url]);
 
@@ -84,33 +94,34 @@ const InfoLink = ({ title, url }: { title: string; url: string }) => {
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   renderTrigger,
-  triggerLabel = 'Onboarding Wizard',
+  triggerLabel = "Onboarding Wizard",
   isVisible,
   onRequestClose,
   onDismiss,
   onFinish,
 }) => {
   const [internalVisible, setInternalVisible] = useState(false);
-  const [step, setStep] = useState<OnboardingStep>('intro');
+  const [step, setStep] = useState<OnboardingStep>("intro");
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiKeyDirty, setApiKeyDirty] = useState(false);
-  const [apiKeyActionState, setApiKeyActionState] = useState<ApiKeyActionSnapshot | null>(null);
+  const [apiKeyActionState, setApiKeyActionState] =
+    useState<ApiKeyActionSnapshot | null>(null);
   const pendingAdvanceRef = useRef(false);
 
-  const isControlled = typeof isVisible === 'boolean';
+  const isControlled = typeof isVisible === "boolean";
   const wizardVisible = isControlled ? Boolean(isVisible) : internalVisible;
 
   const resetWizardState = useCallback(() => {
-    setStep('intro');
+    setStep("intro");
     setApiKeySaved(false);
     setApiKeyDirty(false);
     setApiKeyActionState(null);
     pendingAdvanceRef.current = false;
   }, []);
 
-  const ApiKeyActionBridge: React.FC<{ actionState: ConfigureApiKeyActionState }> = ({
-    actionState,
-  }) => {
+  const ApiKeyActionBridge: React.FC<{
+    actionState: ConfigureApiKeyActionState;
+  }> = ({ actionState }) => {
     useEffect(() => {
       setApiKeyDirty(actionState.isDirty);
       if (actionState.isDirty) {
@@ -190,13 +201,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   }, [isControlled, resetWizardState, wizardVisible]);
 
   const canGoNext = useMemo(() => {
-    if (step === 'intro') return true;
-    if (step === 'apiKey') {
+    if (step === "intro") return true;
+    if (step === "apiKey") {
       if (apiKeyActionState?.isSubmitting) return false;
       if (!apiKeyDirty && apiKeySaved) return true;
       return Boolean(apiKeyActionState?.canSubmit);
     }
-    if (step === 'help') return true;
+    if (step === "help") return true;
     return false;
   }, [apiKeyActionState, apiKeyDirty, apiKeySaved, step]);
 
@@ -210,11 +221,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   }, [closeWizard, onFinish]);
 
   const handleNext = useCallback(() => {
-    if (step === 'intro') {
-      setStep('apiKey');
+    if (step === "intro") {
+      setStep("apiKey");
       return;
     }
-    if (step === 'apiKey') {
+    if (step === "apiKey") {
       if (apiKeyDirty) {
         if (
           !apiKeyActionState ||
@@ -236,13 +247,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         return;
       }
       if (apiKeySaved) {
-        setStep('help');
+        setStep("help");
         return;
       }
-      Alert.alert('Add Your API Key', 'Please enter your OpenAI API key before continuing.');
+      Alert.alert(
+        "Add Your API Key",
+        "Please enter your OpenAI API key before continuing.",
+      );
       return;
     }
-    if (step === 'help') {
+    if (step === "help") {
       handleFinish();
     }
   }, [apiKeyActionState, apiKeyDirty, apiKeySaved, handleFinish, step]);
@@ -252,28 +266,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setApiKeyDirty(false);
     if (pendingAdvanceRef.current) {
       pendingAdvanceRef.current = false;
-      setStep('help');
+      setStep("help");
     }
   }, [setStep]);
 
   const renderHeader = () => {
     const title =
-      step === 'intro'
-        ? '👋 Welcome'
-        : step === 'apiKey'
-        ? 'Add API Key'
-        : 'All Set';
+      step === "intro"
+        ? "👋 Welcome"
+        : step === "apiKey"
+          ? "Add API Key"
+          : "All Set";
 
     return (
       <View style={styles.header}>
-        {step === 'help' ? (
+        {step === "help" ? (
           <View style={styles.headerSpacer} />
         ) : (
           <HeaderButton title="Cancel" onPress={handleCancel} />
         )}
         <Text style={styles.headerTitle}>{title}</Text>
         <HeaderButton
-          title={step === 'help' ? 'Finish' : 'Next'}
+          title={step === "help" ? "Finish" : "Next"}
           onPress={handleNext}
           disabled={!canGoNext}
           emphasis
@@ -293,9 +307,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Text style={styles.introStepBadgeText}>1</Text>
           </View>
           <View style={styles.introStepContent}>
-            <Text style={styles.introStepLabel}>🔐 Add Your OpenAI API Key</Text>
+            <Text style={styles.introStepLabel}>
+              🔐 Add Your OpenAI API Key
+            </Text>
             <Text style={styles.introStepDescription}>
-              Currently requires OpenAI Realtime Speech API.  Future versions will allow self-hosted.
+              Currently requires OpenAI Realtime Speech API. Future versions
+              will allow self-hosted.
             </Text>
           </View>
         </View>
@@ -305,9 +322,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Text style={styles.introStepBadgeText}>2</Text>
           </View>
           <View style={styles.introStepContent}>
-            <Text style={styles.introStepLabel}>🎙️ Start chatting via voice or text</Text>
+            <Text style={styles.introStepLabel}>
+              🎙️ Start chatting via voice or text
+            </Text>
             <Text style={styles.introStepDescription}>
-              Access your data in a natural conversational way.  Switch to text mode in loud environments.
+              Access your data in a natural conversational way. Switch to text
+              mode in loud environments.
             </Text>
           </View>
         </View>
@@ -328,7 +348,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const renderApiKeyStep = () => (
     <ConfigureApiKeyCore
-      isVisible={step === 'apiKey'}
+      isVisible={step === "apiKey"}
       primaryActionLabel="Save"
       showSuccessAlert={false}
       onSaveSuccess={handleApiKeySaveSuccess}
@@ -364,9 +384,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Text style={styles.introStepBadgeText}>2</Text>
           </View>
           <View style={styles.helpStepContent}>
-            <Text style={styles.helpStepLabel}>📰 Try the Hacker News tool</Text>
+            <Text style={styles.helpStepLabel}>
+              📰 Try the Hacker News tool
+            </Text>
             <Text style={styles.helpStepDescription}>
-              Ask questions about Hacker News stories - this tool is built-in and ready to use!
+              Ask questions about Hacker News stories - this tool is built-in
+              and ready to use!
             </Text>
           </View>
         </View>
@@ -378,27 +401,32 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Text style={styles.introStepBadgeText}>3</Text>
           </View>
           <View style={styles.helpStepContent}>
-            <Text style={styles.helpStepLabel}>🔌 Connect Google Drive or GitHub</Text>
+            <Text style={styles.helpStepLabel}>
+              🔌 Connect Google Drive or GitHub
+            </Text>
             <Text style={styles.helpStepDescription}>
-              Open the hamburger menu and go to Settings to connect your Google Drive or GitHub account.
+              Open the hamburger menu and go to Settings to connect your Google
+              Drive or GitHub account.
             </Text>
           </View>
         </View>
       </View>
 
       <Text style={styles.helpBody}>
-        🔇 When you are in a loud environment, open the hamburger menu and choose{' '}
-        <Text style={styles.helpBodyEmphasis}>Configure Chat Mode</Text> to switch to text.
+        🔇 When you are in a loud environment, open the hamburger menu and
+        choose <Text style={styles.helpBodyEmphasis}>Configure Chat Mode</Text>{" "}
+        to switch to text.
       </Text>
       <Text style={styles.helpBody}>
-        💡 Once connected, you can ask about Drive files, create and edit Google Docs, or work with GitHub repositories via voice or text. 🚀
+        💡 Once connected, you can ask about Drive files, create and edit Google
+        Docs, or work with GitHub repositories via voice or text. 🚀
       </Text>
     </ScrollView>
   );
 
   const renderContent = () => {
-    if (step === 'intro') return renderIntro();
-    if (step === 'apiKey') return renderApiKeyStep();
+    if (step === "intro") return renderIntro();
+    if (step === "apiKey") return renderApiKeyStep();
     return renderHelpStep();
   };
 
@@ -425,7 +453,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         visible={wizardVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        supportedOrientations={['portrait']}
+        supportedOrientations={["portrait"]}
         onRequestClose={handleCancel}
       >
         <SafeAreaView style={styles.container}>
@@ -442,31 +470,31 @@ export default OnboardingWizard;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: "#F2F2F7",
   },
   content: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: "#F2F2F7",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D1D1D6',
+    borderBottomColor: "#D1D1D6",
   },
   headerSpacer: {
     width: 68,
   },
   headerTitle: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
+    fontWeight: "600",
+    color: "#1C1C1E",
   },
   headerButton: {
     paddingHorizontal: 10,
@@ -474,52 +502,52 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   headerButtonPressed: {
-    backgroundColor: 'rgba(0,122,255,0.1)',
+    backgroundColor: "rgba(0,122,255,0.1)",
   },
   headerButtonDisabled: {
     opacity: 0.5,
   },
   headerButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
+    fontWeight: "600",
+    color: "#007AFF",
   },
   headerButtonTextEmphasis: {
-    fontWeight: '700',
+    fontWeight: "700",
   },
   headerButtonTextDisabled: {
-    color: '#9CA3AF',
+    color: "#9CA3AF",
   },
   footer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#D1D1D6',
+    borderTopColor: "#D1D1D6",
   },
   primaryButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     borderRadius: 12,
     paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryButtonPressed: {
-    backgroundColor: '#005FCC',
+    backgroundColor: "#005FCC",
   },
   primaryButtonDisabled: {
-    backgroundColor: '#D0D4DA',
+    backgroundColor: "#D0D4DA",
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   linkText: {
-    color: '#007AFF',
-    textDecorationLine: 'underline',
+    color: "#007AFF",
+    textDecorationLine: "underline",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 8,
   },
   introContent: {
@@ -529,95 +557,94 @@ const styles = StyleSheet.create({
   },
   introHeadline: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
+    fontWeight: "700",
+    color: "#1C1C1E",
     marginBottom: 16,
   },
   introBody: {
     fontSize: 16,
-    color: '#3A3A3C',
+    color: "#3A3A3C",
     lineHeight: 22,
     marginBottom: 16,
   },
   introStepTitle: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#1C1C1E',
+    fontWeight: "600",
+    color: "#1C1C1E",
     marginBottom: 8,
   },
   introRoadmap: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E5E5EA',
+    borderColor: "#E5E5EA",
     marginBottom: 32,
   },
   introStepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 16,
     marginTop: 16,
-
   },
   introStepBadge: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0A84FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#0A84FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
     marginTop: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
   },
   introStepBadgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   introStepContent: {
     flex: 1,
   },
   introStepLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
+    fontWeight: "600",
+    color: "#1C1C1E",
     marginBottom: 4,
   },
   introStepDescription: {
     fontSize: 14,
-    color: '#636366',
+    color: "#636366",
     lineHeight: 20,
   },
   introStepConnector: {
-    alignSelf: 'center',
+    alignSelf: "center",
     width: 2,
     height: 28,
-    backgroundColor: '#0A84FF',
+    backgroundColor: "#0A84FF",
     borderRadius: 1,
     marginVertical: 16,
   },
   introNextPromptButton: {
     marginTop: 20,
-    alignSelf: 'center',
+    alignSelf: "center",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(10,132,255,0.08)',
+    backgroundColor: "rgba(10,132,255,0.08)",
   },
   introNextPromptButtonPressed: {
-    backgroundColor: 'rgba(10,132,255,0.16)',
+    backgroundColor: "rgba(10,132,255,0.16)",
   },
   introNextPrompt: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#0A84FF',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#0A84FF",
+    textAlign: "center",
   },
   helpContent: {
     paddingHorizontal: 24,
@@ -626,32 +653,32 @@ const styles = StyleSheet.create({
   },
   helpHeadline: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
+    fontWeight: "700",
+    color: "#1C1C1E",
     marginBottom: 16,
   },
   helpBody: {
     fontSize: 16,
-    color: '#3A3A3C',
+    color: "#3A3A3C",
     lineHeight: 22,
     marginBottom: 16,
   },
   helpBodyEmphasis: {
-    fontWeight: '600',
-    color: '#0A84FF',
+    fontWeight: "600",
+    color: "#0A84FF",
   },
   helpStepsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#E5E5EA',
+    borderColor: "#E5E5EA",
     marginBottom: 24,
   },
   helpStepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   helpStepContent: {
     flex: 1,
@@ -659,35 +686,35 @@ const styles = StyleSheet.create({
   },
   helpStepLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
+    fontWeight: "600",
+    color: "#1C1C1E",
     marginBottom: 4,
   },
   helpStepDescription: {
     fontSize: 14,
-    color: '#636366',
+    color: "#636366",
     lineHeight: 20,
   },
   helpStepDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: "#E5E5EA",
     marginVertical: 16,
   },
   launchButton: {
-    backgroundColor: '#0A84FF',
+    backgroundColor: "#0A84FF",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "center",
   },
   launchButtonPressed: {
-    backgroundColor: '#0060DF',
+    backgroundColor: "#0060DF",
   },
   launchButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

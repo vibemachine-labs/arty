@@ -15,13 +15,9 @@ interface ConfigureMainPromptModalProps {
   onSave: () => void;
 }
 
-export const ConfigureMainPromptModal: React.FC<ConfigureMainPromptModalProps> = ({
-  visible,
-  value,
-  onChange,
-  onClose,
-  onSave,
-}) => (
+export const ConfigureMainPromptModal: React.FC<
+  ConfigureMainPromptModalProps
+> = ({ visible, value, onChange, onClose, onSave }) => (
   <ConfigurePromptModal
     visible={visible}
     value={value}

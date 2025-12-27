@@ -18,10 +18,9 @@ type GDriveLegacyConnectorInfoProps = {
   onClose: () => void;
 };
 
-export const GDriveLegacyConnectorInfo: React.FC<GDriveLegacyConnectorInfoProps> = ({
-  visible,
-  onClose,
-}) => {
+export const GDriveLegacyConnectorInfo: React.FC<
+  GDriveLegacyConnectorInfoProps
+> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const [isEnabled, setIsEnabled] = useState(false);
 
@@ -30,7 +29,9 @@ export const GDriveLegacyConnectorInfo: React.FC<GDriveLegacyConnectorInfoProps>
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("gdrive_legacy_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "gdrive_legacy_connector_enabled",
+          );
           // Default to false (disabled) for legacy connectors
           setIsEnabled(enabledValue === "true");
         } catch {
@@ -44,7 +45,10 @@ export const GDriveLegacyConnectorInfo: React.FC<GDriveLegacyConnectorInfoProps>
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("gdrive_legacy_connector_enabled", value.toString());
+      await AsyncStorage.setItem(
+        "gdrive_legacy_connector_enabled",
+        value.toString(),
+      );
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -80,7 +84,9 @@ export const GDriveLegacyConnectorInfo: React.FC<GDriveLegacyConnectorInfoProps>
           ]}
         >
           <View style={styles.enableSection}>
-            <Text style={styles.enableLabel}>Enable Legacy Google Drive Connector</Text>
+            <Text style={styles.enableLabel}>
+              Enable Legacy Google Drive Connector
+            </Text>
             <Switch
               value={isEnabled}
               onValueChange={handleToggleEnabled}
@@ -90,11 +96,14 @@ export const GDriveLegacyConnectorInfo: React.FC<GDriveLegacyConnectorInfoProps>
           </View>
 
           <Text style={styles.bodyText}>
-            This is the legacy Google Drive connector that executes JavaScript snippets against the Google Drive API.
+            This is the legacy Google Drive connector that executes JavaScript
+            snippets against the Google Drive API.
             {"\n\n"}
-            It is disabled by default. The newer Google Drive tools in the main Google Drive connector are recommended.
+            It is disabled by default. The newer Google Drive tools in the main
+            Google Drive connector are recommended.
             {"\n\n"}
-            To use this connector, you must authenticate with Google Drive via OAuth in the Google Drive connector settings.
+            To use this connector, you must authenticate with Google Drive via
+            OAuth in the Google Drive connector settings.
           </Text>
         </View>
       </SafeAreaView>

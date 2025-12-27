@@ -1,4 +1,4 @@
-import { log } from '../../../lib/logger';
+import { log } from "../../../lib/logger";
 
 // MARK: - Types
 
@@ -32,7 +32,7 @@ export abstract class ToolHelper<TParams extends ToolParams> {
   constructor(
     moduleName: string,
     eventName: string,
-    nativeModule: ToolNativeModule | null
+    nativeModule: ToolNativeModule | null,
   ) {
     this.moduleName = moduleName;
     this.eventName = eventName;
@@ -60,14 +60,20 @@ export abstract class ToolHelper<TParams extends ToolParams> {
    * Execute the tool operation with the given parameters.
    */
   async execute(params: TParams): Promise<number> {
-    log.info(`[${this.moduleName}] 🧮 ${this.eventName} - Operation invoked`, params);
+    log.info(
+      `[${this.moduleName}] 🧮 ${this.eventName} - Operation invoked`,
+      params,
+    );
 
     const result = await this.performOperation(params);
 
-    log.info(`[${this.moduleName}] ✅ ${this.eventName} - Operation result computed`, {
-      ...params,
-      result,
-    });
+    log.info(
+      `[${this.moduleName}] ✅ ${this.eventName} - Operation result computed`,
+      {
+        ...params,
+        result,
+      },
+    );
 
     return result;
   }
@@ -78,16 +84,24 @@ export abstract class ToolHelper<TParams extends ToolParams> {
    */
   async executeFromSwift(...args: number[]): Promise<number> {
     if (!this.module) {
-      throw new Error(`Native module not available for ${this.moduleName} bridge function`);
+      throw new Error(
+        `Native module not available for ${this.moduleName} bridge function`,
+      );
     }
 
     const params = this.argsToParams(args);
 
-    log.info(`[${this.moduleName}] 📱 executeFromSwift invoked (testing Swift → JS → Swift flow)`, params);
+    log.info(
+      `[${this.moduleName}] 📱 executeFromSwift invoked (testing Swift → JS → Swift flow)`,
+      params,
+    );
 
     const result = await this.performOperation(params);
 
-    log.info(`[${this.moduleName}] 📱 executeFromSwift completed`, { ...params, result });
+    log.info(`[${this.moduleName}] 📱 executeFromSwift completed`, {
+      ...params,
+      result,
+    });
 
     return result;
   }
@@ -107,8 +121,8 @@ export abstract class ToolHelper<TParams extends ToolParams> {
    */
   protected argsToParams(args: number[]): TParams {
     const params: any = {};
-    const keys = ['a', 'b', 'c', 'd', 'e']; // Support up to 5 params
-    
+    const keys = ["a", "b", "c", "d", "e"]; // Support up to 5 params
+
     args.forEach((value, index) => {
       if (index < keys.length) {
         params[keys[index]] = value;
@@ -123,17 +137,21 @@ export abstract class ToolHelper<TParams extends ToolParams> {
    */
   protected sendResponse(requestId: string, result: number): void {
     if (!this.module) {
-      log.error(`[${this.moduleName}] Cannot send response: module not available`);
+      log.error(
+        `[${this.moduleName}] Cannot send response: module not available`,
+      );
       return;
     }
 
     const methodName = this.getResponseMethodName();
     const sendMethod = (this.module as any)[methodName];
 
-    if (typeof sendMethod === 'function') {
+    if (typeof sendMethod === "function") {
       sendMethod.call(this.module, requestId, result);
     } else {
-      log.error(`[${this.moduleName}] Response method '${methodName}' not found on module`);
+      log.error(
+        `[${this.moduleName}] Response method '${methodName}' not found on module`,
+      );
     }
   }
 
@@ -149,39 +167,60 @@ export abstract class ToolHelper<TParams extends ToolParams> {
     }
 
     try {
-      this.module.addListener(this.eventName, async (event: ToolRequestPayload) => {
-        log.info(`[${this.moduleName}] 📥 ${this.eventName} - Tool request received from native (OpenAI tool call)`, {}, event);
+      this.module.addListener(
+        this.eventName,
+        async (event: ToolRequestPayload) => {
+          log.info(
+            `[${this.moduleName}] 📥 ${this.eventName} - Tool request received from native (OpenAI tool call)`,
+            {},
+            event,
+          );
 
-        try {
-          // Extract params from event (excluding requestId)
-          const { requestId, ...params } = event;
+          try {
+            // Extract params from event (excluding requestId)
+            const { requestId, ...params } = event;
 
-          // Execute the operation
-          const result = await this.execute(params as TParams);
+            // Execute the operation
+            const result = await this.execute(params as TParams);
 
-          log.info(`[${this.moduleName}] 📤 ${this.eventName} - Sending result back to native`, {}, {
-            requestId,
-            result,
-          });
+            log.info(
+              `[${this.moduleName}] 📤 ${this.eventName} - Sending result back to native`,
+              {},
+              {
+                requestId,
+                result,
+              },
+            );
 
-          // Send result back to native
-          this.sendResponse(requestId, result);
-        } catch (error) {
-          log.error(`[${this.moduleName}] ❌ Operation error`, {}, {
-            requestId: event.requestId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          // Send error result (0 as fallback)
-          this.sendResponse(event.requestId, 0);
-        }
-      });
+            // Send result back to native
+            this.sendResponse(requestId, result);
+          } catch (error) {
+            log.error(
+              `[${this.moduleName}] ❌ Operation error`,
+              {},
+              {
+                requestId: event.requestId,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            );
+            // Send error result (0 as fallback)
+            this.sendResponse(event.requestId, 0);
+          }
+        },
+      );
 
       this.isListenerRegistered = true;
-      log.info(`[${this.moduleName}] ✓ Event listener registered for '${this.eventName}' ✅`);
+      log.info(
+        `[${this.moduleName}] ✓ Event listener registered for '${this.eventName}' ✅`,
+      );
     } catch (error) {
-      log.error(`[${this.moduleName}] ❌ Failed to register event listener`, {}, {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      log.error(
+        `[${this.moduleName}] ❌ Failed to register event listener`,
+        {},
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
     }
   }
 }

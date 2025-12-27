@@ -28,7 +28,9 @@ export const AudioOutputOption: React.FC<AudioOutputOptionProps> = ({
       </View>
       <View style={styles.textContainer}>
         <Text style={styles.label}>{label}</Text>
-        {description ? <Text style={styles.description}>{description}</Text> : null}
+        {description ? (
+          <Text style={styles.description}>{description}</Text>
+        ) : null}
       </View>
     </Pressable>
   );

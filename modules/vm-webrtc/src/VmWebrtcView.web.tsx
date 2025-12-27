@@ -1,6 +1,6 @@
-import * as React from 'react';
+import * as React from "react";
 
-import { VmWebrtcViewProps } from './VmWebrtc.types';
+import { VmWebrtcViewProps } from "./VmWebrtc.types";
 
 export default function VmWebrtcView(props: VmWebrtcViewProps) {
   return (

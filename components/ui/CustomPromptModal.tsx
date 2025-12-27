@@ -31,7 +31,7 @@ export const CustomPromptModal: React.FC<CustomPromptModalProps> = ({
   const insets = useSafeAreaInsets();
   const maxInputHeight = useMemo(
     () => Math.max(160, Math.round(Dimensions.get("window").height * 0.35)),
-    []
+    [],
   );
   const handleReset = useCallback(() => {
     onChange("");
@@ -78,7 +78,8 @@ export const CustomPromptModal: React.FC<CustomPromptModalProps> = ({
             <View style={styles.content}>
               <Text style={styles.title}>Custom Prompt</Text>
               <Text style={styles.subtitle}>
-                Draft the custom prompt to guide VibeMachine. You can update this anytime.
+                Draft the custom prompt to guide VibeMachine. You can update
+                this anytime.
               </Text>
               <TextInput
                 multiline
@@ -96,7 +97,10 @@ export const CustomPromptModal: React.FC<CustomPromptModalProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Save custom prompt"
                 onPress={onSave}
-                style={({ pressed }) => [styles.saveButton, pressed && styles.saveButtonPressed]}
+                style={({ pressed }) => [
+                  styles.saveButton,
+                  pressed && styles.saveButtonPressed,
+                ]}
               >
                 <Text style={styles.saveButtonText}>Save</Text>
               </Pressable>

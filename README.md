@@ -3,47 +3,46 @@
 [![TestFlight](https://img.shields.io/badge/TestFlight-available-blue)](https://testflight.apple.com/join/DyK83gVd) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vibemachine-labs/arty) [![Snyk](https://snyk.io/test/github/vibemachine-labs/arty/badge.svg)](https://snyk.io/test/github/vibemachine-labs/arty)
 [![OSSF Scorecard](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml/badge.svg)](https://github.com/vibemachine-labs/arty/actions/workflows/scorecard-pr.yml) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/vibemachine-labs/arty?utm_source=oss&utm_medium=github&utm_campaign=vibemachine-labs%2Farty&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-An open-source voice assistant for mobile with real-time API integration. Think "Ollama for mobile + realtime voice."
+An open-source voice assistant for iOS that connects to your data and the web.
 
-Connects to your Google Drive, DeepWiki, Hacker News, Daily Hugging Face Top Papers, and the web. 
+**Current features**:
 
-It's currently a thin wrapper around the OpenAI Realtime speech API, however the long term vision is to make it extensible and pluggable, with a fully open source and privacy-first stack. To keep all data within your cloud perimeter, Azure OpenAI Private Endpoint can be configured as an alternative deployment option.
+* Voice interaction via OpenAI Realtime API  (note: secure API key storage in iOS keychain)
+* Connectors: DeepWiki MCP, Google Drive, GitHub, Hugging Face Papers, Hacker News, Web Search
 
-If this sounds interesting, [⭐️ the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to help it grow.
+**Roadmap**:
 
-## 🎤 Demo audio - browse hacker news (1 min 30 secs)
+The long-term vision is a fully pluggable backend architecture with support for self-hosted alternatives.
 
-https://github.com/user-attachments/assets/0c735cc8-317c-407a-8db1-0f02b65533ae
+If this sounds interesting, [star the project on GitHub](https://github.com/vibemachine-labs/arty/stargazers) to follow along.
+
+## 🎥 Demo (3.5 mins)
+
+https://github.com/user-attachments/assets/f37360bb-e40a-461f-8753-a864849d6f7a
 
 <details>
-  <summary>Whats's in the demo</summary>
+<summary><strong>tl;dw</strong></summary>
 
-  - "What are top storiees on hacker news?"
-  - "What are commetns about montana law story?"
-  - "SUmmarize new montana law"
+1. Read latest hacker news top stories
+2. Ask DeepWiki to summarize `uv` tool
+3. Ask DeepWiki a specific question about the `uv` tool
 
 </details>
-
-## 🎥 Demo Reel (80 seconds)
-
-https://github.com/user-attachments/assets/6171b7d1-ef97-483b-ba09-d6854babc726
-
-or view the [full resolution version](https://vimeo.com/manage/videos/1127547235)
 
 ## 📱 Screenshots
 
 <table style="border-collapse:collapse; border-spacing:0; border:none; margin:0 auto;">
   <tr>
     <td align="center" style="border:none; padding:0 12px;">
-      <img width="250" alt="Voice chat home screen" src="https://github.com/user-attachments/assets/16cebc15-46bc-4e9a-8896-17355d079967" />
+      <img width="250" alt="Voice chat home screen" src="https://github.com/user-attachments/assets/aef4e478-c98a-4d9c-a4ca-642871d32dc2" />
       <div>Voice chat (home screen)</div>
     </td>
     <td align="center" style="border:none; padding:0 12px;">
-      <img width="250" alt="Text chat conversation" src="https://github.com/user-attachments/assets/23a68aad-9b6b-4b21-aebb-2cc73c83530d" />
+      <img width="250" alt="Text chat conversation" src="https://github.com/user-attachments/assets/7ee26b61-aa85-4f9d-b923-78e5c9883b9d" />
       <div>Text chat</div>
     </td>
     <td align="center" style="border:none; padding:0 12px;">
-      <img width="250" alt="Configure connectors screen" src="https://github.com/user-attachments/assets/5270b4ce-0951-45df-b7b0-9d1ae6402f5d" />
+      <img width="250" alt="Configure connectors screen" src="https://github.com/user-attachments/assets/e8fe8fe7-c6f1-471c-9535-039e9860bb1f" />
       <div>Configure connectors</div>
     </td>
   </tr>

@@ -245,26 +245,42 @@ export async function getContentsFromUrl(
       );
 
       // codacy-disable Security/DetectUnsafeHTML
+      /**
+       * Repeatedly apply a global regular expression replacement until
+       * the string no longer changes. This avoids incomplete multi-character
+       * sanitization issues (CodeQL security concern) where a single pass
+       * can leave behind new matches that combine to form dangerous patterns.
+       */
+      const removeAllPatterns = (input: string, pattern: RegExp): string => {
+        let previous: string;
+        let current = input;
+        do {
+          previous = current;
+          current = current.replace(pattern, "");
+        } while (current !== previous);
+        return current;
+      };
+
       let cleaned = rawHtml;
 
-      // Remove script tags and their content
-      cleaned = cleaned.replace(
-        /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-        "",
+      // Remove script tags and their content (handles </script >, </script foo>, mixed casing)
+      cleaned = removeAllPatterns(
+        cleaned,
+        /<script\b[\s\S]*?<\/\s*script[^>]*>/gi,
       );
       log.debug("[web] Removed scripts", {}, { length: cleaned.length });
 
       // Remove style tags and their content
-      cleaned = cleaned.replace(
-        /<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi,
-        "",
+      cleaned = removeAllPatterns(
+        cleaned,
+        /<style\b[\s\S]*?<\/\s*style[^>]*>/gi,
       );
       log.debug("[web] Removed styles", {}, { length: cleaned.length });
 
       // Remove other non-content tags (head, nav, header, footer, etc.)
-      cleaned = cleaned.replace(
-        /<(head|nav|header|footer|aside|noscript)\b[^<]*(?:(?!<\/\1>)<[^<]*)*<\/\1>/gi,
-        "",
+      cleaned = removeAllPatterns(
+        cleaned,
+        /<(head|nav|header|footer|aside|noscript)\b[\s\S]*?<\/\s*\1[^>]*>/gi,
       );
       log.debug(
         "[web] Removed structural elements",
@@ -273,7 +289,10 @@ export async function getContentsFromUrl(
       );
 
       // Remove self-closing non-content tags (meta, link, svg, iframe)
-      cleaned = cleaned.replace(/<(meta|link|svg|iframe)\b[^>]*\/?>/gi, "");
+      cleaned = removeAllPatterns(
+        cleaned,
+        /<(meta|link|svg|iframe)\b[^>]*\/?>/gi,
+      );
       log.debug(
         "[web] Removed self-closing tags",
         {},

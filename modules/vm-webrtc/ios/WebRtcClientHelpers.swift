@@ -978,47 +978,65 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     ) {}
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
+        // Capture values before dispatching to main queue
+        let audioTrackCount = stream.audioTracks.count
+        let videoTrackCount = stream.videoTracks.count
+        let streamId = stream.streamId
         guard let audioTrack = stream.audioTracks.first else {
             self.logger.log(
                 "[VmWebrtc] " + "Remote stream added without audio tracks",
                 attributes: logAttributes(
                     for: .debug,
                     metadata: [
-                        "audioTrackCount": stream.audioTracks.count,
-                        "videoTrackCount": stream.videoTracks.count,
+                        "audioTrackCount": audioTrackCount,
+                        "videoTrackCount": videoTrackCount,
                     ]))
             return
         }
+        let trackId = audioTrack.trackId
 
-        remoteAudioTrackId = audioTrack.trackId
-        inboundAudioMonitor.reset()
+        // Dispatch to main queue for thread-safe access to shared state
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.remoteAudioTrackId = trackId
+            self.inboundAudioMonitor.reset()
 
-        self.logger.log(
-            "[VmWebrtc] " + "Remote audio track received",
-            attributes: logAttributes(
-                for: .info,
-                metadata: [
-                    "trackId": audioTrack.trackId,
-                    "streamId": stream.streamId,
-                ]))
+            self.logger.log(
+                "[VmWebrtc] " + "Remote audio track received",
+                attributes: logAttributes(
+                    for: .info,
+                    metadata: [
+                        "trackId": trackId,
+                        "streamId": streamId,
+                    ]))
+        }
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
         guard let removedTrack = stream.audioTracks.first else { return }
 
-        if removedTrack.trackId == remoteAudioTrackId {
-            self.logger.log(
-                "[VmWebrtc] " + "Remote audio track removed",
-                attributes: logAttributes(
-                    for: .info,
-                    metadata: [
-                        "trackId": removedTrack.trackId,
-                        "streamId": stream.streamId,
-                    ]))
-            remoteAudioTrackId = nil
-            inboundAudioMonitor.reset()
-            stopInboundAudioStatsMonitoring()
-            stopOutboundAudioStatsMonitoring()
+        // Capture values before dispatching to main queue
+        let removedTrackId = removedTrack.trackId
+        let streamId = stream.streamId
+
+        // Dispatch to main queue for thread-safe access to shared state
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            if removedTrackId == self.remoteAudioTrackId {
+                self.logger.log(
+                    "[VmWebrtc] " + "Remote audio track removed",
+                    attributes: logAttributes(
+                        for: .info,
+                        metadata: [
+                            "trackId": removedTrackId,
+                            "streamId": streamId,
+                        ]))
+                self.remoteAudioTrackId = nil
+                self.inboundAudioMonitor.reset()
+                self.stopInboundAudioStatsMonitoring()
+                self.stopOutboundAudioStatsMonitoring()
+            }
         }
     }
 
@@ -1027,67 +1045,86 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     func peerConnection(
         _ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState
     ) {
+        // Capture state string before dispatching
+        let stateString = stringValue(for: newState)
+
         self.logger.log(
             "[VmWebrtc] " + "ICE connection state changed",
-            attributes: logAttributes(for: .debug, metadata: ["state": stringValue(for: newState)]))
-        guard let continuation = connectionContinuation else {
-            return
-        }
+            attributes: logAttributes(for: .debug, metadata: ["state": stateString]))
 
-        switch newState {
-        case .connected, .completed:
-            startInboundAudioStatsMonitoring()
-            startOutboundAudioStatsMonitoring()
-            self.logger.log(
-                "[VmWebrtc] " + "OpenAI WebRTC connection established",
-                attributes: logAttributes(
-                    for: .info, metadata: ["state": stringValue(for: newState)]))
-            connectionTimeoutTask?.cancel()
-            connectionTimeoutTask = nil
-            connectionContinuation = nil
-            continuation.resume(returning: self.stringValue(for: newState))
-        case .failed, .disconnected, .closed:
-            stopInboundAudioStatsMonitoring()
-            stopOutboundAudioStatsMonitoring()
-            self.logger.log(
-                "[VmWebrtc] " + "OpenAI WebRTC connection failed",
-                attributes: logAttributes(
-                    for: .error, metadata: ["state": stringValue(for: newState)]))
-            connectionTimeoutTask?.cancel()
-            connectionTimeoutTask = nil
-            connectionContinuation = nil
-            continuation.resume(
-                throwing: OpenAIWebRTCError.connectionFailed(self.stringValue(for: newState)))
-        case .checking, .new:
-            break
-        case .count:
-            break
-        @unknown default:
-            break
+        // Dispatch to main queue for thread-safe access to shared state
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let continuation = self.connectionContinuation else {
+                return
+            }
+
+            switch newState {
+            case .connected, .completed:
+                self.startInboundAudioStatsMonitoring()
+                self.startOutboundAudioStatsMonitoring()
+                self.logger.log(
+                    "[VmWebrtc] " + "OpenAI WebRTC connection established",
+                    attributes: logAttributes(
+                        for: .info, metadata: ["state": stateString]))
+                self.connectionTimeoutTask?.cancel()
+                self.connectionTimeoutTask = nil
+                self.connectionContinuation = nil
+                continuation.resume(returning: stateString)
+            case .failed, .disconnected, .closed:
+                self.stopInboundAudioStatsMonitoring()
+                self.stopOutboundAudioStatsMonitoring()
+                self.logger.log(
+                    "[VmWebrtc] " + "OpenAI WebRTC connection failed",
+                    attributes: logAttributes(
+                        for: .error, metadata: ["state": stateString]))
+                self.connectionTimeoutTask?.cancel()
+                self.connectionTimeoutTask = nil
+                self.connectionContinuation = nil
+                continuation.resume(
+                    throwing: OpenAIWebRTCError.connectionFailed(stateString))
+            case .checking, .new:
+                break
+            case .count:
+                break
+            @unknown default:
+                break
+            }
         }
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate)
     {
-        let isFirstCandidate = (firstCandidateTimestamp == nil)
-        if isFirstCandidate {
-            firstCandidateTimestamp = Date()
+        // Capture candidate info before dispatching
+        let sdpMid = candidate.sdpMid ?? ""
+        let sdpMLineIndex = candidate.sdpMLineIndex
+        let hasServerUrl = candidate.serverUrl != nil
+        let now = Date()
+
+        // Dispatch to main queue for thread-safe access to shared state
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            let isFirstCandidate = (self.firstCandidateTimestamp == nil)
+            if isFirstCandidate {
+                self.firstCandidateTimestamp = now
+            }
+
+            var metadata: [String: Any] = [
+                "sdpMid": sdpMid,
+                "sdpMLineIndex": sdpMLineIndex,
+                "hasServerUrl": hasServerUrl,
+                "isFirst": isFirstCandidate,
+            ]
+
+            if isFirstCandidate, let start = self.iceGatheringStartTimestamp {
+                metadata["elapsedSinceGatherStart"] = now.timeIntervalSince(start)
+            }
+
+            self.logger.log(
+                "[VmWebrtc] " + "Generated ICE candidate",
+                attributes: logAttributes(for: .debug, metadata: metadata))
         }
-
-        var metadata: [String: Any] = [
-            "sdpMid": candidate.sdpMid ?? "",
-            "sdpMLineIndex": candidate.sdpMLineIndex,
-            "hasServerUrl": candidate.serverUrl != nil,
-            "isFirst": isFirstCandidate,
-        ]
-
-        if isFirstCandidate, let start = iceGatheringStartTimestamp {
-            metadata["elapsedSinceGatherStart"] = Date().timeIntervalSince(start)
-        }
-
-        self.logger.log(
-            "[VmWebrtc] " + "Generated ICE candidate",
-            attributes: logAttributes(for: .debug, metadata: metadata))
     }
 
     func peerConnection(
@@ -1101,21 +1138,29 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
     func peerConnection(
         _ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState
     ) {
+        // Capture state before dispatching
+        let stateRawValue = newState.rawValue
+
         self.logger.log(
             "[VmWebrtc] " + "ICE gathering state changed",
-            attributes: logAttributes(for: .debug, metadata: ["state": newState.rawValue]))
+            attributes: logAttributes(for: .debug, metadata: ["state": stateRawValue]))
 
-        if newState == .complete {
-            iceGatheringTimeoutTask?.cancel()
-            iceGatheringTimeoutTask = nil
+        // Dispatch to main queue for thread-safe access to shared state
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            if newState == .complete {
+                self.iceGatheringTimeoutTask?.cancel()
+                self.iceGatheringTimeoutTask = nil
+            }
+
+            guard newState == .complete, let continuation = self.iceGatheringContinuation else {
+                return
+            }
+
+            self.iceGatheringContinuation = nil
+            continuation.resume(returning: ())
         }
-
-        guard newState == .complete, let continuation = iceGatheringContinuation else {
-            return
-        }
-
-        iceGatheringContinuation = nil
-        continuation.resume(returning: ())
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
@@ -1141,21 +1186,31 @@ extension OpenAIWebRTCClient: RTCPeerConnectionDelegate {
 
 extension OpenAIWebRTCClient: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        // Capture values before dispatching
+        let label = dataChannel.label
+        let readyState = dataChannel.readyState
+        let stateString = stringValue(for: readyState)
+
         self.logger.log(
             "[VmWebrtc] " + "Data channel state changed",
             attributes: logAttributes(
                 for: .debug,
                 metadata: [
-                    "label": dataChannel.label,
-                    "state": stringValue(for: dataChannel.readyState),
+                    "label": label,
+                    "state": stateString,
                 ]))
 
-        guard dataChannel == self.dataChannel else {
-            return
-        }
+        // Dispatch to main queue for thread-safe access to shared state
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
 
-        if dataChannel.readyState == .open {
-            sendInitialSessionConfiguration()
+            guard dataChannel === self.dataChannel else {
+                return
+            }
+
+            if readyState == .open {
+                self.sendInitialSessionConfiguration()
+            }
         }
     }
 

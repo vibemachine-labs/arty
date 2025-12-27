@@ -3,7 +3,11 @@ import Foundation
 final class WebRTCEventHandler {
 
     // Default inactivity threshold (seconds) before auto-disconnect
-    static let defaultIdleTimeout: TimeInterval = 60
+    // Set to 8 minutes because idle timer doesn't integrate with state machine.
+    // NOTE: When idle timeout fires, it does NOT inform the rest of the app that
+    // the call has been disconnected (e.g., audio tool sounds will keep playing).
+    // TODO: Integrate with state machine to properly notify all components.
+    static let defaultIdleTimeout: TimeInterval = 480
 
     struct ToolContext {
         let githubConnectorDelegate: BaseTool?
@@ -199,11 +203,25 @@ final class WebRTCEventHandler {
     private var streamingFunctionCallArguments: [String: String] = [:]
     private var activeFunctionCallIds: Set<String> = []
 
+    // MARK: - Shadow State Machine (Observational Only)
+    // This Actor observes events and logs state transitions for debugging.
+    // It does NOT control any behavior - purely for validation and debugging.
+    private let shadowStateMachine = ConversationStateMachine()
+
     /// Check if a response is currently in progress.
     /// Returns true if response in progress, false otherwise.
     func checkResponseInProgress() -> Bool {
         return responseStateQueue.sync {
             return responseInProgress
+        }
+    }
+
+    /// Get the current response ID being tracked.
+    /// Returns nil if no response is in progress.
+    /// Useful for race condition tracing - compare this with error messages from OpenAI.
+    func getCurrentResponseId() -> String? {
+        return responseStateQueue.sync {
+            return currentResponseId
         }
     }
 
@@ -279,6 +297,55 @@ final class WebRTCEventHandler {
                 "[AudioStreamingState] Audio streaming state reset",
                 attributes: logAttributes(for: .debug)
             )
+        }
+    }
+
+    // MARK: - Shadow State Machine Observation Helpers
+    // These methods allow external callers (like OpenAIWebRTCClient) to notify the shadow state machine
+
+    /// Notify shadow state machine that a response.create is about to be sent
+    func shadowObserve_willSendResponseCreate(trigger: String) {
+        Task {
+            await shadowStateMachine.shadow_willSendResponseCreate(trigger: trigger)
+        }
+    }
+
+    /// Notify shadow state machine that a tool result is about to be sent
+    func shadowObserve_willSendToolResult(callId: String) {
+        let actualResponseInProgress = checkResponseInProgress()
+        Task {
+            await shadowStateMachine.shadow_willSendToolResult(
+                callId: callId, actualResponseInProgress: actualResponseInProgress)
+        }
+    }
+
+    /// Notify shadow state machine that a tool call has completed
+    func shadowObserve_didCompleteToolCall(callId: String) {
+        Task {
+            await shadowStateMachine.shadow_didCompleteToolCall(callId: callId)
+        }
+    }
+
+    /// Notify shadow state machine that tool audio start was attempted
+    func shadowObserve_didAttemptStartToolAudio(prefix: String, wasBlocked: Bool) {
+        let actualStreaming = checkAssistantAudioStreaming()
+        Task {
+            await shadowStateMachine.shadow_didAttemptStartToolAudio(
+                prefix: prefix, wasBlocked: wasBlocked, actualAssistantStreaming: actualStreaming)
+        }
+    }
+
+    /// Notify shadow state machine that tool audio was stopped
+    func shadowObserve_didStopToolAudio(reason: String) {
+        Task {
+            await shadowStateMachine.shadow_didStopToolAudio(reason: reason)
+        }
+    }
+
+    /// Reset shadow state machine (e.g., on disconnect)
+    func shadowObserve_reset(reason: String) {
+        Task {
+            await shadowStateMachine.shadow_reset(reason: reason)
         }
     }
 
@@ -818,6 +885,13 @@ final class WebRTCEventHandler {
         // Loop random beeps until we get a response
         context.audioMixPlayer?.startLoopingRandomBeeps(prefix: "artybeeps")
 
+        // SHADOW: Observe tool call
+        let actualStreaming = checkAssistantAudioStreaming()
+        Task {
+            await shadowStateMachine.shadow_didReceiveToolCall(
+                callId: callId, toolName: toolName, actualAssistantStreaming: actualStreaming)
+        }
+
         respondToToolCall(
             callId: callId, toolName: toolName, argumentsJSON: argumentsJSON, context: context)
     }
@@ -985,14 +1059,20 @@ final class WebRTCEventHandler {
         let responseId = response["id"] as? String
         let status = response["status"] as? String
 
+        // Shorten response ID for log message (e.g., "resp_Cr9Qsg8m..." from "resp_Cr9Qsg8mw7CLQ1KOdxzfq")
+        let shortResponseId =
+            responseId.map { id in
+                id.count > 12 ? "\(id.prefix(12))..." : id
+            } ?? "nil"
+
         // Update response state machine
         responseStateQueue.async {
             self.responseInProgress = true
             self.currentResponseId = responseId
             self.logger.log(
-                "[ResponseStateMachine] Response created, now in progress",
+                "🎬 [ResponseStateMachine] Response created (\(shortResponseId)), now in progress",
                 attributes: logAttributes(
-                    for: .debug,
+                    for: .info,
                     metadata: [
                         "responseId": responseId as Any,
                         "status": status as Any,
@@ -1003,9 +1083,9 @@ final class WebRTCEventHandler {
         }
 
         logger.log(
-            "[WebRTCEventHandler] Response created",
+            "🎬 [WebRTCEventHandler] Response created (\(shortResponseId))",
             attributes: logAttributes(
-                for: .debug,
+                for: .info,
                 metadata: [
                     "responseId": responseId as Any,
                     "status": status as Any,
@@ -1014,6 +1094,11 @@ final class WebRTCEventHandler {
 
         // Stop any playing audio when the other side starts speaking
         context.audioMixPlayer?.stop()
+
+        // SHADOW: Observe response.created event
+        Task {
+            await shadowStateMachine.shadow_didReceiveResponseCreated(responseId: responseId)
+        }
     }
 
     private func handleResponseDoneEvent(_ event: [String: Any], context: ToolContext) {
@@ -1057,10 +1142,16 @@ final class WebRTCEventHandler {
                 self.queuedResponseCreate = nil
             }
 
+            // Shorten response ID for log message
+            let shortRespId =
+                responseId.map { id in
+                    id.count > 12 ? "\(id.prefix(12))..." : id
+                } ?? "nil"
+
             self.logger.log(
-                "[ResponseStateMachine] Response done, no longer in progress",
+                "🏁 [ResponseStateMachine] Response done (\(shortRespId)), no longer in progress",
                 attributes: logAttributes(
-                    for: .debug,
+                    for: .info,
                     metadata: [
                         "responseId": responseId as Any,
                         "status": status as Any,
@@ -1184,6 +1275,12 @@ final class WebRTCEventHandler {
             )
             emitTokenUsage(usage: usage, responseId: responseId, context: context)
         }
+
+        // SHADOW: Observe response.done event
+        Task {
+            await shadowStateMachine.shadow_didReceiveResponseDone(
+                responseId: responseId, status: status)
+        }
     }
 
     private func handleResponseCancelledEvent(_ event: [String: Any], context: ToolContext) {
@@ -1215,6 +1312,11 @@ final class WebRTCEventHandler {
                     "responseId": responseId as Any
                 ])
         )
+
+        // SHADOW: Observe response.cancelled event
+        Task {
+            await shadowStateMachine.shadow_didReceiveResponseCancelled(responseId: responseId)
+        }
     }
 
     // MARK: - Assistant Audio Streaming Event Handlers
@@ -1224,6 +1326,8 @@ final class WebRTCEventHandler {
     /// Handles response.audio.delta event - model-generated audio chunks are arriving
     /// This is the most reliable cross-platform indicator that audio is streaming
     private func handleAssistantAudioDeltaEvent(_ event: [String: Any], context: ToolContext) {
+        let responseId = event["response_id"] as? String
+
         audioStreamingQueue.async {
             if !self.assistantAudioStreaming {
                 self.assistantAudioStreaming = true
@@ -1241,6 +1345,13 @@ final class WebRTCEventHandler {
                 context.audioMixPlayer?.stop()
             }
         }
+
+        // SHADOW: Observe audio.delta event
+        let actualStreaming = checkAssistantAudioStreaming()
+        Task {
+            await shadowStateMachine.shadow_didReceiveAudioDelta(
+                responseId: responseId, actualAssistantStreaming: actualStreaming)
+        }
     }
 
     /// Handles response.audio.done event - audio streaming is complete
@@ -1257,6 +1368,13 @@ final class WebRTCEventHandler {
                         "timestamp": ISO8601DateFormatter().string(from: Date()),
                     ])
             )
+        }
+
+        // SHADOW: Observe audio.done event
+        let actualStreaming = checkAssistantAudioStreaming()
+        Task {
+            await shadowStateMachine.shadow_didReceiveAudioDone(
+                actualAssistantStreaming: actualStreaming)
         }
     }
 
@@ -1280,6 +1398,13 @@ final class WebRTCEventHandler {
                 context.audioMixPlayer?.stop()
             }
         }
+
+        // SHADOW: Observe buffer.started event
+        let actualStreaming = checkAssistantAudioStreaming()
+        Task {
+            await shadowStateMachine.shadow_didReceiveOutputAudioBufferStarted(
+                actualAssistantStreaming: actualStreaming)
+        }
     }
 
     /// Handles output_audio_buffer.done event (WebRTC-specific)
@@ -1297,6 +1422,13 @@ final class WebRTCEventHandler {
                         "timestamp": ISO8601DateFormatter().string(from: Date()),
                     ])
             )
+        }
+
+        // SHADOW: Observe buffer.done event
+        let actualStreaming = checkAssistantAudioStreaming()
+        Task {
+            await shadowStateMachine.shadow_didReceiveOutputAudioBufferDone(
+                actualAssistantStreaming: actualStreaming)
         }
     }
 
@@ -1325,6 +1457,11 @@ final class WebRTCEventHandler {
                     "timestamp": ISO8601DateFormatter().string(from: Date()),
                 ])
         )
+
+        // SHADOW: Observe user speech started
+        Task {
+            await shadowStateMachine.shadow_didReceiveUserSpeechStarted()
+        }
     }
 
     /// Handles input_audio_buffer.speech_stopped event
@@ -1349,6 +1486,11 @@ final class WebRTCEventHandler {
                     "timestamp": ISO8601DateFormatter().string(from: Date()),
                 ])
         )
+
+        // SHADOW: Observe user speech stopped
+        Task {
+            await shadowStateMachine.shadow_didReceiveUserSpeechStopped()
+        }
     }
 
     /// Handles input_audio_buffer.cleared event
@@ -1367,6 +1509,11 @@ final class WebRTCEventHandler {
                     "timestamp": ISO8601DateFormatter().string(from: Date()),
                 ])
         )
+
+        // SHADOW: Observe input buffer cleared
+        Task {
+            await shadowStateMachine.shadow_didReceiveInputAudioBufferCleared()
+        }
     }
 
     private func emitTokenUsage(usage: [String: Any], responseId: String?, context: ToolContext) {
@@ -1484,7 +1631,7 @@ final class WebRTCEventHandler {
                         }
 
                         self.logger.log(
-                            "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
+                            "💬 [WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
                             attributes: logAttributes(
                                 for: .debug,
                                 metadata: [
@@ -1543,7 +1690,7 @@ final class WebRTCEventHandler {
                         }
                     } else {
                         self.logger.log(
-                            "[WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
+                            "💬 [WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
                             attributes: logAttributes(
                                 for: .debug,
                                 metadata: [
@@ -1566,7 +1713,7 @@ final class WebRTCEventHandler {
         }
 
         logger.log(
-            "[WebRTCEventHandler] Transcript complete (assistant)",
+            "💬 [WebRTCEventHandler] Transcript complete (assistant)",
             attributes: logAttributes(
                 for: .info,
                 metadata: [
@@ -1702,7 +1849,7 @@ final class WebRTCEventHandler {
 
         if !transcriptText.isEmpty {
             logger.log(
-                "[WebRTCEventHandler] Transcript complete (user)",
+                "💬 [WebRTCEventHandler] Transcript complete (user)",
                 attributes: logAttributes(
                     for: .info,
                     metadata: [
@@ -1715,7 +1862,7 @@ final class WebRTCEventHandler {
             )
         } else {
             logger.log(
-                "[WebRTCEventHandler] Transcript complete (user, empty)",
+                "💬 [WebRTCEventHandler] Transcript complete (user, empty)",
                 attributes: logAttributes(
                     for: .debug,
                     metadata: [
@@ -1761,6 +1908,15 @@ final class WebRTCEventHandler {
                         "timestamp": ISO8601DateFormatter().string(from: Date()),
                     ])
             )
+
+            // Notify shadow state machine about this critical error for analysis and recovery
+            Task {
+                await shadowStateMachine.shadow_didReceiveActiveResponseError(
+                    eventId: eventId as? String,
+                    errorMessage: errorMessage,
+                    blockedByResponseId: currentId
+                )
+            }
 
             // Also emit to module for visibility
             context.emitModuleEvent("onRealtimeError", event)

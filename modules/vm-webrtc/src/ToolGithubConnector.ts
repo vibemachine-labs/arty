@@ -1,12 +1,12 @@
-import { Octokit } from '@octokit/rest';
-import { log } from '../../../lib/logger';
-import { getGithubToken } from '../../../lib/secure-storage';
-import { type ToolNativeModule } from './ToolHelper';
-import { type ToolDefinition } from './VmWebrtc.types';
+import { Octokit } from "@octokit/rest";
+import { log } from "../../../lib/logger";
+import { getGithubToken } from "../../../lib/secure-storage";
+import { type ToolNativeModule } from "./ToolHelper";
+import { type ToolDefinition } from "./VmWebrtc.types";
 
 export const githubConnectorDefinition: ToolDefinition = {
-  type: 'function',
-  name: 'github_connector',
+  type: "function",
+  name: "github_connector",
   description: `This tool allows interaction with the GitHub API.
 
 You can use this tool to perform any operation on GitHub, such as creating issues, managing repositories, or querying data.
@@ -18,7 +18,7 @@ This tool uses the following Octokit versions to interact with the GitHub API:
 - @octokit/types@15.0.0
 
 This app is already connected to GitHub via an officially supported Github connector, and
-the user is already authenticated and logged in. 
+the user is already authenticated and logged in.
 
 IMPORTANT: The following variables are pre-injected into the execution scope:
 - 'octokit' (Octokit instance): An authenticated Octokit REST API client
@@ -26,10 +26,10 @@ IMPORTANT: The following variables are pre-injected into the execution scope:
 
 You do NOT need to create a new Octokit instance or fetch the authenticated user - these are already available.
 
-AUTHENTICATION REQUIRED: If the user is not authenticated (authenticated_github_user is null) and they attempt 
+AUTHENTICATION REQUIRED: If the user is not authenticated (authenticated_github_user is null) and they attempt
 operations that require authentication (like accessing private repos, creating issues, etc.), please inform them:
-"To access private GitHub data, you need to authenticate. Please go to Settings in the hamburger menu, 
-choose 'Configure Connectors', select GitHub, and add your Classic Personal Access Token with the required 
+"To access private GitHub data, you need to authenticate. Please go to Settings in the hamburger menu,
+choose 'Configure Connectors', select GitHub, and add your Classic Personal Access Token with the required
 privileges (such as 'repo' scope for private repositories)."
 
 IMPORTANT: In these versions of Octokit, REST methods are exposed under octokit.rest.* rather than octokit.* directly.
@@ -57,7 +57,7 @@ Example code snippets:
 // Example 1: List repos for authenticated user with pagination
 (() => {
   console.log('Fetching repos for:', authenticated_github_user);
-  
+
   return octokit.paginate(octokit.rest.repos.listForAuthenticatedUser, {
     per_page: 100,
   })
@@ -74,7 +74,7 @@ Example code snippets:
 // Example 2: Search repositories using request method
 (() => {
   const keyword = "keydeleter";
-  
+
   return octokit.request('GET /search/repositories', {
     q: keyword + ' stars:>10',
     sort: 'stars',
@@ -95,9 +95,9 @@ Example code snippets:
 (() => {
   const owner = authenticated_github_user;
   const repo = "my-project";
-  
+
   console.log('Fetching PRs for:', owner + '/' + repo);
-  
+
   return octokit.paginate(octokit.rest.pulls.list, {
     owner: owner,
     repo: repo,
@@ -116,7 +116,7 @@ Example code snippets:
 // Example 4: Get user's recent activity
 (() => {
   console.log('Fetching activity for:', authenticated_github_user);
-  
+
   return octokit.rest.activity.listPublicEventsForUser({
     username: authenticated_github_user,
     per_page: 10
@@ -128,15 +128,15 @@ Example code snippets:
   })));
 })()`,
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       self_contained_javascript_octokit_code_snippet: {
-        type: 'string',
+        type: "string",
         description:
           "Provide the complete Octokit JavaScript snippet (logic + return). Return ONLY JSON-serializable data (objects, arrays, numbers, strings). This parameter should ONLY contain the JavaScript snippet, as a SINGLE self-invoking expression that returns JSON-serializable data. No imports, no exports, no named functions, no external variables. The authenticated 'octokit' instance is already available in scope.",
       },
     },
-    required: ['self_contained_javascript_octokit_code_snippet'],
+    required: ["self_contained_javascript_octokit_code_snippet"],
   },
 };
 
@@ -160,15 +160,18 @@ export interface GithubConnectorNativeModule extends ToolNativeModule {
  * Handles both OpenAI tool calls and direct Swift-to-JS testing.
  */
 export class ToolGithubConnector {
-  private readonly toolName = 'ToolGithubConnector';
-  private readonly requestEventName = 'onGithubConnectorRequest';
+  private readonly toolName = "ToolGithubConnector";
+  private readonly requestEventName = "onGithubConnectorRequest";
   private readonly module: GithubConnectorNativeModule | null;
 
   constructor(nativeModule: GithubConnectorNativeModule | null) {
     this.module = nativeModule;
 
     if (this.module) {
-      this.module.addListener(this.requestEventName, this.handleRequest.bind(this));
+      this.module.addListener(
+        this.requestEventName,
+        this.handleRequest.bind(this),
+      );
     }
   }
 
@@ -177,47 +180,77 @@ export class ToolGithubConnector {
   /**
    * Handle a github connector request from Swift.
    */
-  private async handleRequest(event: { requestId: string; self_contained_javascript_octokit_code_snippet: string }) {
+  private async handleRequest(event: {
+    requestId: string;
+    self_contained_javascript_octokit_code_snippet: string;
+  }) {
     const { requestId, self_contained_javascript_octokit_code_snippet } = event;
-    log.info(`[${this.toolName}] 📥 Received request from Swift`, {}, {
-      requestId,
-      codeSnippet: self_contained_javascript_octokit_code_snippet,
-      snippetLength: self_contained_javascript_octokit_code_snippet.length,
-    });
+    log.info(
+      `[${this.toolName}] 📥 Received request from Swift`,
+      {},
+      {
+        requestId,
+        codeSnippet: self_contained_javascript_octokit_code_snippet,
+        snippetLength: self_contained_javascript_octokit_code_snippet.length,
+      },
+    );
 
     try {
-      const result = await this.performOperation({ self_contained_javascript_octokit_code_snippet });
-      log.info(`[${this.toolName}] ✅ Operation completed`, {}, {
-        requestId,
-        resultLength: String(result).length,
-        result: result,
+      const result = await this.performOperation({
+        self_contained_javascript_octokit_code_snippet,
       });
+      log.info(
+        `[${this.toolName}] ✅ Operation completed`,
+        {},
+        {
+          requestId,
+          resultLength: String(result).length,
+          result: result,
+        },
+      );
 
       if (this.module) {
         this.module.sendGithubConnectorResponse(requestId, result);
-        log.info(`[${this.toolName}] 📤 Sent response to Swift`, {}, {
-          requestId,
-          response: result,
-          responseLength: String(result).length,
-          is_native_logger: false,
-        });
+        log.info(
+          `🔧 [${this.toolName}] 📤 Sent response to Swift`,
+          {},
+          {
+            requestId,
+            response: result,
+            responseLength: String(result).length,
+            is_native_logger: false,
+          },
+        );
       }
     } catch (error) {
-      log.error(`[${this.toolName}] ❌ Operation failed`, {}, {
-        requestId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        errorName: error instanceof Error ? error.name : undefined,
-      }, error);
+      log.error(
+        `[${this.toolName}] ❌ Operation failed`,
+        {},
+        {
+          requestId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorName: error instanceof Error ? error.name : undefined,
+        },
+        error,
+      );
 
       if (this.module) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        this.module.sendGithubConnectorResponse(requestId, `Error: ${errorMessage}`);
-        log.info(`[${this.toolName}] 📤 Sent error response to Swift`, {}, {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        this.module.sendGithubConnectorResponse(
           requestId,
-          errorMessage,
-          is_native_logger: false,
-        });
+          `Error: ${errorMessage}`,
+        );
+        log.info(
+          `🔧 [${this.toolName}] 📤 Sent error response to Swift`,
+          {},
+          {
+            requestId,
+            errorMessage,
+            is_native_logger: false,
+          },
+        );
       }
     }
   }
@@ -225,21 +258,63 @@ export class ToolGithubConnector {
   /**
    * Perform the actual github API operation.
    */
-  private async performOperation(params: GithubConnectorParams): Promise<string> {
+  private async performOperation(
+    params: GithubConnectorParams,
+  ): Promise<string> {
     const { self_contained_javascript_octokit_code_snippet } = params;
-    log.info(`[${this.toolName}] 🔧 Performing github operation`, {}, {
-      codeSnippet: self_contained_javascript_octokit_code_snippet,
-      snippetLength: self_contained_javascript_octokit_code_snippet.length,
-    });
+    log.info(
+      `[${this.toolName}] 🔧 Performing github operation`,
+      {},
+      {
+        codeSnippet: self_contained_javascript_octokit_code_snippet,
+        snippetLength: self_contained_javascript_octokit_code_snippet.length,
+      },
+    );
 
     const snippet = self_contained_javascript_octokit_code_snippet.trim();
 
     // Get the GitHub token from secure storage
     const token = await getGithubToken();
 
+    // Create custom logger for Octokit that forwards all logs with the actual message
+    const octokitLogger = {
+      debug: (message: string, ...args: any[]) => {
+        log.debug(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+      info: (message: string, ...args: any[]) => {
+        log.debug(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+      warn: (message: string, ...args: any[]) => {
+        log.warn(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+      error: (message: string, ...args: any[]) => {
+        // Use warn instead of error - Octokit logs 404s as errors, but they're expected
+        // during repo lookup fallback and shouldn't show up as errors in the app
+        log.warn(
+          `🔧 [Octokit] ${message}`,
+          {},
+          { args: args.length > 0 ? JSON.stringify(args) : undefined },
+        );
+      },
+    };
+
     // Create an authenticated Octokit instance
     // If no token exists, create an anonymous instance (rate-limited)
-    const octokit = token ? new Octokit({ auth: token }) : new Octokit();
+    const octokit = token
+      ? new Octokit({ auth: token, log: octokitLogger })
+      : new Octokit({ log: octokitLogger });
 
     // Fetch authenticated user if token exists
     let authenticatedUser: string | null = null;
@@ -247,15 +322,25 @@ export class ToolGithubConnector {
       try {
         const { data } = await octokit.rest.users.getAuthenticated();
         authenticatedUser = data.login;
-        log.info(`[${this.toolName}] 👤 Authenticated as GitHub user`, {}, { username: authenticatedUser });
+        log.info(
+          `[${this.toolName}] 👤 Authenticated as GitHub user`,
+          {},
+          { username: authenticatedUser },
+        );
       } catch (error) {
-        log.warn(`[${this.toolName}] ⚠️ Failed to fetch authenticated user`, {}, {
-          errorMessage: error instanceof Error ? error.message : String(error),
-          errorStack: error instanceof Error ? error.stack : undefined,
-        }, error);
+        log.warn(
+          `[${this.toolName}] ⚠️ Failed to fetch authenticated user`,
+          {},
+          {
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+          },
+          error,
+        );
       }
     }
-    
+
     // Make Octokit class AND authenticated instance available in the eval scope
     (globalThis as any).Octokit = Octokit;
     (globalThis as any).octokit = octokit;
@@ -263,8 +348,12 @@ export class ToolGithubConnector {
 
     // Add common stdlib-like globals if missing (best-effort)
     const stdlibModules: Record<string, any> = {};
-    try { if (typeof Buffer !== 'undefined') stdlibModules.Buffer = Buffer; } catch {}
-    try { if (typeof process !== 'undefined') stdlibModules.process = process; } catch {}
+    try {
+      if (typeof Buffer !== "undefined") stdlibModules.Buffer = Buffer;
+    } catch {}
+    try {
+      if (typeof process !== "undefined") stdlibModules.process = process;
+    } catch {}
     stdlibModules.console = console;
     stdlibModules.setTimeout = setTimeout;
     stdlibModules.clearTimeout = clearTimeout;
@@ -278,42 +367,56 @@ export class ToolGithubConnector {
 
     // Validation (no transforms)
     if (/^\s*import\s/m.test(snippet) || /^\s*export\s/m.test(snippet)) {
-      throw new Error('Snippet must not contain import/export.');
+      throw new Error("Snippet must not contain import/export.");
     }
     if (/function\s+\w+\s*\(/.test(snippet)) {
-      throw new Error('Snippet must not declare named functions.');
+      throw new Error("Snippet must not declare named functions.");
     }
 
     let execResult: any;
     try {
-      log.info(`[${this.toolName}] 🚀 Evaluating code snippet`, {}, {
-        codeSnippet: snippet,
-        snippetLength: snippet.length
-      });
+      log.info(
+        `[${this.toolName}] 🚀 Evaluating code snippet`,
+        {},
+        {
+          codeSnippet: snippet,
+          snippetLength: snippet.length,
+        },
+      );
       execResult = eval(snippet); // may be value or Promise
     } catch (e) {
-      log.error(`[${this.toolName}] ❌ Execution eval error`, {}, {
-        errorMessage: e instanceof Error ? e.message : String(e),
-        errorStack: e instanceof Error ? e.stack : undefined,
-        errorName: e instanceof Error ? e.name : undefined,
-        snippetPreview: snippet.slice(0, 200),
-        fullSnippet: snippet,
-      }, e);
+      log.error(
+        `[${this.toolName}] ❌ Execution eval error`,
+        {},
+        {
+          errorMessage: e instanceof Error ? e.message : String(e),
+          errorStack: e instanceof Error ? e.stack : undefined,
+          errorName: e instanceof Error ? e.name : undefined,
+          snippetPreview: snippet.slice(0, 200),
+          fullSnippet: snippet,
+        },
+        e,
+      );
       return JSON.stringify({ error: String(e), snippet });
     }
 
     try {
-      if (execResult && typeof execResult.then === 'function') {
+      if (execResult && typeof execResult.then === "function") {
         log.info(`[${this.toolName}] ⏳ Awaiting promise result`, {});
         execResult = await execResult;
       }
     } catch (e) {
-      log.error(`[${this.toolName}] ❌ Awaiting promise failed`, {}, {
-        errorMessage: e instanceof Error ? e.message : String(e),
-        errorStack: e instanceof Error ? e.stack : undefined,
-        errorName: e instanceof Error ? e.name : undefined,
-        snippetPreview: snippet.slice(0, 200),
-      }, e);
+      log.error(
+        `[${this.toolName}] ❌ Awaiting promise failed`,
+        {},
+        {
+          errorMessage: e instanceof Error ? e.message : String(e),
+          errorStack: e instanceof Error ? e.stack : undefined,
+          errorName: e instanceof Error ? e.name : undefined,
+          snippetPreview: snippet.slice(0, 200),
+        },
+        e,
+      );
       return JSON.stringify({ error: String(e), snippet });
     }
 
@@ -324,10 +427,14 @@ export class ToolGithubConnector {
       serialized = JSON.stringify({ result: String(execResult) });
     }
 
-    log.info(`[${this.toolName}] ✅ Execution complete`, {}, {
-      serializedLength: serialized.length,
-      result: serialized,
-    });
+    log.info(
+      `[${this.toolName}] ✅ Execution complete`,
+      {},
+      {
+        serializedLength: serialized.length,
+        result: serialized,
+      },
+    );
     return serialized;
   }
 
@@ -347,7 +454,9 @@ export class ToolGithubConnector {
    */
   async executeFromSwift(codeSnippet: string): Promise<string> {
     if (!this.module) {
-      throw new Error(`Native module not available for github connector bridge function`);
+      throw new Error(
+        `Native module not available for github connector bridge function`,
+      );
     }
 
     return this.module.githubOperationFromSwift(codeSnippet);
@@ -360,9 +469,14 @@ export class ToolGithubConnector {
  * Creates a new ToolGithubConnector instance with the provided native module.
  * Returns null if the module is not available.
  */
-export const createGithubConnectorTool = (nativeModule: GithubConnectorNativeModule | null): ToolGithubConnector | null => {
+export const createGithubConnectorTool = (
+  nativeModule: GithubConnectorNativeModule | null,
+): ToolGithubConnector | null => {
   if (!nativeModule) {
-    log.warn('[ToolGithubConnector] Native module not available. Github connector tool will not be initialized.', {});
+    log.warn(
+      "[ToolGithubConnector] Native module not available. Github connector tool will not be initialized.",
+      {},
+    );
     return null;
   }
 

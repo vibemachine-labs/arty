@@ -1,20 +1,20 @@
-import * as AuthSession from 'expo-auth-session';
+import * as AuthSession from "expo-auth-session";
 
-import { log } from '../../../lib/logger';
+import { log } from "../../../lib/logger";
 import {
   deleteGDriveTokens,
   getGDriveAccessToken,
   getGDriveClientId,
   // These may already exist in your secure-storage. If not, add them there accordingly.
   getGDriveRefreshToken,
-  setGDriveAccessToken
-} from '../../../lib/secure-storage';
-import { type ToolNativeModule } from './ToolHelper';
-import { type ToolDefinition } from './VmWebrtc.types';
+  setGDriveAccessToken,
+} from "../../../lib/secure-storage";
+import { type ToolNativeModule } from "./ToolHelper";
+import { type ToolDefinition } from "./VmWebrtc.types";
 
 export const gdriveConnectorDefinition: ToolDefinition = {
-  type: 'function',
-  name: 'gdrive_connector',
+  type: "function",
+  name: "gdrive_connector",
   description: `This tool can perform any operation on Google Drive (GDrive) by generating
 a self-contained JavaScript snippet that uses the Google Drive API.
 
@@ -29,7 +29,7 @@ Requirements:
 - Do NOT reference external variables - inline all needed values as constants
 - Use only standard JavaScript features available in most environments
 
-The snippet must not import any other modules or libraries that are not included by default in react native, 
+The snippet must not import any other modules or libraries that are not included by default in react native,
 since it will be run in a restricted react native environment.
 
 You should derive the snippet from the user's request, then call this tool
@@ -67,12 +67,12 @@ Example code snippet 1:
     modifiedTime: file.modifiedTime,
   })));
 })()
-  
+
 Example 2:
 
-You can get any google docs in google drive by converting them into plain text.  
-Here is a single, runnable TypeScript snippet that exports a Google Doc to 
-plain text using the raw Drive API (no SDK), stays fully in memory, and returns { id, name, mimeType, text }. 
+You can get any google docs in google drive by converting them into plain text.
+Here is a single, runnable TypeScript snippet that exports a Google Doc to
+plain text using the raw Drive API (no SDK), stays fully in memory, and returns { id, name, mimeType, text }.
 
 ((docFileId) => {
   const errIfNotOk = (res) =>
@@ -257,11 +257,11 @@ Here is some sample code:
   })));
 })("search_param_goes_here")`,
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       self_contained_javascript_gdrive_code_snippet: {
-        type: 'string',
-        description: `Provide the complete 
+        type: "string",
+        description: `Provide the complete
 Google Drive API JavaScript snippet (logic + return).
 
 The snippet MUST be a single self-invoking expression that returns a JSON-serializable value:
@@ -308,16 +308,16 @@ Example:
 })()`,
       },
     },
-    required: ['self_contained_javascript_gdrive_code_snippet'],
+    required: ["self_contained_javascript_gdrive_code_snippet"],
   },
 };
 
-const GOOGLE_REVOCATION_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
+const GOOGLE_REVOCATION_ENDPOINT = "https://oauth2.googleapis.com/revoke";
 
 // MARK: - Helpers
 
 export const revokeGDriveAccess = async (): Promise<void> => {
-  log.info('[ToolGDriveConnector] 🧹 Revoking GDrive access', {});
+  log.info("[ToolGDriveConnector] 🧹 Revoking GDrive access", {});
 
   const [accessToken, refreshToken] = await Promise.all([
     getGDriveAccessToken(),
@@ -325,29 +325,46 @@ export const revokeGDriveAccess = async (): Promise<void> => {
   ]);
 
   const uniqueTokens = Array.from(
-    new Set([accessToken, refreshToken].filter((token): token is string => Boolean(token)))
+    new Set(
+      [accessToken, refreshToken].filter((token): token is string =>
+        Boolean(token),
+      ),
+    ),
   );
 
   for (const token of uniqueTokens) {
     try {
-      await AuthSession.revokeAsync({ token }, { revocationEndpoint: GOOGLE_REVOCATION_ENDPOINT });
+      await AuthSession.revokeAsync(
+        { token },
+        { revocationEndpoint: GOOGLE_REVOCATION_ENDPOINT },
+      );
       log.info(`[ToolGDriveConnector] ✅ Token revoked`, {}, {});
     } catch (error) {
-      log.warn(`[ToolGDriveConnector] ⚠️ Failed to revoke token`, {}, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-      }, error);
+      log.warn(
+        `[ToolGDriveConnector] ⚠️ Failed to revoke token`,
+        {},
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
+        error,
+      );
     }
   }
 
   try {
     await deleteGDriveTokens();
-    log.info('[ToolGDriveConnector] 🧺 Local Google Drive tokens cleared', {});
+    log.info("[ToolGDriveConnector] 🧺 Local Google Drive tokens cleared", {});
   } catch (error) {
-    log.warn('[ToolGDriveConnector] ⚠️ Failed to clear local tokens', {}, {
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
-    }, error);
+    log.warn(
+      "[ToolGDriveConnector] ⚠️ Failed to clear local tokens",
+      {},
+      {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      },
+      error,
+    );
   }
 };
 
@@ -371,18 +388,25 @@ export interface GDriveConnectorNativeModule extends ToolNativeModule {
  * Handles both OpenAI tool calls and direct Swift-to-JS testing.
  */
 export class ToolGDriveConnector {
-  private readonly toolName = 'ToolGDriveConnector';
-  private readonly requestEventName = 'onGDriveConnectorRequest';
+  private readonly toolName = "ToolGDriveConnector";
+  private readonly requestEventName = "onGDriveConnectorRequest";
   private readonly module: GDriveConnectorNativeModule | null;
 
   constructor(nativeModule: GDriveConnectorNativeModule | null) {
     this.module = nativeModule;
 
     if (this.module) {
-      this.module.addListener(this.requestEventName, this.handleRequest.bind(this));
-      log.info('[ToolGDriveConnector] Initialized with native module', {}, { eventName: this.requestEventName });
+      this.module.addListener(
+        this.requestEventName,
+        this.handleRequest.bind(this),
+      );
+      log.info(
+        "[ToolGDriveConnector] Initialized with native module",
+        {},
+        { eventName: this.requestEventName },
+      );
     } else {
-      log.warn('[ToolGDriveConnector] Native module unavailable', {});
+      log.warn("[ToolGDriveConnector] Native module unavailable", {});
     }
   }
 
@@ -391,57 +415,94 @@ export class ToolGDriveConnector {
   /**
    * Handle a gdrive connector request from Swift.
    */
-  private async handleRequest(event: { requestId: string; self_contained_javascript_gdrive_code_snippet: string; eventId?: string }) {
-    const { requestId, self_contained_javascript_gdrive_code_snippet, eventId } = event;
-    log.info(`[${this.toolName}] 📥 Received request from Swift`, {}, {
+  private async handleRequest(event: {
+    requestId: string;
+    self_contained_javascript_gdrive_code_snippet: string;
+    eventId?: string;
+  }) {
+    const {
       requestId,
+      self_contained_javascript_gdrive_code_snippet,
       eventId,
-      codeSnippet: self_contained_javascript_gdrive_code_snippet,
-      snippetLength: self_contained_javascript_gdrive_code_snippet.length,
-    });
+    } = event;
+    log.info(
+      `[${this.toolName}] 📥 Received request from Swift`,
+      {},
+      {
+        requestId,
+        eventId,
+        codeSnippet: self_contained_javascript_gdrive_code_snippet,
+        snippetLength: self_contained_javascript_gdrive_code_snippet.length,
+      },
+    );
 
     try {
       const result = await this.performOperation(
         { self_contained_javascript_gdrive_code_snippet },
-        { eventId }
+        { eventId },
       );
-      log.info(`[${this.toolName}] ✅ Operation completed`, {}, {
-        requestId,
-        eventId,
-        resultLength: String(result).length,
-        result: result,
-      });
+      log.info(
+        `[${this.toolName}] ✅ Operation completed`,
+        {},
+        {
+          requestId,
+          eventId,
+          resultLength: String(result).length,
+          result: result,
+        },
+      );
 
       if (this.module) {
         this.module.sendGDriveConnectorResponse(requestId, result);
-        log.info(`[${this.toolName}] 📤 Sent response to Swift`, {}, {
-          requestId,
-          eventId,
-          response: result,
-          responseLength: String(result).length,
-          is_native_logger: false,
-        });
+        log.info(
+          `🔧 [${this.toolName}] 📤 Sent response to Swift`,
+          {},
+          {
+            requestId,
+            eventId,
+            response: result,
+            responseLength: String(result).length,
+            is_native_logger: false,
+          },
+        );
       } else {
-        log.warn(`[${this.toolName}] ⚠️ Cannot send response; native module missing`, {}, { requestId });
+        log.warn(
+          `[${this.toolName}] ⚠️ Cannot send response; native module missing`,
+          {},
+          { requestId },
+        );
       }
     } catch (error) {
-      log.error(`[${this.toolName}] ❌ Operation failed`, {}, {
-        requestId,
-        eventId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        errorName: error instanceof Error ? error.name : undefined,
-      }, error);
-
-      if (this.module) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        this.module.sendGDriveConnectorResponse(requestId, `Error: ${errorMessage}`);
-        log.info(`[${this.toolName}] 📤 Sent error response to Swift`, {}, {
+      log.error(
+        `[${this.toolName}] ❌ Operation failed`,
+        {},
+        {
           requestId,
           eventId,
-          errorMessage,
-          is_native_logger: false,
-        });
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorName: error instanceof Error ? error.name : undefined,
+        },
+        error,
+      );
+
+      if (this.module) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        this.module.sendGDriveConnectorResponse(
+          requestId,
+          `Error: ${errorMessage}`,
+        );
+        log.info(
+          `🔧 [${this.toolName}] 📤 Sent error response to Swift`,
+          {},
+          {
+            requestId,
+            eventId,
+            errorMessage,
+            is_native_logger: false,
+          },
+        );
       }
     }
   }
@@ -449,13 +510,20 @@ export class ToolGDriveConnector {
   /**
    * Perform the actual gdrive API operation.
    */
-  private async performOperation(params: GDriveConnectorParams, context?: { eventId?: string }): Promise<string> {
+  private async performOperation(
+    params: GDriveConnectorParams,
+    context?: { eventId?: string },
+  ): Promise<string> {
     const { self_contained_javascript_gdrive_code_snippet } = params;
-    log.info(`[${this.toolName}] 🔧 Performing gdrive operation`, {}, {
-      codeSnippet: self_contained_javascript_gdrive_code_snippet,
-      snippetLength: self_contained_javascript_gdrive_code_snippet.length,
-      eventId: context?.eventId,
-    });
+    log.info(
+      `[${this.toolName}] 🔧 Performing gdrive operation`,
+      {},
+      {
+        codeSnippet: self_contained_javascript_gdrive_code_snippet,
+        snippetLength: self_contained_javascript_gdrive_code_snippet.length,
+        eventId: context?.eventId,
+      },
+    );
 
     return executeGDriveSnippet({
       snippet: self_contained_javascript_gdrive_code_snippet,
@@ -480,7 +548,9 @@ export class ToolGDriveConnector {
    */
   async executeFromSwift(codeSnippet: string): Promise<string> {
     if (!this.module) {
-      throw new Error(`Native module not available for gdrive connector bridge function`);
+      throw new Error(
+        `Native module not available for gdrive connector bridge function`,
+      );
     }
     return this.module.gdriveOperationFromSwift(codeSnippet);
   }
@@ -499,16 +569,20 @@ export const executeGDriveSnippet = async ({
   toolName,
   eventId,
 }: ExecuteGDriveSnippetOptions): Promise<string> => {
-  const trimmedSnippet = (snippet ?? '').trim();
+  const trimmedSnippet = (snippet ?? "").trim();
   const accessToken = await getGDriveAccessToken();
   const eventMeta = eventId ? { eventId } : {};
 
   const tokenLen = accessToken?.length ?? 0;
-  log.info(`[${toolName}] 🔑 GDrive access token retrieved`, {}, {
-    hasToken: !!accessToken,
-    tokenLength: tokenLen,
-    ...eventMeta,
-  });
+  log.info(
+    `[${toolName}] 🔑 GDrive access token retrieved`,
+    {},
+    {
+      hasToken: !!accessToken,
+      tokenLength: tokenLen,
+      ...eventMeta,
+    },
+  );
 
   // Make the GDrive access token available in the eval scope
   (globalThis as any).accessToken = accessToken ?? null;
@@ -518,8 +592,12 @@ export const executeGDriveSnippet = async ({
 
   // Add common stdlib-like globals if missing (best-effort)
   const stdlibModules: Record<string, any> = {};
-  try { if (typeof Buffer !== 'undefined') stdlibModules.Buffer = Buffer; } catch {}
-  try { if (typeof process !== 'undefined') stdlibModules.process = process; } catch {}
+  try {
+    if (typeof Buffer !== "undefined") stdlibModules.Buffer = Buffer;
+  } catch {}
+  try {
+    if (typeof process !== "undefined") stdlibModules.process = process;
+  } catch {}
   stdlibModules.console = console;
   stdlibModules.setTimeout = setTimeout;
   stdlibModules.clearTimeout = clearTimeout;
@@ -532,29 +610,35 @@ export const executeGDriveSnippet = async ({
   }
 
   if (!trimmedSnippet) {
-    return JSON.stringify({ error: 'No JavaScript snippet provided' });
+    return JSON.stringify({ error: "No JavaScript snippet provided" });
   }
 
   // Validation (no transforms)
-  if (/^\s*import\s/m.test(trimmedSnippet) || /^\s*export\s/m.test(trimmedSnippet)) {
-    throw new Error('Snippet must not contain import/export.');
+  if (
+    /^\s*import\s/m.test(trimmedSnippet) ||
+    /^\s*export\s/m.test(trimmedSnippet)
+  ) {
+    throw new Error("Snippet must not contain import/export.");
   }
   if (/function\s+\w+\s*\(/.test(trimmedSnippet)) {
-    throw new Error('Snippet must not declare named functions.');
+    throw new Error("Snippet must not declare named functions.");
   }
 
   // Wrap global fetch to reactively handle 401 by refreshing access token once and retrying
-  const originalFetch: typeof fetch | undefined = (globalThis as any).fetch?.bind(globalThis);
+  const originalFetch: typeof fetch | undefined = (
+    globalThis as any
+  ).fetch?.bind(globalThis);
 
-  const isTokenEndpoint = (urlStr: string) => urlStr.startsWith('https://oauth2.googleapis.com/token');
+  const isTokenEndpoint = (urlStr: string) =>
+    urlStr.startsWith("https://oauth2.googleapis.com/token");
 
   const toUrlString = (input: RequestInfo | URL): string => {
     try {
-      if (typeof input === 'string') return input;
+      if (typeof input === "string") return input;
       if ((input as any)?.url) return (input as any).url;
       if (input instanceof URL) return input.toString();
     } catch {}
-    return '';
+    return "";
   };
 
   const normalizeHeaders = (h: any): Headers => {
@@ -574,15 +658,21 @@ export const executeGDriveSnippet = async ({
     return headers;
   };
 
-  const applyAuthHeader = (init: RequestInit | undefined, token: string): RequestInit => {
+  const applyAuthHeader = (
+    init: RequestInit | undefined,
+    token: string,
+  ): RequestInit => {
     const next: RequestInit = { ...(init || {}) };
     const headers = normalizeHeaders(next.headers as any);
-    headers.set('Authorization', `Bearer ${token}`);
+    headers.set("Authorization", `Bearer ${token}`);
     next.headers = headers;
     return next;
   };
 
-  const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const wrappedFetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
     if (!originalFetch) {
       return fetch(input, init);
     }
@@ -598,15 +688,16 @@ export const executeGDriveSnippet = async ({
 
     // Explain common HTTP status codes
     const statusExplanation = (() => {
-      if (res.status === 200) return 'OK';
-      if (res.status === 201) return 'Created';
-      if (res.status === 204) return 'No Content (success, empty response)';
-      if (res.status === 400) return 'Bad Request';
-      if (res.status === 401) return 'Unauthorized (will attempt token refresh)';
-      if (res.status === 403) return 'Forbidden';
-      if (res.status === 404) return 'Not Found';
-      if (res.status === 429) return 'Rate Limited';
-      if (res.status >= 500) return 'Server Error';
+      if (res.status === 200) return "OK";
+      if (res.status === 201) return "Created";
+      if (res.status === 204) return "No Content (success, empty response)";
+      if (res.status === 400) return "Bad Request";
+      if (res.status === 401)
+        return "Unauthorized (will attempt token refresh)";
+      if (res.status === 403) return "Forbidden";
+      if (res.status === 404) return "Not Found";
+      if (res.status === 429) return "Rate Limited";
+      if (res.status >= 500) return "Server Error";
       return `HTTP ${res.status}`;
     })();
 
@@ -615,10 +706,18 @@ export const executeGDriveSnippet = async ({
     }
 
     // Attempt one refresh and retry once
-    log.info(`[${toolName}] 🔁 401 Unauthorized - attempting token refresh`, {}, { url: urlStr, ...eventMeta });
+    log.info(
+      `[${toolName}] 🔁 401 Unauthorized - attempting token refresh`,
+      {},
+      { url: urlStr, ...eventMeta },
+    );
     const newToken = await refreshDriveAccessToken(toolName);
     if (!newToken) {
-      log.warn(`[${toolName}] ⚠️ Token refresh failed`, {}, { url: urlStr, ...eventMeta });
+      log.warn(
+        `[${toolName}] ⚠️ Token refresh failed`,
+        {},
+        { url: urlStr, ...eventMeta },
+      );
       return res;
     }
 
@@ -628,8 +727,11 @@ export const executeGDriveSnippet = async ({
       let retryInit: RequestInit | undefined = init;
 
       // If the original input was a Request, clone and override headers
-      if (typeof Request !== 'undefined' && input instanceof Request) {
-        const hdrs = applyAuthHeader({ headers: (input as Request).headers as any }, newToken).headers as Headers;
+      if (typeof Request !== "undefined" && input instanceof Request) {
+        const hdrs = applyAuthHeader(
+          { headers: (input as Request).headers as any },
+          newToken,
+        ).headers as Headers;
         retryInput = new Request((input as Request).url, {
           method: (input as Request).method,
           headers: hdrs,
@@ -640,40 +742,58 @@ export const executeGDriveSnippet = async ({
         retryInit = applyAuthHeader(retryInit, newToken);
       }
 
-      log.info(`[${toolName}] 🔁 Retrying request with refreshed token`, {}, { url: urlStr, ...eventMeta });
+      log.info(
+        `[${toolName}] 🔁 Retrying request with refreshed token`,
+        {},
+        { url: urlStr, ...eventMeta },
+      );
       const retryRes = await originalFetch(retryInput, retryInit);
       return retryRes;
     } catch (e) {
-      log.error(`[${toolName}] ❌ Retry after refresh failed`, {}, {
-        url: urlStr,
-        errorMessage: e instanceof Error ? e.message : String(e),
-        errorStack: e instanceof Error ? e.stack : undefined,
-        ...eventMeta,
-      }, e);
+      log.error(
+        `[${toolName}] ❌ Retry after refresh failed`,
+        {},
+        {
+          url: urlStr,
+          errorMessage: e instanceof Error ? e.message : String(e),
+          errorStack: e instanceof Error ? e.stack : undefined,
+          ...eventMeta,
+        },
+        e,
+      );
       return res;
     }
   };
 
   let execResult: any;
   try {
-    log.info(`[${toolName}] 🚀 Evaluating code snippet`, {}, {
-      codeSnippet: trimmedSnippet,
-      snippetLength: trimmedSnippet.length,
-      ...eventMeta,
-    });
+    log.info(
+      `[${toolName}] 🚀 Evaluating code snippet`,
+      {},
+      {
+        codeSnippet: trimmedSnippet,
+        snippetLength: trimmedSnippet.length,
+        ...eventMeta,
+      },
+    );
     if (originalFetch) {
       (globalThis as any).fetch = wrappedFetch;
     }
     execResult = eval(trimmedSnippet);
   } catch (e) {
-    log.error(`[${toolName}] ❌ Execution eval error`, {}, {
-      errorMessage: e instanceof Error ? e.message : String(e),
-      errorStack: e instanceof Error ? e.stack : undefined,
-      errorName: e instanceof Error ? e.name : undefined,
-      snippetPreview: trimmedSnippet.slice(0, 200),
-      fullSnippet: trimmedSnippet,
-      ...eventMeta,
-    }, e);
+    log.error(
+      `[${toolName}] ❌ Execution eval error`,
+      {},
+      {
+        errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack : undefined,
+        errorName: e instanceof Error ? e.name : undefined,
+        snippetPreview: trimmedSnippet.slice(0, 200),
+        fullSnippet: trimmedSnippet,
+        ...eventMeta,
+      },
+      e,
+    );
     if (originalFetch) {
       (globalThis as any).fetch = originalFetch;
     }
@@ -681,18 +801,23 @@ export const executeGDriveSnippet = async ({
   }
 
   try {
-    if (execResult && typeof execResult.then === 'function') {
+    if (execResult && typeof execResult.then === "function") {
       log.info(`[${toolName}] ⏳ Awaiting promise from snippet`, {}, eventMeta);
       execResult = await execResult;
     }
   } catch (e) {
-    log.error(`[${toolName}] ❌ Execution error (promise rejection)`, {}, {
-      errorMessage: e instanceof Error ? e.message : String(e),
-      errorStack: e instanceof Error ? e.stack : undefined,
-      errorName: e instanceof Error ? e.name : undefined,
-      snippetPreview: trimmedSnippet.slice(0, 200),
-      ...eventMeta,
-    }, e);
+    log.error(
+      `[${toolName}] ❌ Execution error (promise rejection)`,
+      {},
+      {
+        errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack : undefined,
+        errorName: e instanceof Error ? e.name : undefined,
+        snippetPreview: trimmedSnippet.slice(0, 200),
+        ...eventMeta,
+      },
+      e,
+    );
     return JSON.stringify({ error: String(e), snippet: trimmedSnippet });
   } finally {
     if (originalFetch) {
@@ -705,9 +830,9 @@ export const executeGDriveSnippet = async ({
   try {
     // JSON-serializable results will be handled here
     serialized = JSON.stringify(execResult);
-    if (serialized === undefined as unknown as string) {
+    if (serialized === (undefined as unknown as string)) {
       // JSON.stringify(undefined) returns undefined; normalize to "null"
-      serialized = 'null';
+      serialized = "null";
     }
   } catch {
     // Fallback for non-serializable values
@@ -716,51 +841,66 @@ export const executeGDriveSnippet = async ({
     });
   }
 
-  log.info(`[${toolName}] ✅ executeGDriveSnippet() complete.  Response Lenth: ${serialized.length}`, {}, {
-    serializedLength: serialized.length,
-    response: serialized,
-    ...eventMeta,
-  });
+  log.info(
+    `[${toolName}] ✅ executeGDriveSnippet() complete.  Response Lenth: ${serialized.length}`,
+    {},
+    {
+      serializedLength: serialized.length,
+      response: serialized,
+      ...eventMeta,
+    },
+  );
   return serialized;
 };
 
-const refreshDriveAccessToken = async (toolName: string): Promise<string | null> => {
+const refreshDriveAccessToken = async (
+  toolName: string,
+): Promise<string | null> => {
   try {
     const refreshToken = await (getGDriveRefreshToken as any)?.();
     const clientId = await (getGDriveClientId as any)?.();
 
     if (!refreshToken || !clientId) {
-      log.warn(`[${toolName}] ⚠️ Cannot refresh token - missing credentials`, {}, {
-        hasRefreshToken: !!refreshToken,
-        hasClientId: !!clientId,
-      });
+      log.warn(
+        `[${toolName}] ⚠️ Cannot refresh token - missing credentials`,
+        {},
+        {
+          hasRefreshToken: !!refreshToken,
+          hasClientId: !!clientId,
+        },
+      );
       return null;
     }
 
     log.info(`[${toolName}] 🔄 Refreshing Google Drive access token`, {});
 
     const body = new URLSearchParams({
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       refresh_token: refreshToken,
       client_id: clientId,
     }).toString();
 
     // Use the original global fetch (not wrapped) for token refresh
-    const fetchFn: typeof fetch = (globalThis as any).__originalFetch__ || fetch;
+    const fetchFn: typeof fetch =
+      (globalThis as any).__originalFetch__ || fetch;
 
-    const resp = await fetchFn('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    const resp = await fetchFn("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
     });
 
     if (!resp.ok) {
-      const txt = await resp.text().catch(() => '');
-      log.error(`[${toolName}] ❌ Token refresh failed`, {}, {
-        status: resp.status,
-        statusText: resp.statusText,
-        errorBody: txt,
-      });
+      const txt = await resp.text().catch(() => "");
+      log.error(
+        `[${toolName}] ❌ Token refresh failed`,
+        {},
+        {
+          status: resp.status,
+          statusText: resp.statusText,
+          errorBody: txt,
+        },
+      );
       return null;
     }
 
@@ -768,37 +908,55 @@ const refreshDriveAccessToken = async (toolName: string): Promise<string | null>
     const newAccessToken: string | undefined = json?.access_token;
 
     if (!newAccessToken) {
-      log.error(`[${toolName}] ❌ Token refresh response missing access_token`, {}, { response: json });
+      log.error(
+        `[${toolName}] ❌ Token refresh response missing access_token`,
+        {},
+        { response: json },
+      );
       return null;
     }
 
     // Persist if setter exists
     try {
-      if (typeof (setGDriveAccessToken as any) === 'function') {
+      if (typeof (setGDriveAccessToken as any) === "function") {
         await (setGDriveAccessToken as any)(newAccessToken, json?.expires_in);
       }
     } catch (e) {
-      log.warn(`[${toolName}] ⚠️ Failed to persist refreshed token, using in-memory only`, {}, {
-        errorMessage: e instanceof Error ? e.message : String(e),
-        errorStack: e instanceof Error ? e.stack : undefined,
-      }, e);
+      log.warn(
+        `[${toolName}] ⚠️ Failed to persist refreshed token, using in-memory only`,
+        {},
+        {
+          errorMessage: e instanceof Error ? e.message : String(e),
+          errorStack: e instanceof Error ? e.stack : undefined,
+        },
+        e,
+      );
     }
 
     (globalThis as any).accessToken = newAccessToken;
 
     const newTokenLen = newAccessToken.length;
-    log.info(`[${toolName}] ✅ Token refreshed successfully`, {}, {
-      tokenLength: newTokenLen,
-      expiresIn: json?.expires_in,
-    });
+    log.info(
+      `[${toolName}] ✅ Token refreshed successfully`,
+      {},
+      {
+        tokenLength: newTokenLen,
+        expiresIn: json?.expires_in,
+      },
+    );
 
     return newAccessToken;
   } catch (e) {
-    log.error(`[${toolName}] ❌ Unexpected error refreshing token`, {}, {
-      errorMessage: e instanceof Error ? e.message : String(e),
-      errorStack: e instanceof Error ? e.stack : undefined,
-      errorName: e instanceof Error ? e.name : undefined,
-    }, e);
+    log.error(
+      `[${toolName}] ❌ Unexpected error refreshing token`,
+      {},
+      {
+        errorMessage: e instanceof Error ? e.message : String(e),
+        errorStack: e instanceof Error ? e.stack : undefined,
+        errorName: e instanceof Error ? e.name : undefined,
+      },
+      e,
+    );
     return null;
   }
 };
@@ -809,9 +967,14 @@ const refreshDriveAccessToken = async (toolName: string): Promise<string | null>
  * Creates a new ToolGDriveConnector instance with the provided native module.
  * Returns null if the module is not available.
  */
-export const createGDriveConnectorTool = (nativeModule: GDriveConnectorNativeModule | null): ToolGDriveConnector | null => {
+export const createGDriveConnectorTool = (
+  nativeModule: GDriveConnectorNativeModule | null,
+): ToolGDriveConnector | null => {
   if (!nativeModule) {
-    log.warn('[ToolGDriveConnector] Native module not available, tool will not be initialized', {});
+    log.warn(
+      "[ToolGDriveConnector] Native module not available, tool will not be initialized",
+      {},
+    );
     return null;
   }
   return new ToolGDriveConnector(nativeModule);

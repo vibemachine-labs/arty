@@ -16,9 +16,10 @@ This document provides a comprehensive overview of all audio-related states, eve
 8. [RTP-Based Speaking Detection](#rtp-based-speaking-detection)
 9. [Local Audio Playback (AudioMixPlayer)](#local-audio-playback-audiomixplayer)
 10. [Tool Call Flow](#tool-call-flow)
-11. [Complete State Diagram](#complete-state-diagram)
-12. [Event Timeline Examples](#event-timeline-examples)
-13. [Known Issues & Edge Cases](#known-issues--edge-cases)
+11. [Shadow State Machine](#shadow-state-machine)
+12. [Complete State Diagram](#complete-state-diagram)
+13. [Event Timeline Examples](#event-timeline-examples)
+14. [Known Issues & Edge Cases](#known-issues--edge-cases)
 
 ---
 
@@ -41,6 +42,11 @@ The audio system has multiple independent but interacting state machines:
 │  │                    Response State Machine                         │      │
 │  │              (responseInProgress, queuedResponseCreate)           │      │
 │  └────────────────────────────────┬─────────────────────────────────┘      │
+│                                   │                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐      │
+│  │                 🔮 Shadow State Machine (Observer)                │      │
+│  │           ConversationStateMachine - Validates All States         │      │
+│  └──────────────────────────────────────────────────────────────────┘      │
 │                                   │                                         │
 │           ┌───────────────────────┼───────────────────────┐                │
 │           ▼                       ▼                       ▼                │
@@ -798,6 +804,102 @@ Time     Event                                           State Changes
 2.100s   response.created (for tool result)
 ...      (tool result spoken)
 ```
+
+---
+
+## Shadow State Machine
+
+### Purpose
+
+The **Shadow State Machine** (`ConversationStateMachine.swift`) is an observational Actor that mirrors all conversation state transitions without controlling any behavior. It serves as a validation and debugging tool.
+
+### Key Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| 🔍 **Validation** | Detects inconsistencies between shadow state and actual behavior |
+| ✅ **Zero Risk** | Pure observation - no behavior changes |
+| 📊 **Debugging** | Comprehensive logging of conversation flow |
+| 🎯 **Future Migration** | Validates unified state model before actual migration |
+
+### State Enums
+
+```swift
+// Response lifecycle
+enum ResponsePhase {
+    case idle
+    case inProgress(responseId: String?)
+    case streaming(responseId: String?)  // Audio actively streaming
+}
+
+// Tool call lifecycle
+enum ToolCallPhase {
+    case idle
+    case executing(callId: String, toolName: String)
+    case awaitingAudioStart(callId: String, toolName: String)  // Blocked
+    case playingAudio(callId: String, toolName: String)
+}
+
+// User speech
+enum UserSpeechPhase {
+    case idle
+    case speaking(startedAt: Date)
+}
+```
+
+### Shadow Methods
+
+All methods are prefixed with `shadow_` to indicate they are observational:
+
+| Method | Observes |
+|--------|----------|
+| `shadow_willSendResponseCreate(trigger:)` | Response.create about to be sent |
+| `shadow_didReceiveResponseCreated(responseId:)` | `response.created` event |
+| `shadow_didReceiveAudioDelta(...)` | `response.audio.delta` event |
+| `shadow_didReceiveAudioDone(...)` | `response.audio.done` event |
+| `shadow_didReceiveResponseDone(...)` | `response.done` event |
+| `shadow_didReceiveToolCall(...)` | `function_call_arguments.done` event |
+| `shadow_willSendToolResult(callId:...)` | Tool result about to be sent |
+| `shadow_didReceiveUserSpeechStarted()` | `input_audio_buffer.speech_started` |
+| `shadow_didReceiveUserSpeechStopped()` | `input_audio_buffer.speech_stopped` |
+| `shadow_reset(reason:)` | Connection closed/reset |
+
+### Log Format
+
+All shadow logs use the 🔮 emoji prefix for easy filtering:
+
+```
+🔮 [ShadowState] response.created → ResponsePhase: idle → inProgress(resp_abc123)
+🔮 [ShadowState] audio.delta → ResponsePhase: inProgress → streaming(resp_abc123)
+🔮 [ShadowState] Tool call received - audio BLOCKED (assistant streaming)
+🔮 [ShadowState] ⚠️ INCONSISTENCY: Streaming state mismatch
+```
+
+### Consistency Checks
+
+The shadow state machine performs automatic consistency checks:
+
+```swift
+// Example: Detects when shadow state disagrees with actual state
+if shadowStreaming != actualStreaming {
+    log("⚠️ INCONSISTENCY: Streaming state mismatch", level: .warn)
+}
+```
+
+### Integration Points
+
+The shadow state machine is wired into:
+
+1. **WebRTCEventHandler** - Observes all OpenAI Realtime API events
+2. **OpenAIWebRTCClient** - Observes tool result sending and connection lifecycle
+
+### Future: Migration to Active State Machine
+
+Once validated, the shadow state machine can be promoted to the active state machine by:
+
+1. Removing `shadow_` prefixes
+2. Having actual handlers delegate to the state machine
+3. Removing the fragmented DispatchQueue-based state tracking
 
 ---
 

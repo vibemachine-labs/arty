@@ -78,7 +78,7 @@ final class NativeLogger {
         case .debug: return .debug
         case .info: return .info
         case .warn: return .warn
-        case .error: return .error
+        case .error, .fatal: return .error
         }
     }
 }

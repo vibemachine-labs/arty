@@ -62,7 +62,7 @@ async function validateRepoName(params: any): Promise<any> {
     );
     // Pass through the detailed error message from lookupGithubRepo
     throw new Error(
-      `Could not find unique repository for "${originalRepoName}". ${errorMessage}`,
+      `Could not find unique repository for "${originalRepoName}". ${errorMessage}. Try spelling it out loud in case it differed from my spelling: ${originalRepoName}`,
     );
   }
 }
@@ -146,9 +146,38 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
             groupName,
             toolName,
             resultLength: result.result.length,
+            fullResult: result.result,
             sessionContextKeys: Object.keys(result.updatedToolSessionContext),
           },
         );
+
+        // Check if DeepWiki returned an error fetching the wiki
+        if (
+          typeof result.result === "string" &&
+          result.result.includes("Error fetching wiki")
+        ) {
+          const repoName =
+            params.repoName || validatedParams.repoName || "unknown";
+          const truncatedResponse = result.result.substring(0, 1000);
+          const spelledOutName = repoName.split("").join(" ");
+          const errorMessage = `DeepWiki could not fetch documentation for this repository. Response: ${truncatedResponse}... I searched for "${repoName}". Let me spell that out letter by letter so you can double check the spelling: ${spelledOutName}`;
+
+          log.warn(
+            "[DeepWikiWrapper] Error fetching wiki detected in response",
+            {},
+            {
+              groupName,
+              toolName,
+              repoName,
+              truncatedResponse,
+            },
+          );
+
+          return {
+            result: errorMessage,
+            updatedToolSessionContext: {},
+          };
+        }
 
         // Check if result exceeds max length and needs summarization
         if (

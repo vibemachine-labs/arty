@@ -19,10 +19,22 @@ public protocol GDriveConnectorToolDelegate: AnyObject {
         codeSnippet: String, completion: @escaping (String?, Error?) -> Void)
 }
 
-// MARK: - GDrive Connector Tool Manager
+// MARK: - GDrive Connector Tool Manager (Legacy Codegen)
 
-/// Manages GDrive connector tool calls between OpenAI WebRTC and JavaScript
-/// Uses the Google Drive API
+/// **Legacy Codegen Tool** - Manages GDrive connector tool calls between OpenAI WebRTC and JavaScript.
+///
+/// This is the **legacy codegen-based** GDrive tool where the AI generates self-contained JavaScript
+/// code snippets that are executed by the JavaScript runtime to interact with the Google Drive API.
+///
+/// The AI provides a `self_contained_javascript_gdrive_code_snippet` parameter containing executable
+/// JavaScript code, which is then forwarded to the JS side for execution.
+///
+/// - Note: This is distinct from the **Gen2 toolkit** approach (see `ToolkitHelper`) which uses
+///   structured tool definitions with a mux/demux pattern. The Gen2 toolkit is the preferred approach
+///   for new tools.
+///
+/// - SeeAlso: `ToolkitHelper` for the Gen2 toolkit-based tools
+/// - SeeAlso: `ToolGPT5GDriveFixer` for the GPT-5 based fixer tool that repairs broken codegen snippets
 public class ToolGDriveConnector: BaseTool {
 
     // MARK: - Properties

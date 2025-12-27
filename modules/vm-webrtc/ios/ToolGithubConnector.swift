@@ -19,10 +19,22 @@ public protocol GithubConnectorToolDelegate: AnyObject {
         codeSnippet: String, completion: @escaping (String?, Error?) -> Void)
 }
 
-// MARK: - Github Connector Tool Manager
+// MARK: - Github Connector Tool Manager (Legacy Codegen)
 
-/// Manages github connector tool calls between OpenAI WebRTC and JavaScript
-/// Uses the Github API
+/// **Legacy Codegen Tool** - Manages GitHub connector tool calls between OpenAI WebRTC and JavaScript.
+///
+/// This is the **legacy codegen-based** GitHub tool where the AI generates self-contained JavaScript
+/// code snippets that are executed by the JavaScript runtime using Octokit to interact with the GitHub API.
+///
+/// The AI provides a `self_contained_javascript_octokit_code_snippet` parameter containing executable
+/// JavaScript code, which is then forwarded to the JS side for execution.
+///
+/// - Note: This is distinct from the **Gen2 toolkit** approach (see `ToolkitHelper`) which uses
+///   structured tool definitions with a mux/demux pattern. The Gen2 toolkit is the preferred approach
+///   for new tools.
+///
+/// - SeeAlso: `ToolkitHelper` for the Gen2 toolkit-based tools
+/// - SeeAlso: `ToolGDriveConnector` for the similar legacy codegen tool for Google Drive
 public class ToolGithubConnector: BaseTool {
 
     // MARK: - Properties

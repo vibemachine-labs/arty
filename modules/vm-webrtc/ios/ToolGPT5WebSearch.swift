@@ -1,6 +1,27 @@
 import ExpoModulesCore
 import Foundation
 
+// MARK: - GPT-5 Web Search Tool (Standalone Structured Tool)
+
+/// **Standalone Structured Tool** - Uses GPT-5 to perform web searches and return results.
+///
+/// This is a **standalone tool with structured parameters** - it is neither a legacy codegen tool
+/// nor a Gen2 toolkit tool. It accepts a simple `query` parameter and delegates the web search
+/// to the JavaScript side, which performs the actual search and returns formatted results.
+///
+/// Unlike the legacy codegen tools (`ToolGDriveConnector`, `ToolGithubConnector`) which require
+/// the AI to generate executable JavaScript code, this tool uses a simple structured interface
+/// where the AI only provides the search query.
+///
+/// Parameters:
+/// - `query`: The search query string
+///
+/// - Note: This tool pattern (structured parameters delegated to JS) is simpler than legacy codegen
+///   but predates the Gen2 toolkit. For new tools, consider using the **Gen2 toolkit** approach
+///   (see `ToolkitHelper`) which provides a unified mux/demux pattern for all toolkit-based tools.
+///
+/// - SeeAlso: `ToolkitHelper` for the Gen2 toolkit-based tools
+/// - SeeAlso: `ToolGDriveConnector` for an example of legacy codegen tools
 public class ToolGPT5WebSearch: BaseTool {
     public let toolName = "GPT5-web-search"
 

@@ -1,6 +1,25 @@
 import ExpoModulesCore
 import Foundation
 
+// MARK: - GPT-5 GDrive Fixer Tool (Legacy Codegen Support)
+
+/// **Legacy Codegen Support Tool** - Uses GPT-5 to repair broken JavaScript code snippets for GDrive operations.
+///
+/// This tool is a **support tool for the legacy codegen approach**. When the AI-generated JavaScript code
+/// from `ToolGDriveConnector` fails to execute (e.g., syntax errors, API misuse, runtime exceptions),
+/// this tool can be invoked to analyze the broken code and error message, then generate a corrected version.
+///
+/// Parameters:
+/// - `task_description`: What the original code was trying to accomplish
+/// - `broken_code`: The JavaScript code snippet that failed
+/// - `error_message`: The error message from the failed execution
+///
+/// - Note: This tool exists to improve the reliability of the legacy codegen approach. The preferred
+///   approach for new tools is the **Gen2 toolkit** (see `ToolkitHelper`) which uses structured tool
+///   definitions and avoids code generation altogether.
+///
+/// - SeeAlso: `ToolGDriveConnector` for the legacy codegen tool this supports
+/// - SeeAlso: `ToolkitHelper` for the Gen2 toolkit-based tools
 public class ToolGPT5GDriveFixer: BaseTool {
     public let toolName = "GPT5-gdrive-fixer"
 

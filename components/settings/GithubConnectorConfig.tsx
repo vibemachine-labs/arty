@@ -73,7 +73,10 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
 
   const handleSave = useCallback(async () => {
     if (!token.trim()) {
-      Alert.alert("Invalid Token", "Please enter a valid GitHub personal access token.");
+      Alert.alert(
+        "Invalid Token",
+        "Please enter a valid GitHub personal access token.",
+      );
       return;
     }
 
@@ -81,28 +84,21 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
     try {
       await saveGithubToken(token.trim());
       log.info("✅ GitHub token saved successfully");
-      
-      Alert.alert(
-        "Success",
-        "Your GitHub token has been saved securely.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setToken("");
-              setHasExistingToken(false);
-              onSave?.();
-              onClose();
-            },
+
+      Alert.alert("Success", "Your GitHub token has been saved securely.", [
+        {
+          text: "OK",
+          onPress: () => {
+            setToken("");
+            setHasExistingToken(false);
+            onSave?.();
+            onClose();
           },
-        ]
-      );
+        },
+      ]);
     } catch (error) {
       log.error("❌ Failed to save GitHub token:", {}, error);
-      Alert.alert(
-        "Error",
-        "Failed to save GitHub token. Please try again."
-      );
+      Alert.alert("Error", "Failed to save GitHub token. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -131,26 +127,20 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
               Alert.alert("Success", "Your GitHub token has been deleted.");
             } catch (error) {
               log.error("❌ Failed to delete GitHub token:", {}, error);
-              Alert.alert("Error", "Failed to delete GitHub token. Please try again.");
+              Alert.alert(
+                "Error",
+                "Failed to delete GitHub token. Please try again.",
+              );
             } finally {
               setIsLoading(false);
             }
           },
         },
-      ]
+      ],
     );
   }, []);
 
   const handleToggleEnabled = useCallback(async (value: boolean) => {
-    if (value) {
-      // Show alert when trying to enable
-      Alert.alert(
-        "GitHub Connector Unavailable",
-        "The GitHub connector is temporarily disabled and not currently working. We're working on bringing it back in a future update.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
     setIsEnabled(value);
     try {
       await AsyncStorage.setItem("github_connector_enabled", value.toString());
@@ -183,7 +173,12 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
                   pressed && styles.headerActionPressed,
                 ]}
               >
-                <Text style={[styles.headerActionText, isLoading && styles.disabledText]}>
+                <Text
+                  style={[
+                    styles.headerActionText,
+                    isLoading && styles.disabledText,
+                  ]}
+                >
                   Cancel
                 </Text>
               </Pressable>
@@ -193,7 +188,10 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
                 disabled={isLoading || !token.trim()}
                 style={({ pressed }) => [
                   styles.headerAction,
-                  pressed && !isLoading && token.trim() && styles.headerActionPressed,
+                  pressed &&
+                    !isLoading &&
+                    token.trim() &&
+                    styles.headerActionPressed,
                 ]}
               >
                 <Text
@@ -226,66 +224,76 @@ export const GithubConnectorConfig: React.FC<GithubConnectorConfigProps> = ({
                     <Text style={styles.icon}>🐙</Text>
                   </View>
 
-                  <Text style={styles.title}>GitHub Personal Access Token</Text>
+                  <Text style={styles.title}>
+                    GitHub Personal Access Token (Optional)
+                  </Text>
                   <Text style={styles.description}>
-                    Enter your GitHub personal access token to enable repository access and code analysis.
+                    Some operations work without a token. To file issues, star
+                    repos, or access private repositories, you'll need a
+                    personal access token.
                   </Text>
 
-              <View style={styles.inputSection}>
-                <Text style={styles.label}>Access Token</Text>
-                <TextInput
-                  style={styles.input}
-                  value={token}
-                  onChangeText={setToken}
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  placeholderTextColor="#C7C7CC"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="off"
-                  secureTextEntry={hasExistingToken && token.length > 0}
-                  editable={!isLoading}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSave}
-                />
-                <Text style={styles.hint}>
-                  Generate a token at github.com/settings/tokens
-                </Text>
-              </View>
+                  <View style={styles.inputSection}>
+                    <Text style={styles.label}>Access Token</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={token}
+                      onChangeText={setToken}
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      placeholderTextColor="#C7C7CC"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="off"
+                      secureTextEntry={hasExistingToken && token.length > 0}
+                      editable={!isLoading}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSave}
+                    />
+                    <Text style={styles.hint}>
+                      Generate a token at github.com/settings/tokens
+                    </Text>
+                  </View>
 
-              {hasExistingToken && (
-                <View style={styles.statusBanner}>
-                  <Text style={styles.statusIcon}>✓</Text>
-                  <Text style={styles.statusText}>Token configured</Text>
-                </View>
-              )}
+                  {hasExistingToken && (
+                    <View style={styles.statusBanner}>
+                      <Text style={styles.statusIcon}>✓</Text>
+                      <Text style={styles.statusText}>Token configured</Text>
+                    </View>
+                  )}
 
-              {hasExistingToken && (
-                <Pressable
-                  onPress={handleDelete}
-                  disabled={isLoading}
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    pressed && !isLoading && styles.deleteButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.deleteButtonText}>Delete Token</Text>
-                </Pressable>
-              )}
+                  {hasExistingToken && (
+                    <Pressable
+                      onPress={handleDelete}
+                      disabled={isLoading}
+                      style={({ pressed }) => [
+                        styles.deleteButton,
+                        pressed && !isLoading && styles.deleteButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.deleteButtonText}>Delete Token</Text>
+                    </Pressable>
+                  )}
 
-              <View style={styles.infoBox}>
-                <Text style={styles.infoTitle}>What permissions do I need?</Text>
-                <Text style={styles.infoText}>
-                  • <Text style={styles.infoBold}>repo</Text> - Access repositories{"\n"}
-                  • <Text style={styles.infoBold}>read:org</Text> - Read organization data{"\n"}
-                  • <Text style={styles.infoBold}>read:user</Text> - Read user profile
-                </Text>
-              </View>
+                  <View style={styles.infoBox}>
+                    <Text style={styles.infoTitle}>
+                      What permissions do I need?
+                    </Text>
+                    <Text style={styles.infoText}>
+                      • <Text style={styles.infoBold}>repo</Text> - Access
+                      repositories{"\n"}•{" "}
+                      <Text style={styles.infoBold}>read:org</Text> - Read
+                      organization data{"\n"}•{" "}
+                      <Text style={styles.infoBold}>read:user</Text> - Read user
+                      profile
+                    </Text>
+                  </View>
 
-              <View style={styles.footerNote}>
-                <Text style={styles.footerNoteText}>
-                  Your token is stored securely and never shared. SSO support coming soon.
-                </Text>
-              </View>
+                  <View style={styles.footerNote}>
+                    <Text style={styles.footerNoteText}>
+                      Your token is stored securely and never shared. SSO
+                      support coming soon.
+                    </Text>
+                  </View>
                 </>
               )}
             </View>

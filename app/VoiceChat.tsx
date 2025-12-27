@@ -70,7 +70,6 @@ export function VoiceChat({
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [voiceSpeed, setVoiceSpeed] = useState(DEFAULT_VOICE_SPEED);
   const [isMuted, setIsMuted] = useState(false);
-  const [isRecordingEnabled, setIsRecordingEnabled] = useState(false);
   const tokenUsageTracker = useRef(new TokenUsageTracker("gpt-realtime"));
   const [sessionCostUsd, setSessionCostUsd] = useState(0);
   const [frequencyBins, setFrequencyBins] = useState<number[]>([]);
@@ -409,7 +408,6 @@ export function VoiceChat({
         instructions: finalPrompt,
         vadMode: selectedVadMode,
         audioSpeed: voiceSpeed,
-        enableRecording: isRecordingEnabled,
         maxConversationTurns,
         retentionRatio,
         transcriptionEnabled,
@@ -519,7 +517,6 @@ export function VoiceChat({
     selectedVoice,
     selectedVadMode,
     voiceSpeed,
-    isRecordingEnabled,
     maxConversationTurns,
     retentionRatio,
     selectedLanguage,
@@ -590,11 +587,6 @@ export function VoiceChat({
     setIsMuted(nextValue);
     muteUnmuteOutgoingAudio(nextValue);
     log.info("Microphone mute status updated", {}, { muted: nextValue });
-  }, []);
-
-  const handleToggleRecording = useCallback((nextValue: boolean) => {
-    setIsRecordingEnabled(nextValue);
-    log.info("📼 Recording preference updated", {}, { enabled: nextValue });
   }, []);
 
   const handleVoiceSpeedChange = useCallback((value: number) => {
@@ -764,24 +756,6 @@ export function VoiceChat({
                 accessibilityLabel="Toggle microphone mute"
                 value={isMuted}
                 onValueChange={handleToggleMute}
-                ios_backgroundColor="#D1D1D6"
-                trackColor={{ false: "#D1D1D6", true: "#34C759" }}
-              />
-            </View>
-          </View>
-          <View style={styles.advancedRow}>
-            <View style={styles.advancedRowCopy}>
-              <Text style={styles.advancedRowLabel}>Record Voice Session</Text>
-              <Text style={styles.advancedRowSubtitle}>
-                Recordings available in settings / developer
-              </Text>
-            </View>
-            <View style={styles.advancedRowControl}>
-              <Text style={styles.advancedRowIcon}>📼</Text>
-              <Switch
-                accessibilityLabel="Toggle voice session recording"
-                value={isRecordingEnabled}
-                onValueChange={handleToggleRecording}
                 ios_backgroundColor="#D1D1D6"
                 trackColor={{ false: "#D1D1D6", true: "#34C759" }}
               />

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "@vibemachine/transcriptionPreference";
-export const DEFAULT_TRANSCRIPTION_ENABLED = false;
+export const DEFAULT_TRANSCRIPTION_ENABLED = true;
 
 export const loadTranscriptionPreference = async (): Promise<boolean> => {
   try {
@@ -15,7 +15,9 @@ export const loadTranscriptionPreference = async (): Promise<boolean> => {
   }
 };
 
-export const saveTranscriptionPreference = async (enabled: boolean): Promise<void> => {
+export const saveTranscriptionPreference = async (
+  enabled: boolean,
+): Promise<void> => {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, enabled ? "true" : "false");
   } catch {

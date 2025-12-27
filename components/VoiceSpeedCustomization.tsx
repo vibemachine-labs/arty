@@ -23,9 +23,16 @@ export function VoiceSpeedCustomization({
         ? UIManager.getViewManagerConfig("RNCSlider")
         : undefined;
     const hasLegacyConfig =
-      typeof (UIManager as unknown as { hasViewManagerConfig?: (name: string) => boolean }).hasViewManagerConfig ===
-      "function"
-        ? (UIManager as unknown as { hasViewManagerConfig: (name: string) => boolean }).hasViewManagerConfig("RNCSlider")
+      typeof (
+        UIManager as unknown as {
+          hasViewManagerConfig?: (name: string) => boolean;
+        }
+      ).hasViewManagerConfig === "function"
+        ? (
+            UIManager as unknown as {
+              hasViewManagerConfig: (name: string) => boolean;
+            }
+          ).hasViewManagerConfig("RNCSlider")
         : false;
 
     return Boolean(hasConfig || hasLegacyConfig);
@@ -38,7 +45,8 @@ export function VoiceSpeedCustomization({
         <Text style={styles.advancedValueText}>{voiceSpeed.toFixed(2)}x</Text>
       </View>
       <Text style={styles.advancedRowDescription}>
-        Fine-tune the assistant tempo. 1.0x keeps speech natural while higher values add focus.
+        Fine-tune the assistant tempo. 1.0x keeps speech natural while higher
+        values add focus.
       </Text>
       {isVoiceSpeedSliderAvailable ? (
         <Slider
@@ -57,9 +65,12 @@ export function VoiceSpeedCustomization({
         />
       ) : (
         <View style={styles.advancedSliderUnavailable}>
-          <Text style={styles.advancedUnavailableTitle}>Slider unavailable</Text>
+          <Text style={styles.advancedUnavailableTitle}>
+            Slider unavailable
+          </Text>
           <Text style={styles.advancedUnavailableBody}>
-            Install @react-native-community/slider and rebuild the iOS client to fine-tune speed here.
+            Install @react-native-community/slider and rebuild the iOS client to
+            fine-tune speed here.
           </Text>
         </View>
       )}

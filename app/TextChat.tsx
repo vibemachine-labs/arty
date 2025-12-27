@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,14 +9,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { log } from '../lib/logger';
-import { composeMainPrompt } from '../lib/mainPrompt';
-import { getApiKey } from '../lib/secure-storage';
-import toolManager from '../modules/vm-webrtc/src/ToolManager';
-import { getToolkitDefinitions } from '../modules/vm-webrtc/src/ToolkitManager';
-import type { ToolDefinition } from '../modules/vm-webrtc/src/VmWebrtc.types';
+  View,
+} from "react-native";
+import { log } from "../lib/logger";
+import { composeMainPrompt } from "../lib/mainPrompt";
+import { getApiKey } from "../lib/secure-storage";
+import toolManager from "../modules/vm-webrtc/src/ToolManager";
+import { getToolkitDefinitions } from "../modules/vm-webrtc/src/ToolkitManager";
+import type { ToolDefinition } from "../modules/vm-webrtc/src/VmWebrtc.types";
 
 interface ToolCall {
   name: string;
@@ -37,7 +37,8 @@ interface ResponsesCreateResponse {
   id: string;
   model: string;
   created: number;
-  output: (| {
+  output: (
+    | {
         id: string;
         type: "reasoning";
         summary: any[];
@@ -56,7 +57,8 @@ interface ResponsesCreateResponse {
           text?: string;
           [k: string]: any;
         }[];
-      })[];
+      }
+  )[];
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -97,21 +99,25 @@ function genRequestId(): string {
 }
 
 function logInstrumentation(instr: Instrumentation) {
-  log.info('[OpenAI Responses] instrumentation:', {}, {
-    requestId: instr.requestId,
-    url: instr.url,
-    status: instr.status,
-    durationMs: instr.durationMs,
-    model: instr.model,
-    responseId: instr.responseId,
-    error: instr.errorMessage,
-    usage: instr.usage,
-    requestPayload: JSON.stringify(instr.requestPayload).slice(0, 500),
-    responsePayloadSnippet:
-      instr.responsePayload && typeof instr.responsePayload === "object"
-        ? JSON.stringify(instr.responsePayload).slice(0, 500)
-        : instr.responsePayload,
-  });
+  log.info(
+    "[OpenAI Responses] instrumentation:",
+    {},
+    {
+      requestId: instr.requestId,
+      url: instr.url,
+      status: instr.status,
+      durationMs: instr.durationMs,
+      model: instr.model,
+      responseId: instr.responseId,
+      error: instr.errorMessage,
+      usage: instr.usage,
+      requestPayload: JSON.stringify(instr.requestPayload).slice(0, 500),
+      responsePayloadSnippet:
+        instr.responsePayload && typeof instr.responsePayload === "object"
+          ? JSON.stringify(instr.responsePayload).slice(0, 500)
+          : instr.responsePayload,
+    },
+  );
 }
 
 const summarizeDescription = (value: string): string => {
@@ -124,38 +130,43 @@ const summarizeDescription = (value: string): string => {
   return `${head}…${tail}`;
 };
 
-const summarizeToolCallArguments = (args: Record<string, unknown> | null | undefined) => {
+const summarizeToolCallArguments = (
+  args: Record<string, unknown> | null | undefined,
+) => {
   const entries = Object.entries(args ?? {});
-  const previews = entries.reduce<Record<string, unknown>>((acc, [key, value]) => {
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
+  const previews = entries.reduce<Record<string, unknown>>(
+    (acc, [key, value]) => {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        acc[key] = {
+          type: "string",
+          length: trimmed.length,
+          preview: summarizeDescription(trimmed),
+        };
+        return acc;
+      }
+      if (Array.isArray(value)) {
+        acc[key] = {
+          type: "array",
+          length: value.length,
+        };
+        return acc;
+      }
+      if (value && typeof value === "object") {
+        acc[key] = {
+          type: "object",
+          keys: Object.keys(value).slice(0, 5),
+        };
+        return acc;
+      }
       acc[key] = {
-        type: 'string',
-        length: trimmed.length,
-        preview: summarizeDescription(trimmed),
+        type: value === null ? "null" : typeof value,
+        value,
       };
       return acc;
-    }
-    if (Array.isArray(value)) {
-      acc[key] = {
-        type: 'array',
-        length: value.length,
-      };
-      return acc;
-    }
-    if (value && typeof value === 'object') {
-      acc[key] = {
-        type: 'object',
-        keys: Object.keys(value).slice(0, 5),
-      };
-      return acc;
-    }
-    acc[key] = {
-      type: value === null ? 'null' : typeof value,
-      value,
-    };
-    return acc;
-  }, {});
+    },
+    {},
+  );
 
   return {
     argCount: entries.length,
@@ -170,15 +181,15 @@ type NormalizedToolCall = { id: string; name: string; argsJson: string };
 function extractOutputText(resp: ResponsesCreateResponse): string {
   // Prefer output_text if present (some Responses API variants return this)
   const outputText = (resp as any).output_text;
-  if (typeof outputText === 'string' && outputText.length) return outputText;
+  if (typeof outputText === "string" && outputText.length) return outputText;
 
   // Fallback to flattening "message" content with text
   let combinedText = "";
   for (const outItem of resp.output ?? []) {
-    if (outItem.type === 'message') {
+    if (outItem.type === "message") {
       const segments = Array.isArray(outItem?.content) ? outItem.content : [];
       for (const c of segments) {
-        if (typeof (c as any)?.text === 'string') {
+        if (typeof (c as any)?.text === "string") {
           combinedText += (c as any).text;
         }
       }
@@ -187,29 +198,37 @@ function extractOutputText(resp: ResponsesCreateResponse): string {
   return combinedText;
 }
 
-function extractFirstToolCall(resp: ResponsesCreateResponse): NormalizedToolCall | null {
+function extractFirstToolCall(
+  resp: ResponsesCreateResponse,
+): NormalizedToolCall | null {
   // 1) Newer style: function_call item at top level
   for (const outItem of resp.output ?? []) {
-    if ((outItem as any).type === 'function_call') {
+    if ((outItem as any).type === "function_call") {
       const fc = outItem as any;
       return {
-        id: fc.call_id ?? fc.id ?? 'tool_call_0',
+        id: fc.call_id ?? fc.id ?? "tool_call_0",
         name: fc.name,
-        argsJson: typeof fc.arguments === 'string' ? fc.arguments : JSON.stringify(fc.arguments ?? {}),
+        argsJson:
+          typeof fc.arguments === "string"
+            ? fc.arguments
+            : JSON.stringify(fc.arguments ?? {}),
       };
     }
   }
 
   // 2) Older style: tool_call inside assistant message content
   for (const outItem of resp.output ?? []) {
-    if ((outItem as any).type === 'message') {
+    if ((outItem as any).type === "message") {
       const content = (outItem as any).content ?? [];
-      const toolCall = content.find?.((c: any) => c?.type === 'tool_call');
+      const toolCall = content.find?.((c: any) => c?.type === "tool_call");
       if (toolCall) {
         return {
-          id: toolCall.id ?? 'tool_call_0',
+          id: toolCall.id ?? "tool_call_0",
           name: toolCall.name,
-          argsJson: typeof toolCall.args === 'string' ? toolCall.args : JSON.stringify(toolCall.args ?? {}),
+          argsJson:
+            typeof toolCall.args === "string"
+              ? toolCall.args
+              : JSON.stringify(toolCall.args ?? {}),
         };
       }
     }
@@ -218,7 +237,11 @@ function extractFirstToolCall(resp: ResponsesCreateResponse): NormalizedToolCall
   return null;
 }
 
-async function callOpenAIResponses(apiKey: string, payload: any, label: string): Promise<ResponsesCreateResponse> {
+async function callOpenAIResponses(
+  apiKey: string,
+  payload: any,
+  label: string,
+): Promise<ResponsesCreateResponse> {
   const instr: Instrumentation = {
     requestId: genRequestId(),
     url: BASE_URL,
@@ -232,7 +255,7 @@ async function callOpenAIResponses(apiKey: string, payload: any, label: string):
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
     });
@@ -241,7 +264,9 @@ async function callOpenAIResponses(apiKey: string, payload: any, label: string):
     instr.durationMs = instr.endTime - instr.startTime;
 
     const headerMap: Record<string, string> = {};
-    resp.headers.forEach((v, k) => { headerMap[k] = v; });
+    resp.headers.forEach((v, k) => {
+      headerMap[k] = v;
+    });
     instr.responseHeaders = headerMap;
 
     const text = await resp.text();
@@ -289,7 +314,10 @@ function buildSecondTurnInput(callId: string, toolResult: unknown) {
     {
       type: "function_call_output",
       call_id: callId,
-      output: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult),
+      output:
+        typeof toolResult === "string"
+          ? toolResult
+          : JSON.stringify(toolResult),
     },
   ];
 }
@@ -301,54 +329,74 @@ async function executeToolCall(toolCall: ToolCall): Promise<string> {
   const knownTools = await getToolkitDefinitions();
   const knownToolNames = toolManager.getToolNames(knownTools);
 
-  log.info('[TextChat] Dispatching tool call to ToolManager', {}, {
-    toolName: toolCall.name,
-    ...argSummary,
-    knownToolCount: knownTools.length,
-    knownToolNames: knownToolNames,
-    knownTools: knownTools,
-  });
+  log.info(
+    "[TextChat] Dispatching tool call to ToolManager",
+    {},
+    {
+      toolName: toolCall.name,
+      ...argSummary,
+      knownToolCount: knownTools.length,
+      knownToolNames: knownToolNames,
+      knownTools: knownTools,
+    },
+  );
 
   const start = Date.now();
 
   try {
-    const result = await toolManager.executeToolCall(toolCall.name, toolCall.arguments);
-    log.info('[TextChat] Tool call completed', {}, {
-      toolName: toolCall.name,
-      durationMs: Date.now() - start,
-      resultLength: typeof result === 'string' ? result.length : undefined,
-      result: result,
-      checkedToolCount: knownTools.length,
-      checkedToolNames: knownToolNames,
-      checkedTools: knownTools,
-    });
+    const result = await toolManager.executeToolCall(
+      toolCall.name,
+      toolCall.arguments,
+    );
+    log.info(
+      "[TextChat] Tool call completed",
+      {},
+      {
+        toolName: toolCall.name,
+        durationMs: Date.now() - start,
+        resultLength: typeof result === "string" ? result.length : undefined,
+        result: result,
+        checkedToolCount: knownTools.length,
+        checkedToolNames: knownToolNames,
+        checkedTools: knownTools,
+      },
+    );
     return result;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    log.error('[TextChat] Tool call execution failed', {}, {
-      toolName: toolCall.name,
-      durationMs: Date.now() - start,
-      errorMessage,
-    });
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    log.error(
+      "[TextChat] Tool call execution failed",
+      {},
+      {
+        toolName: toolCall.name,
+        durationMs: Date.now() - start,
+        errorMessage,
+      },
+    );
     return `Error executing ${toolCall.name}: ${errorMessage}`;
   }
 }
 
 async function callResponsesAPI(
   apiKey: string,
-  req: ResponsesCreateRequest
+  req: ResponsesCreateRequest,
 ): Promise<ResponsesAPIResult> {
   let currentPayload: any = {
     ...req,
     tool_choice: "auto",
   };
 
-  log.info('[callResponsesAPI] Starting conversation loop', {}, {
-    model: req.model,
-    initialPayload: currentPayload,
-    hasTools: !!req.tools,
-    toolCount: req.tools?.length ?? 0,
-  });
+  log.info(
+    "[callResponsesAPI] Starting conversation loop",
+    {},
+    {
+      model: req.model,
+      initialPayload: currentPayload,
+      hasTools: !!req.tools,
+      toolCount: req.tools?.length ?? 0,
+    },
+  );
 
   let responseJson: any = null;
   let previousResponseId: string | null = null;
@@ -357,58 +405,86 @@ async function callResponsesAPI(
 
   while (safetyCounter++ < MAX_TURNS) {
     // Send request to OpenAI
-    log.info(`[callResponsesAPI] Sending request to LLM (turn ${safetyCounter})`, {}, {
-      turnNumber: safetyCounter,
-      payload: currentPayload,
-      previousResponseId: previousResponseId,
-    });
+    log.info(
+      `[callResponsesAPI] Sending request to LLM (turn ${safetyCounter})`,
+      {},
+      {
+        turnNumber: safetyCounter,
+        payload: currentPayload,
+        previousResponseId: previousResponseId,
+      },
+    );
 
-    responseJson = await callOpenAIResponses(apiKey, currentPayload, `turn_${safetyCounter}`);
+    responseJson = await callOpenAIResponses(
+      apiKey,
+      currentPayload,
+      `turn_${safetyCounter}`,
+    );
 
-    log.info(`[callResponsesAPI] Received response from LLM (turn ${safetyCounter})`, {}, {
-      turnNumber: safetyCounter,
-      responseId: responseJson.id,
-      responseJson: responseJson,
-      outputText: extractOutputText(responseJson),
-    });
+    log.info(
+      `[callResponsesAPI] Received response from LLM (turn ${safetyCounter})`,
+      {},
+      {
+        turnNumber: safetyCounter,
+        responseId: responseJson.id,
+        responseJson: responseJson,
+        outputText: extractOutputText(responseJson),
+      },
+    );
 
     const toolCall = extractFirstToolCall(responseJson);
 
     // If model gives direct text output (no tool call), we're done
     if (!toolCall) {
-      log.info('[callResponsesAPI] LLM returned final response (no tool call)', {}, {
-        turnNumber: safetyCounter,
-        outputText: extractOutputText(responseJson),
-        responseId: responseJson.id,
-      });
+      log.info(
+        "[callResponsesAPI] LLM returned final response (no tool call)",
+        {},
+        {
+          turnNumber: safetyCounter,
+          outputText: extractOutputText(responseJson),
+          responseId: responseJson.id,
+        },
+      );
       return {
         text: extractOutputText(responseJson),
         responseId: responseJson.id ?? null,
       };
     }
 
-    log.info('[callResponsesAPI] LLM requested tool call', {}, {
-      turnNumber: safetyCounter,
-      toolName: toolCall.name,
-      toolCallId: toolCall.id,
-      toolArgsJson: toolCall.argsJson,
-    });
+    log.info(
+      "[callResponsesAPI] LLM requested tool call",
+      {},
+      {
+        turnNumber: safetyCounter,
+        toolName: toolCall.name,
+        toolCallId: toolCall.id,
+        toolArgsJson: toolCall.argsJson,
+      },
+    );
 
     // Parse tool args
     let argsObj: any;
     try {
       argsObj = JSON.parse(toolCall.argsJson || "{}");
-      log.info('[callResponsesAPI] Parsed tool arguments', {}, {
-        toolName: toolCall.name,
-        parsedArgs: argsObj,
-      });
+      log.info(
+        "[callResponsesAPI] Parsed tool arguments",
+        {},
+        {
+          toolName: toolCall.name,
+          parsedArgs: argsObj,
+        },
+      );
     } catch (err: any) {
       const errorText = `Error parsing tool call: ${err.message}`;
-      log.error('[callResponsesAPI] Failed to parse tool arguments', {}, {
-        toolName: toolCall.name,
-        argsJson: toolCall.argsJson,
-        error: err.message,
-      });
+      log.error(
+        "[callResponsesAPI] Failed to parse tool arguments",
+        {},
+        {
+          toolName: toolCall.name,
+          argsJson: toolCall.argsJson,
+          error: err.message,
+        },
+      );
       return {
         text: errorText,
         responseId: responseJson.id ?? null,
@@ -421,11 +497,16 @@ async function callResponsesAPI(
       arguments: argsObj,
     });
 
-    log.info('[callResponsesAPI] Tool execution completed', {}, {
-      toolName: toolCall.name,
-      toolResult: toolResult,
-      toolResultLength: typeof toolResult === 'string' ? toolResult.length : undefined,
-    });
+    log.info(
+      "[callResponsesAPI] Tool execution completed",
+      {},
+      {
+        toolName: toolCall.name,
+        toolResult: toolResult,
+        toolResultLength:
+          typeof toolResult === "string" ? toolResult.length : undefined,
+      },
+    );
 
     // Prepare next turn with function_call_output
     // No need to resend tools, since we are using responses api and sending previous response id
@@ -434,41 +515,64 @@ async function callResponsesAPI(
       model: req.model,
       previous_response_id: responseJson.id,
       input: nextInput,
-      instructions: req.instructions
+      instructions: req.instructions,
     };
 
-    log.info('[callResponsesAPI] Prepared next turn payload', {}, {
-      turnNumber: safetyCounter + 1,
-      nextPayload: currentPayload,
-      toolCallId: toolCall.id,
-    });
+    log.info(
+      "[callResponsesAPI] Prepared next turn payload",
+      {},
+      {
+        turnNumber: safetyCounter + 1,
+        nextPayload: currentPayload,
+        toolCallId: toolCall.id,
+      },
+    );
 
     previousResponseId = responseJson.id;
   }
 
   // If we exit due to too many turns, stop gracefully
-  log.warn('[callResponsesAPI] Reached MAX_TURNS limit — possible infinite loop', {}, {
-    maxTurns: MAX_TURNS,
-    finalResponseId: responseJson?.id,
-    finalOutputText: extractOutputText(responseJson),
-  });
+  log.warn(
+    "[callResponsesAPI] Reached MAX_TURNS limit — possible infinite loop",
+    {},
+    {
+      maxTurns: MAX_TURNS,
+      finalResponseId: responseJson?.id,
+      finalOutputText: extractOutputText(responseJson),
+    },
+  );
   return {
-    text: extractOutputText(responseJson) || '[Loop terminated: too many tool calls]',
+    text:
+      extractOutputText(responseJson) ||
+      "[Loop terminated: too many tool calls]",
     responseId: responseJson?.id ?? null,
   };
 }
 
-const MessageBubble: React.FC<{ role: 'user' | 'assistant'; content: string }> = ({
-  role,
-  content,
-}) => {
-  const isUser = role === 'user';
+const MessageBubble: React.FC<{
+  role: "user" | "assistant";
+  content: string;
+}> = ({ role, content }) => {
+  const isUser = role === "user";
 
   return (
-    <View style={[styles.bubbleContainer, isUser ? styles.userAlign : styles.assistantAlign]}>
-      <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+    <View
+      style={[
+        styles.bubbleContainer,
+        isUser ? styles.userAlign : styles.assistantAlign,
+      ]}
+    >
+      <View
+        style={[
+          styles.bubble,
+          isUser ? styles.userBubble : styles.assistantBubble,
+        ]}
+      >
         <Text
-          style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}
+          style={[
+            styles.bubbleText,
+            isUser ? styles.userText : styles.assistantText,
+          ]}
           selectable={true}
         >
           {content}
@@ -501,7 +605,9 @@ const ChatInputBar: React.FC<{
       activeOpacity={0.7}
       disabled={isSending || !value.trim()}
     >
-      <Text style={styles.sendButtonLabel}>{isSending ? 'Sending…' : 'Send'}</Text>
+      <Text style={styles.sendButtonLabel}>
+        {isSending ? "Sending…" : "Send"}
+      </Text>
     </TouchableOpacity>
   </View>
 );
@@ -511,17 +617,22 @@ type TextChatProps = {
 };
 
 export default function TextChat({ mainPromptAddition }: TextChatProps) {
-
   const [messages, setMessages] = useState<
-    { id: string; role: 'user' | 'assistant'; content: string }[]
+    { id: string; role: "user" | "assistant"; content: string }[]
   >([]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [lastResponseId, setLastResponseId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
 
-  const appendMessage = (message: { role: 'user' | 'assistant'; content: string }) => {
-    setMessages((prev) => [...prev, { id: `${Date.now()}-${prev.length}`, ...message }]);
+  const appendMessage = (message: {
+    role: "user" | "assistant";
+    content: string;
+  }) => {
+    setMessages((prev) => [
+      ...prev,
+      { id: `${Date.now()}-${prev.length}`, ...message },
+    ]);
     requestAnimationFrame(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     });
@@ -533,12 +644,15 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
 
     const apiKey = await getApiKey({ forceSecureStore: true });
     if (!apiKey) {
-      Alert.alert('Missing API Key', 'Add your OpenAI API key in Settings to send messages.');
+      Alert.alert(
+        "Missing API Key",
+        "Add your OpenAI API key in Settings to send messages.",
+      );
       return;
     }
 
-    appendMessage({ role: 'user', content: userMessage });
-    setDraft('');
+    appendMessage({ role: "user", content: userMessage });
+    setDraft("");
     setIsSending(true);
 
     try {
@@ -547,9 +661,13 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       // Get Gen2 toolkit definitions already converted to ToolDefinition format with qualified names
       // This now includes dynamic MCP tools fetched from remote servers
       const toolDefinitionsFromToolkits = await getToolkitDefinitions(); // gen2
-      log.info('[TextChat] Toolkit definitions resolved', {}, {
-        definitions: toolDefinitionsFromToolkits,
-      });
+      log.info(
+        "[TextChat] Toolkit definitions resolved",
+        {},
+        {
+          definitions: toolDefinitionsFromToolkits,
+        },
+      );
 
       // Merge Gen1 and Gen2 tool definitions
       // const tools = [
@@ -560,25 +678,37 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
       const tools = toolDefinitionsFromToolkits;
 
       const toolNames = toolManager.getToolNames(tools);
-      log.info('[TextChat] tools included', {}, {
-        toolCount: tools.length,
-        toolNames: toolNames,
-        toolDefinitions: tools,
-      });
+      log.info(
+        "[TextChat] tools included",
+        {},
+        {
+          toolCount: tools.length,
+          toolNames: toolNames,
+          toolDefinitions: tools,
+        },
+      );
 
       const resolvedInstructions = composeMainPrompt(mainPromptAddition);
-      log.info('[TextChat] instructions composed', {}, {
-        length: resolvedInstructions.length,
-        additionLength: mainPromptAddition.trim().length,
-        preview: summarizeDescription(resolvedInstructions),
-      });
+      log.info(
+        "[TextChat] instructions composed",
+        {},
+        {
+          length: resolvedInstructions.length,
+          additionLength: mainPromptAddition.trim().length,
+          preview: summarizeDescription(resolvedInstructions),
+        },
+      );
 
-      log.info('[TextChat] Sent input to LLM, waiting for reply', {}, {
-        userMessage: userMessage,
-        userMessageLength: userMessage.length,
-      });
+      log.info(
+        "[TextChat] Sent input to LLM, waiting for reply",
+        {},
+        {
+          userMessage: userMessage,
+          userMessageLength: userMessage.length,
+        },
+      );
       const requestPayload: ResponsesCreateRequest = {
-        model: 'gpt-5-mini',
+        model: "gpt-5-mini",
         input: userMessage,
         instructions: resolvedInstructions,
         tools,
@@ -586,15 +716,19 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
         // tool_choice is added inside callResponsesAPI for first call
       };
 
-      const { text: responseText, responseId } = await callResponsesAPI(apiKey, requestPayload);
-      appendMessage({ role: 'assistant', content: responseText });
+      const { text: responseText, responseId } = await callResponsesAPI(
+        apiKey,
+        requestPayload,
+      );
+      appendMessage({ role: "assistant", content: responseText });
       setLastResponseId(responseId ?? null);
     } catch (error) {
-      log.error('[TextChat] send failed', {}, error);
-      Alert.alert('Error', 'Unable to reach OpenAI. Please try again.');
+      log.error("[TextChat] send failed", {}, error);
+      Alert.alert("Error", "Unable to reach OpenAI. Please try again.");
       appendMessage({
-        role: 'assistant',
-        content: 'I\'m having trouble replying right now. Could you try again in a moment?',
+        role: "assistant",
+        content:
+          "I'm having trouble replying right now. Could you try again in a moment?",
       });
     } finally {
       setIsSending(false);
@@ -605,8 +739,8 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flexContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 140 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 140 : 0}
       >
         <ScrollView
           ref={scrollRef}
@@ -614,17 +748,26 @@ export default function TextChat({ mainPromptAddition }: TextChatProps) {
           keyboardShouldPersistTaps="handled"
         >
           {messages.map((message) => (
-            <MessageBubble key={message.id} role={message.role} content={message.content} />
+            <MessageBubble
+              key={message.id}
+              role={message.role}
+              content={message.content}
+            />
           ))}
         </ScrollView>
-        <ChatInputBar value={draft} onChangeText={setDraft} onSend={handleSend} isSending={isSending} />
+        <ChatInputBar
+          value={draft}
+          onChangeText={setDraft}
+          onSend={handleSend}
+          isSending={isSending}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
   flexContainer: { flex: 1 },
   messagesContainer: {
     paddingHorizontal: 16,
@@ -633,44 +776,44 @@ const styles = StyleSheet.create({
   },
   bubbleContainer: {
     marginBottom: 12,
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   assistantAlign: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   userAlign: {
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   bubble: {
-    maxWidth: '80%',
+    maxWidth: "80%",
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   assistantBubble: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: "#F2F2F7",
   },
   userBubble: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
   },
   bubbleText: {
     fontSize: 16,
     lineHeight: 22,
   },
   assistantText: {
-    color: '#1C1C1E',
+    color: "#1C1C1E",
   },
   userText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#C7C7CC',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: "#C7C7CC",
+    backgroundColor: "#FFFFFF",
     gap: 12,
   },
   textInput: {
@@ -679,26 +822,26 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: "#F2F2F7",
     borderRadius: 20,
     fontSize: 16,
     lineHeight: 22,
-    color: '#1C1C1E',
+    color: "#1C1C1E",
   },
   sendButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   disabledSendButton: {
-    backgroundColor: '#8E8E93',
+    backgroundColor: "#8E8E93",
   },
   sendButtonLabel: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });

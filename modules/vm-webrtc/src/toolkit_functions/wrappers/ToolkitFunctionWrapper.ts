@@ -1,7 +1,7 @@
 // MARK: - Toolkit Function Wrapper Interface
 
-import type { ToolkitFunction } from '../toolkit_functions';
-import { DeepWikiWrapper } from './deepwiki_wrapper';
+import type { ToolkitFunction } from "../toolkit_functions";
+import { DeepWikiWrapper } from "./deepwiki_wrapper";
 
 /**
  * Interface for toolkit function wrappers.
@@ -19,7 +19,7 @@ export interface ToolkitFunctionWrapper {
   wrap(
     groupName: string,
     toolName: string,
-    originalFunction: ToolkitFunction
+    originalFunction: ToolkitFunction,
   ): ToolkitFunction;
 }
 
@@ -29,7 +29,9 @@ export interface ToolkitFunctionWrapper {
  * @param groupName - The toolkit group name
  * @returns The wrapper instance if configured, otherwise null
  */
-export function getWrapperForGroup(groupName: string): ToolkitFunctionWrapper | null {
+export function getWrapperForGroup(
+  groupName: string,
+): ToolkitFunctionWrapper | null {
   // Registry of wrappers by group name
   const wrappers: Record<string, ToolkitFunctionWrapper> = {
     deepwiki: new DeepWikiWrapper(),

@@ -30,7 +30,9 @@ export const DeepwikiConnectorInfo: React.FC<DeepwikiConnectorInfoProps> = ({
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("deepwiki_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "deepwiki_connector_enabled",
+          );
           // Default to true if not set
           setIsEnabled(enabledValue === null ? true : enabledValue === "true");
         } catch {
@@ -44,7 +46,10 @@ export const DeepwikiConnectorInfo: React.FC<DeepwikiConnectorInfoProps> = ({
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("deepwiki_connector_enabled", value.toString());
+      await AsyncStorage.setItem(
+        "deepwiki_connector_enabled",
+        value.toString(),
+      );
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -90,8 +95,8 @@ export const DeepwikiConnectorInfo: React.FC<DeepwikiConnectorInfoProps> = ({
           </View>
 
           <Text style={styles.bodyText}>
-            Access structured documentation and search for public GitHub repositories.
-            No authentication required.
+            Access structured documentation and search for public GitHub
+            repositories. No authentication required.
           </Text>
         </View>
       </SafeAreaView>

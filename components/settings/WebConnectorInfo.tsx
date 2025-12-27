@@ -30,7 +30,9 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("web_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "web_connector_enabled",
+          );
           // Default to true if not set
           setIsEnabled(enabledValue === null ? true : enabledValue === "true");
         } catch {
@@ -90,8 +92,8 @@ export const WebConnectorInfo: React.FC<WebConnectorInfoProps> = ({
           </View>
 
           <Text style={styles.bodyText}>
-            Web search is handled using GPT-5 and needs no further configuration.
-            More options will be added later.
+            Web search is handled using GPT-5 and needs no further
+            configuration. More options will be added later.
           </Text>
         </View>
       </SafeAreaView>

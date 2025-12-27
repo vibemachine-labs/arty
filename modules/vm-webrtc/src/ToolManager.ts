@@ -1,29 +1,29 @@
-import { requireOptionalNativeModule } from 'expo-modules-core';
+import { requireOptionalNativeModule } from "expo-modules-core";
 
-import { log } from '../../../lib/logger';
-import { composePrompt } from '../../../lib/promptStorage';
-import { loadToolPromptAddition } from '../../../lib/toolPrompts';
+import { log } from "../../../lib/logger";
+import { composePrompt } from "../../../lib/promptStorage";
+import { loadToolPromptAddition } from "../../../lib/toolPrompts";
 import {
   ToolGDriveConnector,
   type GDriveConnectorNativeModule,
   type GDriveConnectorParams,
-} from './ToolGDriveConnector';
+} from "./ToolGDriveConnector";
 import {
   ToolGithubConnector,
   type GithubConnectorNativeModule,
   type GithubConnectorParams,
-} from './ToolGithubConnector';
-import { toolkitRegistry } from './toolkit_functions/toolkit_functions';
+} from "./ToolGithubConnector";
+import { toolkitRegistry } from "./toolkit_functions/toolkit_functions";
 import {
   isToolSessionContextEmpty,
   summarizeToolSessionContext,
   type ToolSessionContext,
-} from './toolkit_functions/types';
-import type { ToolDefinition } from './VmWebrtc.types';
+} from "./toolkit_functions/types";
+import type { ToolDefinition } from "./VmWebrtc.types";
 
 type ToolCallArguments = Record<string, any>;
 
-const MODULE_NAME = 'VmWebrtc';
+const MODULE_NAME = "VmWebrtc";
 
 // Legacy connectors are now controlled via toolkit groups in toolkitGroups.json
 // and can be enabled/disabled in settings. This flag is no longer used.
@@ -39,10 +39,10 @@ const summarizeDescription = (value: string): string => {
 };
 
 const summarizeSnippetArgument = (value: unknown) => {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return {
       snippetProvided: Boolean(value),
-      snippetType: value === null ? 'null' : typeof value,
+      snippetType: value === null ? "null" : typeof value,
     };
   }
   const trimmed = value.trim();
@@ -68,15 +68,18 @@ class ToolManager {
   private githubConnectorTool: ToolGithubConnector | null | undefined;
   private gdriveConnectorTool: ToolGDriveConnector | null | undefined;
   private readonly nativeModule = requireOptionalNativeModule(MODULE_NAME);
-  private readonly toolSessionContexts: Map<string, ToolSessionContext> = new Map();
+  private readonly toolSessionContexts: Map<string, ToolSessionContext> =
+    new Map();
 
   constructor() {
     if (!this.nativeModule) {
-      log.warn('[ToolManager] Native module unavailable during initialization; tool listeners inactive until module loads');
+      log.warn(
+        "[ToolManager] Native module unavailable during initialization; tool listeners inactive until module loads",
+      );
       return;
     }
 
-    log.info('[ToolManager] Native module detected, prewarming tool listeners');
+    log.info("[ToolManager] Native module detected, prewarming tool listeners");
     this.prewarmNativeToolListeners();
   }
 
@@ -85,7 +88,9 @@ class ToolManager {
       return this.githubConnectorTool;
     }
     this.githubConnectorTool = this.nativeModule
-      ? new ToolGithubConnector(this.nativeModule as GithubConnectorNativeModule)
+      ? new ToolGithubConnector(
+          this.nativeModule as GithubConnectorNativeModule,
+        )
       : null;
     return this.githubConnectorTool;
   }
@@ -95,7 +100,9 @@ class ToolManager {
       return this.gdriveConnectorTool;
     }
     this.gdriveConnectorTool = this.nativeModule
-      ? new ToolGDriveConnector(this.nativeModule as GDriveConnectorNativeModule)
+      ? new ToolGDriveConnector(
+          this.nativeModule as GDriveConnectorNativeModule,
+        )
       : null;
     return this.gdriveConnectorTool;
   }
@@ -106,14 +113,22 @@ class ToolManager {
       // This ensures the JavaScript-side listeners are ready when tools are enabled in settings
       const github = this.getGithubConnectorTool();
       const gdrive = this.getGDriveConnectorTool();
-      log.info('[ToolManager] Tool listener prewarm complete', {}, {
-        githubListenerActive: Boolean(github),
-        gdriveListenerActive: Boolean(gdrive),
-      });
+      log.info(
+        "[ToolManager] Tool listener prewarm complete",
+        {},
+        {
+          githubListenerActive: Boolean(github),
+          gdriveListenerActive: Boolean(gdrive),
+        },
+      );
     } catch (error) {
-      log.error('[ToolManager] Failed to prewarm native tool listeners', {}, {
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
+      log.error(
+        "[ToolManager] Failed to prewarm native tool listeners",
+        {},
+        {
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      );
     }
   }
 
@@ -128,9 +143,13 @@ class ToolManager {
     return merged;
   }
 
-  async getAugmentedToolDefinitions(overrides?: ToolDefinition[]): Promise<ToolDefinition[]> {
+  async getAugmentedToolDefinitions(
+    overrides?: ToolDefinition[],
+  ): Promise<ToolDefinition[]> {
     const canonical = this.getCanonicalToolDefinitions(overrides);
-    return Promise.all(canonical.map((definition) => this.applyPromptAddition(definition)));
+    return Promise.all(
+      canonical.map((definition) => this.applyPromptAddition(definition)),
+    );
   }
 
   getToolNames(definitions: ToolDefinition[]): string[] {
@@ -143,20 +162,23 @@ class ToolManager {
       .filter((name): name is string => Boolean(name));
   }
 
-
   /**
    * TODO: can this be DRY'd with ToolkitHelper.executeToolkitOperation()?
    */
   private async executeGen2ToolCall(
     groupName: string,
     toolName: string,
-    args: ToolCallArguments
+    args: ToolCallArguments,
   ): Promise<string> {
-    log.info('[ToolManager] Executing gen2 tool', {}, {
-      groupName,
-      toolName,
-      args,
-    });
+    log.info(
+      "[ToolManager] Executing gen2 tool",
+      {},
+      {
+        groupName,
+        toolName,
+        args,
+      },
+    );
 
     const group = toolkitRegistry[groupName];
     if (!group) {
@@ -174,111 +196,176 @@ class ToolManager {
       const currentSessionContext = this.toolSessionContexts.get(toolKey) || {};
 
       // Execute the tool function with session context
-      const toolkitResult = await toolFunction(args, undefined, currentSessionContext);
+      const toolkitResult = await toolFunction(
+        args,
+        undefined,
+        currentSessionContext,
+      );
 
       // Store the updated session context for this tool
-      this.toolSessionContexts.set(toolKey, toolkitResult.updatedToolSessionContext);
+      this.toolSessionContexts.set(
+        toolKey,
+        toolkitResult.updatedToolSessionContext,
+      );
 
       // Append session context to result if non-empty
       let finalResult = toolkitResult.result;
       if (!isToolSessionContextEmpty(toolkitResult.updatedToolSessionContext)) {
-        const contextSummary = summarizeToolSessionContext(toolkitResult.updatedToolSessionContext);
+        const contextSummary = summarizeToolSessionContext(
+          toolkitResult.updatedToolSessionContext,
+        );
         finalResult = `${toolkitResult.result}\n\nTool session context: ${contextSummary}`;
       }
 
-      log.info('[ToolManager] Gen2 tool execution succeeded', {}, {
-        groupName,
-        toolName,
-        resultLength: finalResult.length,
-        result: finalResult,
-        sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
-      });
+      log.info(
+        "[ToolManager] Gen2 tool execution succeeded",
+        {},
+        {
+          groupName,
+          toolName,
+          resultLength: finalResult.length,
+          result: finalResult,
+          sessionContextKeys: Object.keys(
+            toolkitResult.updatedToolSessionContext,
+          ),
+        },
+      );
       return finalResult;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      log.error('[ToolManager] Gen2 tool execution failed', {}, {
-        groupName,
-        toolName,
-        errorMessage,
-      });
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      log.error(
+        "[ToolManager] Gen2 tool execution failed",
+        {},
+        {
+          groupName,
+          toolName,
+          errorMessage,
+        },
+      );
       return `Error executing gen2 tool ${groupName}__${toolName}: ${errorMessage}`;
     }
   }
 
-  async executeToolCall(toolName: string, args: ToolCallArguments): Promise<string> {
-    log.info('[ToolManager] Tool call requested', {}, {
-      toolName,
-      args,
-    });
+  async executeToolCall(
+    toolName: string,
+    args: ToolCallArguments,
+  ): Promise<string> {
+    log.info(
+      "[ToolManager] Tool call requested",
+      {},
+      {
+        toolName,
+        args,
+      },
+    );
 
     // Check if this is a gen2 tool (format: groupName__toolName)
-    if (toolName.includes('__')) {
-      const [groupName, toolFunctionName] = toolName.split('__');
+    if (toolName.includes("__")) {
+      const [groupName, toolFunctionName] = toolName.split("__");
 
       // Execute gen2 tools (includes both local and cached MCP tools)
       if (toolkitRegistry[groupName]?.[toolFunctionName]) {
-        return await this.executeGen2ToolCall(groupName, toolFunctionName, args);
+        return await this.executeGen2ToolCall(
+          groupName,
+          toolFunctionName,
+          args,
+        );
       }
     }
 
-    if (toolName === 'github_connector') {
+    if (toolName === "github_connector") {
       const connector = this.getGithubConnectorTool();
       if (!connector) {
-        log.warn('[ToolManager] GitHub connector unavailable', {}, {
-          nativeModuleLoaded: Boolean(this.nativeModule),
-        });
-        return 'GitHub connector tool is not available';
+        log.warn(
+          "[ToolManager] GitHub connector unavailable",
+          {},
+          {
+            nativeModuleLoaded: Boolean(this.nativeModule),
+          },
+        );
+        return "GitHub connector tool is not available";
       }
 
       const params: GithubConnectorParams = {
         self_contained_javascript_octokit_code_snippet:
           args.self_contained_javascript_octokit_code_snippet,
       };
-      log.debug('[ToolManager] Routing GitHub connector request', {}, summarizeSnippetArgument(
-        args.self_contained_javascript_octokit_code_snippet
-      ));
+      log.debug(
+        "[ToolManager] Routing GitHub connector request",
+        {},
+        summarizeSnippetArgument(
+          args.self_contained_javascript_octokit_code_snippet,
+        ),
+      );
 
       try {
         const result = await connector.execute(params);
-        log.info('[ToolManager] GitHub connector execution succeeded', {}, {
-          resultLength: typeof result === 'string' ? result.length : 0,
-          result: result,
-        });
+        log.info(
+          "[ToolManager] GitHub connector execution succeeded",
+          {},
+          {
+            resultLength: typeof result === "string" ? result.length : 0,
+            result: result,
+          },
+        );
         return result;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        log.error('[ToolManager] GitHub connector execution failed', {}, errorMessage);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        log.error(
+          "[ToolManager] GitHub connector execution failed",
+          {},
+          errorMessage,
+        );
         return `Error executing GitHub connector: ${errorMessage}`;
       }
     }
 
-    if (toolName === 'gdrive_connector') {
+    if (toolName === "gdrive_connector") {
       const connector = this.getGDriveConnectorTool();
       if (!connector) {
-        log.warn('[ToolManager] Google Drive connector unavailable', {}, {
-          nativeModuleLoaded: Boolean(this.nativeModule),
-        });
-        return 'Google Drive connector tool is not available';
+        log.warn(
+          "[ToolManager] Google Drive connector unavailable",
+          {},
+          {
+            nativeModuleLoaded: Boolean(this.nativeModule),
+          },
+        );
+        return "Google Drive connector tool is not available";
       }
 
       const params: GDriveConnectorParams = {
         self_contained_javascript_gdrive_code_snippet:
           args.self_contained_javascript_gdrive_code_snippet,
       };
-      log.debug('[ToolManager] Routing Google Drive connector request', {}, summarizeSnippetArgument(
-        args.self_contained_javascript_gdrive_code_snippet
-      ));
+      log.debug(
+        "[ToolManager] Routing Google Drive connector request",
+        {},
+        summarizeSnippetArgument(
+          args.self_contained_javascript_gdrive_code_snippet,
+        ),
+      );
 
       try {
         const result = await connector.execute(params);
-        log.info('[ToolManager] Google Drive connector execution succeeded', {}, {
-          resultLength: typeof result === 'string' ? result.length : 0,
-          result: result,
-        });
+        log.info(
+          "[ToolManager] Google Drive connector execution succeeded",
+          {},
+          {
+            resultLength: typeof result === "string" ? result.length : 0,
+            result: result,
+          },
+        );
         return result;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        log.error('[ToolManager] Google Drive connector execution failed', {}, errorMessage);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        log.error(
+          "[ToolManager] Google Drive connector execution failed",
+          {},
+          errorMessage,
+        );
         return `Error executing Google Drive connector: ${errorMessage}`;
       }
     }
@@ -286,7 +373,9 @@ class ToolManager {
     return `Unknown tool: ${toolName}`;
   }
 
-  private async applyPromptAddition(definition: ToolDefinition): Promise<ToolDefinition> {
+  private async applyPromptAddition(
+    definition: ToolDefinition,
+  ): Promise<ToolDefinition> {
     // All tools are now exported as 'function' type, including remote MCP tools
     // Apply prompt additions to all function tools
     const addition = await loadToolPromptAddition(definition.name);
@@ -294,29 +383,40 @@ class ToolManager {
     const beforeLength = definition.description.length;
 
     if (trimmedAddition.length === 0) {
-      log.info('[ToolManager] Tool definition unchanged', {}, {
-        toolName: definition.name,
-        descriptionLength: beforeLength,
-        description: definition.description,
-        descriptionPreview: summarizeDescription(definition.description),
-      });
+      log.info(
+        "[ToolManager] Tool definition unchanged",
+        {},
+        {
+          toolName: definition.name,
+          descriptionLength: beforeLength,
+          description: definition.description,
+          descriptionPreview: summarizeDescription(definition.description),
+        },
+      );
       return { ...definition };
     }
 
-    const composedDescription = composePrompt(definition.description, trimmedAddition);
+    const composedDescription = composePrompt(
+      definition.description,
+      trimmedAddition,
+    );
 
-    log.info('[ToolManager] Tool definition augmented', {}, {
-      toolName: definition.name,
-      beforeLength,
-      afterLength: composedDescription.length,
-      beforeDescription: definition.description,
-      afterDescription: composedDescription,
-      addition: trimmedAddition,
-      beforePreview: summarizeDescription(definition.description),
-      additionLength: trimmedAddition.length,
-      additionPreview: summarizeDescription(trimmedAddition),
-      afterPreview: summarizeDescription(composedDescription),
-    });
+    log.info(
+      "[ToolManager] Tool definition augmented",
+      {},
+      {
+        toolName: definition.name,
+        beforeLength,
+        afterLength: composedDescription.length,
+        beforeDescription: definition.description,
+        afterDescription: composedDescription,
+        addition: trimmedAddition,
+        beforePreview: summarizeDescription(definition.description),
+        additionLength: trimmedAddition.length,
+        additionPreview: summarizeDescription(trimmedAddition),
+        afterPreview: summarizeDescription(composedDescription),
+      },
+    );
 
     return {
       ...definition,

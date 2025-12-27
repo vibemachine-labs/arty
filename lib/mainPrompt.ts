@@ -1,4 +1,8 @@
-import { composePrompt, loadPromptAddition, savePromptAddition } from "./promptStorage";
+import {
+  composePrompt,
+  loadPromptAddition,
+  savePromptAddition,
+} from "./promptStorage";
 
 export const MAIN_PROMPT_STORAGE_KEY = "@vibemachine/mainPrompt";
 

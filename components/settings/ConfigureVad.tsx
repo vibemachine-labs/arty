@@ -38,11 +38,15 @@ export const ConfigureVad: React.FC<ConfigureVadProps> = ({
   onClose,
 }) => {
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Voice Activity Detection">
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Voice Activity Detection"
+    >
       <View style={styles.body}>
         <Text style={styles.lead}>
-          Choose how Vibemachine detects when you're speaking. Adjust this anytime for the right
-          feel during iOS sessions.
+          Choose how Vibemachine detects when you're speaking. Adjust this
+          anytime for the right feel during iOS sessions.
         </Text>
         <View style={styles.optionList}>
           {OPTIONS.map((option) => {
@@ -63,7 +67,12 @@ export const ConfigureVad: React.FC<ConfigureVadProps> = ({
                   <Text style={styles.optionTitle}>{option.title}</Text>
                   <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
                 </View>
-                <Text style={[styles.optionCheckmark, isSelected ? styles.optionCheckmarkActive : null]}>
+                <Text
+                  style={[
+                    styles.optionCheckmark,
+                    isSelected ? styles.optionCheckmarkActive : null,
+                  ]}
+                >
                   {isSelected ? "●" : "○"}
                 </Text>
               </Pressable>

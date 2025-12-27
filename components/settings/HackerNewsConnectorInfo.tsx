@@ -18,10 +18,9 @@ type HackerNewsConnectorInfoProps = {
   onClose: () => void;
 };
 
-export const HackerNewsConnectorInfo: React.FC<HackerNewsConnectorInfoProps> = ({
-  visible,
-  onClose,
-}) => {
+export const HackerNewsConnectorInfo: React.FC<
+  HackerNewsConnectorInfoProps
+> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const [isEnabled, setIsEnabled] = useState(true);
 
@@ -30,7 +29,9 @@ export const HackerNewsConnectorInfo: React.FC<HackerNewsConnectorInfoProps> = (
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("hacker_news_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "hacker_news_connector_enabled",
+          );
           // Default to true if not set
           setIsEnabled(enabledValue === null ? true : enabledValue === "true");
         } catch {
@@ -44,7 +45,10 @@ export const HackerNewsConnectorInfo: React.FC<HackerNewsConnectorInfoProps> = (
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("hacker_news_connector_enabled", value.toString());
+      await AsyncStorage.setItem(
+        "hacker_news_connector_enabled",
+        value.toString(),
+      );
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -90,8 +94,8 @@ export const HackerNewsConnectorInfo: React.FC<HackerNewsConnectorInfoProps> = (
           </View>
 
           <Text style={styles.bodyText}>
-            Access Hacker News stories, comments, and user information.
-            No authentication required.
+            Access Hacker News stories, comments, and user information. No
+            authentication required.
           </Text>
         </View>
       </SafeAreaView>

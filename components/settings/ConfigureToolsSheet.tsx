@@ -41,14 +41,18 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
 
     Object.keys(toolkitGroups).forEach((groupKey) => {
       const group = toolkitGroups[groupKey as keyof typeof toolkitGroups];
-      const connectorOption = CONNECTOR_OPTIONS.find((opt) => opt.id === groupKey as ConnectorId);
+      const connectorOption = CONNECTOR_OPTIONS.find(
+        (opt) => opt.id === (groupKey as ConnectorId),
+      );
 
       if (!connectorOption) {
         return;
       }
 
       const toolkits = group.toolkits || [];
-      const isRemoteMcp = toolkits.some((t: any) => t.type === "remote_mcp_server");
+      const isRemoteMcp = toolkits.some(
+        (t: any) => t.type === "remote_mcp_server",
+      );
 
       groups.push({
         id: groupKey,
@@ -117,7 +121,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
             name: tool.name,
             description: tool.description,
             group: selectedGroupId,
-          }))
+          })),
         );
       })
       .catch((error) => {
@@ -169,7 +173,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   }, []);
 
   const activeToolValue = activeTool
-    ? promptDrafts[`${activeTool.group}.${activeTool.name}`] ?? ""
+    ? (promptDrafts[`${activeTool.group}.${activeTool.name}`] ?? "")
     : "";
 
   const handleActivePromptChange = useCallback(
@@ -182,7 +186,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
         [`${activeTool.group}.${activeTool.name}`]: text,
       }));
     },
-    [activeTool]
+    [activeTool],
   );
 
   const loadActiveToolPrompt = useCallback(() => {
@@ -197,9 +201,12 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
       if (!activeTool) {
         return Promise.resolve();
       }
-      return saveToolPromptAddition(`${activeTool.group}.${activeTool.name}`, text);
+      return saveToolPromptAddition(
+        `${activeTool.group}.${activeTool.name}`,
+        text,
+      );
     },
-    [activeTool]
+    [activeTool],
   );
 
   return (
@@ -232,7 +239,8 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
           onSaveSuccess={() => {
             setPromptDrafts((prev) => ({
               ...prev,
-              [`${activeTool.group}.${activeTool.name}`]: activeToolValue.trim(),
+              [`${activeTool.group}.${activeTool.name}`]:
+                activeToolValue.trim(),
             }));
             closePromptModal();
           }}

@@ -52,7 +52,11 @@ const HeaderAction = ({
   </Pressable>
 );
 
-export const GDriveConnectorConfig: React.FC<Props> = ({ visible, onClose, onSave }) => {
+export const GDriveConnectorConfig: React.FC<Props> = ({
+  visible,
+  onClose,
+  onSave,
+}) => {
   const insets = useSafeAreaInsets();
 
   const handleRequestClose = useCallback(() => {
@@ -76,7 +80,7 @@ export const GDriveConnectorConfig: React.FC<Props> = ({ visible, onClose, onSav
         />
       </View>
     ),
-    [handleRequestClose]
+    [handleRequestClose],
   );
 
   return (

@@ -1,5 +1,11 @@
 import * as AuthSession from "expo-auth-session";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Platform,
@@ -25,7 +31,8 @@ import {
 import { revokeGDriveAccess } from "../../modules/vm-webrtc/src/ToolGDriveConnector";
 
 const DEFAULT_CLIENT_ID_HINT =
-  process.env.EXPO_PUBLIC_GOOGLE_API_CLIENT_ID || "xxxx-yyyy.apps.googleusercontent.com";
+  process.env.EXPO_PUBLIC_GOOGLE_API_CLIENT_ID ||
+  "xxxx-yyyy.apps.googleusercontent.com";
 
 const CLIENT_ID_SUFFIX = ".apps.googleusercontent.com";
 const SCOPES = [
@@ -64,13 +71,17 @@ export interface GDriveConnectorConfigCoreProps {
 async function signInWithGoogleDrive() {
   const clientId = await getGDriveClientId();
   if (!clientId) {
-    throw new Error("Missing Google Client ID. Set EXPO_PUBLIC_GOOGLE_API_CLIENT_ID or provide an override.");
+    throw new Error(
+      "Missing Google Client ID. Set EXPO_PUBLIC_GOOGLE_API_CLIENT_ID or provide an override.",
+    );
   }
 
   const core = clientId.endsWith(CLIENT_ID_SUFFIX)
     ? clientId.slice(0, -CLIENT_ID_SUFFIX.length)
     : clientId;
-  const nativeRedirect = core ? `com.googleusercontent.apps.${core}:/oauthredirect` : undefined;
+  const nativeRedirect = core
+    ? `com.googleusercontent.apps.${core}:/oauthredirect`
+    : undefined;
 
   const redirectUri = AuthSession.makeRedirectUri({
     scheme: "vibemachine",
@@ -105,7 +116,7 @@ async function signInWithGoogleDrive() {
       redirectUri,
       extraParams: { code_verifier: request.codeVerifier || "" },
     },
-    { tokenEndpoint: GOOGLE_DISCOVERY.tokenEndpoint }
+    { tokenEndpoint: GOOGLE_DISCOVERY.tokenEndpoint },
   );
 
   if (tokenResponse.accessToken) {
@@ -157,8 +168,8 @@ const ButtonCard = ({
     variant === "destructive"
       ? styles.cardDestructive
       : variant === "secondary"
-      ? styles.cardSecondary
-      : styles.cardPrimary;
+        ? styles.cardSecondary
+        : styles.cardPrimary;
 
   const longPressFiredRef = useRef(false);
 
@@ -197,7 +208,9 @@ const ButtonCard = ({
               style={[
                 styles.actionTitle,
                 variant === "primary" ? styles.actionTitlePrimary : null,
-                variant === "destructive" ? styles.actionTitleDestructive : null,
+                variant === "destructive"
+                  ? styles.actionTitleDestructive
+                  : null,
               ]}
             >
               {title}
@@ -207,7 +220,9 @@ const ButtonCard = ({
                 style={[
                   styles.actionSubtitle,
                   variant === "primary" ? styles.actionSubtitlePrimary : null,
-                  variant === "destructive" ? styles.actionSubtitleDestructive : null,
+                  variant === "destructive"
+                    ? styles.actionSubtitleDestructive
+                    : null,
                 ]}
               >
                 {subtitle}
@@ -223,7 +238,9 @@ const ButtonCard = ({
   );
 };
 
-export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps> = ({
+export const GDriveConnectorConfigCore: React.FC<
+  GDriveConnectorConfigCoreProps
+> = ({
   isVisible = true,
   renderHeader,
   renderFooter,
@@ -307,32 +324,42 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
       setHasAuthTokens(true);
       Alert.alert("Connected", "Google Drive is now connected.");
     } catch (error: any) {
-      Alert.alert("Error", error?.message ?? "Failed to sign in to Google Drive.");
+      Alert.alert(
+        "Error",
+        error?.message ?? "Failed to sign in to Google Drive.",
+      );
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const handleDisconnect = useCallback(() => {
-    Alert.alert("Disconnect Google Drive", "This will sign you out and clear stored tokens.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Disconnect",
-        style: "destructive",
-        onPress: async () => {
-          setIsLoading(true);
-          try {
-            await revokeGDriveAccess();
-            setHasAuthTokens(false);
-            Alert.alert("Disconnected", "Google Drive access has been revoked.");
-          } catch {
-            Alert.alert("Error", "Failed to clear tokens. Try again.");
-          } finally {
-            setIsLoading(false);
-          }
+    Alert.alert(
+      "Disconnect Google Drive",
+      "This will sign you out and clear stored tokens.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: async () => {
+            setIsLoading(true);
+            try {
+              await revokeGDriveAccess();
+              setHasAuthTokens(false);
+              Alert.alert(
+                "Disconnected",
+                "Google Drive access has been revoked.",
+              );
+            } catch {
+              Alert.alert("Error", "Failed to clear tokens. Try again.");
+            } finally {
+              setIsLoading(false);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }, []);
 
   const handleDisconnectLongPress = useCallback(async () => {
@@ -345,15 +372,16 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
     }
   }, []);
 
-
   // Helper to generate a secure random "ya29." token (with 32-byte hex string)
   async function generateSecureRandomToken(): Promise<string> {
     // Use expo-random for cryptographically secure PRNG in React Native/Expo
     // Generates 32 random bytes and encodes as hex
-    const { getRandomBytesAsync } = await import('expo-random');
+    const { getRandomBytesAsync } = await import("expo-random");
     const bytes = await getRandomBytesAsync(32);
     // Convert bytes to hex string
-    const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const hex = Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
     return `ya29.${hex}`;
   }
 
@@ -383,7 +411,14 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
       onSubmit: handleSave,
       onCancel: onRequestClose,
     }),
-    [clientIdOverride, handleSave, initialClientIdOverride, isLoading, onRequestClose, primaryActionLabel]
+    [
+      clientIdOverride,
+      handleSave,
+      initialClientIdOverride,
+      isLoading,
+      onRequestClose,
+      primaryActionLabel,
+    ],
   );
 
   return (
@@ -409,137 +444,163 @@ export const GDriveConnectorConfigCore: React.FC<GDriveConnectorConfigCoreProps>
         {isEnabled && (
           <>
             {hasAuthTokens && hasClientId ? (
-          <View style={styles.statusBannerConnected}>
-            <Text style={styles.statusIcon}>✓</Text>
-            <Text style={styles.statusTextConnected}>Connected to Google Drive</Text>
-          </View>
-        ) : !hasClientId ? (
-          <View style={styles.statusBannerDisconnected}>
-            <Text style={styles.statusIcon}>•</Text>
-            <Text style={styles.statusTextDisconnected}>Status: Not connected yet (missing client id)</Text>
-          </View>
-        ) : (
-          <View style={styles.statusBannerDisconnected}>
-            <Text style={styles.statusIcon}>•</Text>
-            <Text style={styles.statusTextDisconnected}>Status: Not connected yet</Text>
-          </View>
-        )}
-
-        <View style={styles.actionsGroup}>
-          <ButtonCard
-            icon="🔗"
-            title="Connect with Google Drive"
-            note={
-              !hasClientId
-                ? 'Configure a Client ID first (see Advanced Options below)'
-                : '⚠️ Tap "Advanced" during Google sign-in and continue despite the unverified app warning.'
-            }
-            variant="primary"
-            disabled={isLoading || hasAuthTokens || !hasClientId}
-            onPress={handleConnect}
-          />
-          <ButtonCard
-            icon="🧹"
-            title="Disconnect"
-            note="Disconnects and clears stored auth tokens."
-            variant="destructive"
-            disabled={!hasAuthTokens || isLoading}
-            onPress={handleDisconnect}
-            onLongPress={handleDisconnectLongPress}
-            suppressOnPressAfterLongPress
-          />
-        </View>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>Security</Text>
-          <Text style={styles.infoText}>
-            🔒 Your auth tokens will not leave the device, and are stored in Expo Secure Store. On iOS it uses the OS Keychain.
-          </Text>
-        </View>
-
-        <View style={styles.advancedSection}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: isAdvancedVisible }}
-            onPress={handleToggleAdvanced}
-            style={({ pressed }) => [
-              styles.advancedHeader,
-              pressed ? styles.advancedHeaderPressed : null,
-            ]}
-          >
-            <Text style={styles.advancedTitle}>Advanced Options</Text>
-            <Text style={styles.advancedChevron}>{isAdvancedVisible ? "^" : "v"}</Text>
-          </Pressable>
-          {isAdvancedVisible ? (
-            <View style={styles.advancedContent}>
-              <Text style={styles.advancedHeading}>Google Drive Connector</Text>
-              <Text style={styles.advancedDescription}>You can use your own Client ID for maximum internal control. You will need to confgure it with all required permissions. Documentation still pending.</Text>
-
-              <View style={styles.inputSection}>
-                <Text style={styles.label}>Client ID Override</Text>
-                <TextInput
-                  style={styles.input}
-                  value={clientIdOverride}
-                  onChangeText={setClientIdOverride}
-                  placeholder={DEFAULT_CLIENT_ID_HINT}
-                  placeholderTextColor="#C7C7CC"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete="off"
-                  keyboardType="default"
-                  editable={!isLoading}
-                  returnKeyType="done"
-                />
-                <Text style={styles.hint}>
-                  Leave blank to use the default bundled Client ID. Override if you have your own Google
-                  OAuth 2.0 client ID you would like to use.
+              <View style={styles.statusBannerConnected}>
+                <Text style={styles.statusIcon}>✓</Text>
+                <Text style={styles.statusTextConnected}>
+                  Connected to Google Drive
                 </Text>
               </View>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Save Client ID override"
-                onPress={handleSave}
-                disabled={!actionState.isDirty || isLoading}
-                style={({ pressed }) => [
-                  styles.saveButton,
-                  (!actionState.isDirty || isLoading) && styles.saveButtonDisabled,
-                  pressed && actionState.isDirty && !isLoading && styles.saveButtonPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.saveButtonText,
-                    (!actionState.isDirty || isLoading) && styles.saveButtonTextDisabled,
-                  ]}
-                >
-                  {isLoading ? "Saving..." : "Save Changes"}
+            ) : !hasClientId ? (
+              <View style={styles.statusBannerDisconnected}>
+                <Text style={styles.statusIcon}>•</Text>
+                <Text style={styles.statusTextDisconnected}>
+                  Status: Not connected yet (missing client id)
                 </Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cancel changes"
-                onPress={handleCancel}
-                disabled={!actionState.isDirty || isLoading}
-                style={({ pressed }) => [
-                  styles.cancelButton,
-                  (!actionState.isDirty || isLoading) && styles.cancelButtonDisabled,
-                  pressed && actionState.isDirty && !isLoading && styles.cancelButtonPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.cancelButtonText,
-                    (!actionState.isDirty || isLoading) && styles.cancelButtonTextDisabled,
-                  ]}
-                >
-                  Cancel
+              </View>
+            ) : (
+              <View style={styles.statusBannerDisconnected}>
+                <Text style={styles.statusIcon}>•</Text>
+                <Text style={styles.statusTextDisconnected}>
+                  Status: Not connected yet
                 </Text>
-              </Pressable>
+              </View>
+            )}
+
+            <View style={styles.actionsGroup}>
+              <ButtonCard
+                icon="🔗"
+                title="Connect with Google Drive"
+                note={
+                  !hasClientId
+                    ? "Configure a Client ID first (see Advanced Options below)"
+                    : '⚠️ Tap "Advanced" during Google sign-in and continue despite the unverified app warning.'
+                }
+                variant="primary"
+                disabled={isLoading || hasAuthTokens || !hasClientId}
+                onPress={handleConnect}
+              />
+              <ButtonCard
+                icon="🧹"
+                title="Disconnect"
+                note="Disconnects and clears stored auth tokens."
+                variant="destructive"
+                disabled={!hasAuthTokens || isLoading}
+                onPress={handleDisconnect}
+                onLongPress={handleDisconnectLongPress}
+                suppressOnPressAfterLongPress
+              />
             </View>
-          ) : null}
-        </View>
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoTitle}>Security</Text>
+              <Text style={styles.infoText}>
+                🔒 Your auth tokens will not leave the device, and are stored in
+                Expo Secure Store. On iOS it uses the OS Keychain.
+              </Text>
+            </View>
+
+            <View style={styles.advancedSection}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: isAdvancedVisible }}
+                onPress={handleToggleAdvanced}
+                style={({ pressed }) => [
+                  styles.advancedHeader,
+                  pressed ? styles.advancedHeaderPressed : null,
+                ]}
+              >
+                <Text style={styles.advancedTitle}>Advanced Options</Text>
+                <Text style={styles.advancedChevron}>
+                  {isAdvancedVisible ? "^" : "v"}
+                </Text>
+              </Pressable>
+              {isAdvancedVisible ? (
+                <View style={styles.advancedContent}>
+                  <Text style={styles.advancedHeading}>
+                    Google Drive Connector
+                  </Text>
+                  <Text style={styles.advancedDescription}>
+                    You can use your own Client ID for maximum internal control.
+                    You will need to configure it with all required permissions.
+                    Documentation still pending.
+                  </Text>
+
+                  <View style={styles.inputSection}>
+                    <Text style={styles.label}>Client ID Override</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={clientIdOverride}
+                      onChangeText={setClientIdOverride}
+                      placeholder={DEFAULT_CLIENT_ID_HINT}
+                      placeholderTextColor="#C7C7CC"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="off"
+                      keyboardType="default"
+                      editable={!isLoading}
+                      returnKeyType="done"
+                    />
+                    <Text style={styles.hint}>
+                      Leave blank to use the default bundled Client ID. Override
+                      if you have your own Google OAuth 2.0 client ID you would
+                      like to use.
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Save Client ID override"
+                    onPress={handleSave}
+                    disabled={!actionState.isDirty || isLoading}
+                    style={({ pressed }) => [
+                      styles.saveButton,
+                      (!actionState.isDirty || isLoading) &&
+                        styles.saveButtonDisabled,
+                      pressed &&
+                        actionState.isDirty &&
+                        !isLoading &&
+                        styles.saveButtonPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.saveButtonText,
+                        (!actionState.isDirty || isLoading) &&
+                          styles.saveButtonTextDisabled,
+                      ]}
+                    >
+                      {isLoading ? "Saving..." : "Save Changes"}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel changes"
+                    onPress={handleCancel}
+                    disabled={!actionState.isDirty || isLoading}
+                    style={({ pressed }) => [
+                      styles.cancelButton,
+                      (!actionState.isDirty || isLoading) &&
+                        styles.cancelButtonDisabled,
+                      pressed &&
+                        actionState.isDirty &&
+                        !isLoading &&
+                        styles.cancelButtonPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.cancelButtonText,
+                        (!actionState.isDirty || isLoading) &&
+                          styles.cancelButtonTextDisabled,
+                      ]}
+                    >
+                      Cancel
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           </>
         )}
       </ScrollView>
@@ -671,7 +732,12 @@ const styles = StyleSheet.create({
   },
   actionTitlePrimary: { color: "#FFFFFF" },
   actionTitleDestructive: { color: "#FFFFFF" },
-  actionSubtitle: { fontSize: 14, color: "#6E6E73", marginTop: 4, lineHeight: 20 },
+  actionSubtitle: {
+    fontSize: 14,
+    color: "#6E6E73",
+    marginTop: 4,
+    lineHeight: 20,
+  },
   actionSubtitlePrimary: { color: "#E5F2FF" },
   actionSubtitleDestructive: { color: "#FFE5E5" },
   buttonNote: {
@@ -681,8 +747,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
   },
-  infoBox: { backgroundColor: "#FFFFFF", borderRadius: 12, padding: 16, marginTop: 12 },
-  infoTitle: { fontSize: 15, fontWeight: "600", color: "#1C1C1E", marginBottom: 8 },
+  infoBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  infoTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1C1C1E",
+    marginBottom: 8,
+  },
   infoText: { fontSize: 14, color: "#636366", lineHeight: 20 },
   advancedSection: {
     marginTop: 24,
@@ -717,7 +793,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
-  advancedHeading: { fontSize: 16, fontWeight: "600", color: "#1C1C1E", marginBottom: 6 },
+  advancedHeading: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1C1C1E",
+    marginBottom: 6,
+  },
   advancedDescription: {
     fontSize: 14,
     color: "#636366",

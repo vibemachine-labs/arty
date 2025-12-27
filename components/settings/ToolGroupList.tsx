@@ -23,8 +23,8 @@ export const ToolGroupList: React.FC<ToolGroupListProps> = ({
   return (
     <View style={styles.container}>
       <Text style={styles.lead}>
-        Choose a tool group to configure its tools. Each tool group contains
-        one or more tools that enhance the assistant's capabilities.
+        Choose a tool group to configure its tools. Each tool group contains one
+        or more tools that enhance the assistant's capabilities.
       </Text>
       <View style={styles.groupList}>
         {toolGroups.map((group) => (

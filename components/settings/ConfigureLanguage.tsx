@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import {
-    Keyboard,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Keyboard,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 import { BottomSheet } from "../ui/BottomSheet";
@@ -33,7 +33,7 @@ const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { name: "Italian", flag: "🇮🇹", tier: "excellent" },
   { name: "Portuguese", flag: "🇧🇷", tier: "excellent" },
   { name: "Dutch", flag: "🇳🇱", tier: "excellent" },
-  
+
   // Tier 2 - Very good (4 stars)
   { name: "Japanese", flag: "🇯🇵", tier: "good" },
   { name: "Korean", flag: "🇰🇷", tier: "good" },
@@ -80,72 +80,80 @@ export const ConfigureLanguage: React.FC<ConfigureLanguageProps> = ({
 
         <View style={styles.tierSection}>
           <Text style={styles.tierHeader}>⭐ Excellent Support</Text>
-          <Text style={styles.tierSubtext}>Near-native quality • Natural TTS • High accuracy</Text>
+          <Text style={styles.tierSubtext}>
+            Near-native quality • Natural TTS • High accuracy
+          </Text>
         </View>
 
         <View style={styles.languageList}>
-          {SUPPORTED_LANGUAGES.filter(lang => lang.tier === "excellent").map((language) => {
-            const isSelected = selectedLanguage === language.name;
-            return (
-              <Pressable
-                key={language.name}
-                onPress={() => handleSelectLanguage(language.name)}
-                style={({ pressed }) => [
-                  styles.languageOption,
-                  isSelected && styles.languageOptionSelected,
-                  pressed && styles.languageOptionPressed,
-                ]}
-              >
-                <View style={styles.languageOptionContent}>
-                  <Text style={styles.languageFlag}>{language.flag}</Text>
-                  <Text
-                    style={[
-                      styles.languageLabel,
-                      isSelected && styles.languageLabelSelected,
-                    ]}
-                  >
-                    {language.name}
-                  </Text>
-                </View>
-                {isSelected && <Text style={styles.checkmark}>✓</Text>}
-              </Pressable>
-            );
-          })}
+          {SUPPORTED_LANGUAGES.filter((lang) => lang.tier === "excellent").map(
+            (language) => {
+              const isSelected = selectedLanguage === language.name;
+              return (
+                <Pressable
+                  key={language.name}
+                  onPress={() => handleSelectLanguage(language.name)}
+                  style={({ pressed }) => [
+                    styles.languageOption,
+                    isSelected && styles.languageOptionSelected,
+                    pressed && styles.languageOptionPressed,
+                  ]}
+                >
+                  <View style={styles.languageOptionContent}>
+                    <Text style={styles.languageFlag}>{language.flag}</Text>
+                    <Text
+                      style={[
+                        styles.languageLabel,
+                        isSelected && styles.languageLabelSelected,
+                      ]}
+                    >
+                      {language.name}
+                    </Text>
+                  </View>
+                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                </Pressable>
+              );
+            },
+          )}
         </View>
 
         <View style={styles.tierSection}>
           <Text style={styles.tierHeader}>✅ Very Good Support</Text>
-          <Text style={styles.tierSubtext}>Reliable • Good quality • Occasional quirks</Text>
+          <Text style={styles.tierSubtext}>
+            Reliable • Good quality • Occasional quirks
+          </Text>
         </View>
 
         <View style={styles.languageList}>
-          {SUPPORTED_LANGUAGES.filter(lang => lang.tier === "good").map((language) => {
-            const isSelected = selectedLanguage === language.name;
-            return (
-              <Pressable
-                key={language.name}
-                onPress={() => handleSelectLanguage(language.name)}
-                style={({ pressed }) => [
-                  styles.languageOption,
-                  isSelected && styles.languageOptionSelected,
-                  pressed && styles.languageOptionPressed,
-                ]}
-              >
-                <View style={styles.languageOptionContent}>
-                  <Text style={styles.languageFlag}>{language.flag}</Text>
-                  <Text
-                    style={[
-                      styles.languageLabel,
-                      isSelected && styles.languageLabelSelected,
-                    ]}
-                  >
-                    {language.name}
-                  </Text>
-                </View>
-                {isSelected && <Text style={styles.checkmark}>✓</Text>}
-              </Pressable>
-            );
-          })}
+          {SUPPORTED_LANGUAGES.filter((lang) => lang.tier === "good").map(
+            (language) => {
+              const isSelected = selectedLanguage === language.name;
+              return (
+                <Pressable
+                  key={language.name}
+                  onPress={() => handleSelectLanguage(language.name)}
+                  style={({ pressed }) => [
+                    styles.languageOption,
+                    isSelected && styles.languageOptionSelected,
+                    pressed && styles.languageOptionPressed,
+                  ]}
+                >
+                  <View style={styles.languageOptionContent}>
+                    <Text style={styles.languageFlag}>{language.flag}</Text>
+                    <Text
+                      style={[
+                        styles.languageLabel,
+                        isSelected && styles.languageLabelSelected,
+                      ]}
+                    >
+                      {language.name}
+                    </Text>
+                  </View>
+                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                </Pressable>
+              );
+            },
+          )}
         </View>
 
         <View style={styles.customSection}>

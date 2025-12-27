@@ -26,20 +26,28 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} title="Configure Context Window">
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Configure Context Window"
+    >
       <View style={styles.body}>
         <Text style={styles.lead}>
-          Control how audio and conversation history are retained to optimize cost and performance.
+          Control how audio and conversation history are retained to optimize
+          cost and performance.
         </Text>
 
         {/* Retention Ratio */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Retention Ratio</Text>
-            <Text style={styles.sectionValue}>{Math.round(retentionRatio * 100)}%</Text>
+            <Text style={styles.sectionValue}>
+              {Math.round(retentionRatio * 100)}%
+            </Text>
           </View>
           <Text style={styles.settingSubtitle}>
-            When context limit is hit, keep {Math.round(retentionRatio * 100)}% of most recent content
+            When context limit is hit, keep {Math.round(retentionRatio * 100)}%
+            of most recent content
           </Text>
           <Slider
             style={styles.slider}
@@ -60,7 +68,8 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
             <Text style={styles.sectionValue}>{maxConversationTurns}</Text>
           </View>
           <Text style={styles.settingSubtitle}>
-            Limit conversation history to most recent {maxConversationTurns} turn{maxConversationTurns === 1 ? '' : 's'}
+            Limit conversation history to most recent {maxConversationTurns}{" "}
+            turn{maxConversationTurns === 1 ? "" : "s"}
           </Text>
           <Slider
             style={styles.slider}

@@ -97,7 +97,7 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
     (text: string) => {
       onChange(text);
     },
-    [onChange]
+    [onChange],
   );
 
   const handleClearPress = useCallback(() => {
@@ -118,7 +118,10 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
       log.info("Copied prompt addition", {}, { length: value.trim().length });
     } catch (error) {
       log.error("Failed to copy prompt addition", {}, error);
-      Alert.alert("Copy Failed", "We couldn't copy your prompt. Please try again.");
+      Alert.alert(
+        "Copy Failed",
+        "We couldn't copy your prompt. Please try again.",
+      );
     }
   }, [isLoading, isSaving, value]);
 
@@ -134,7 +137,10 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
       onSaveSuccess();
     } catch (error) {
       log.error("Failed to save prompt addition", {}, error);
-      Alert.alert("Save Failed", "We couldn't update your prompt. Please try again in a moment.");
+      Alert.alert(
+        "Save Failed",
+        "We couldn't update your prompt. Please try again in a moment.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -225,7 +231,9 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
                     style={({ pressed }) => [
                       styles.actionButton,
                       styles.copyButton,
-                      pressed && !isCopyDisabled ? styles.copyButtonPressed : null,
+                      pressed && !isCopyDisabled
+                        ? styles.copyButtonPressed
+                        : null,
                       isCopyDisabled ? styles.actionButtonDisabled : null,
                     ]}
                   >
@@ -240,7 +248,9 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
                     style={({ pressed }) => [
                       styles.actionButton,
                       styles.clearButton,
-                      pressed && !isClearDisabled ? styles.clearButtonPressed : null,
+                      pressed && !isClearDisabled
+                        ? styles.clearButtonPressed
+                        : null,
                       isClearDisabled ? styles.actionButtonDisabled : null,
                     ]}
                   >
@@ -261,8 +271,12 @@ export const ConfigurePromptModal: React.FC<ConfigurePromptModalProps> = ({
                       pressed ? styles.currentPromptHeaderPressed : null,
                     ]}
                   >
-                    <Text style={styles.currentPromptTitle}>Current prompt</Text>
-                    <Text style={styles.currentPromptChevron}>{isExpanded ? "⌃" : "⌄"}</Text>
+                    <Text style={styles.currentPromptTitle}>
+                      Current prompt
+                    </Text>
+                    <Text style={styles.currentPromptChevron}>
+                      {isExpanded ? "⌃" : "⌄"}
+                    </Text>
                   </Pressable>
                   {isExpanded ? (
                     <View style={styles.currentPromptBody}>

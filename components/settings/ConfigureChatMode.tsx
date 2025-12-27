@@ -1,11 +1,5 @@
 import { memo } from "react";
-import {
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-} from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 export type ChatMode = "voice" | "text";
 
@@ -17,43 +11,68 @@ type ConfigureChatModeProps = {
 };
 
 const CHAT_MODES: { id: ChatMode; label: string; description: string }[] = [
-  { id: "voice", label: "Voice", description: "Talk naturally with realtime responses." },
+  {
+    id: "voice",
+    label: "Voice",
+    description: "Talk naturally with realtime responses.",
+  },
   { id: "text", label: "Text", description: "Type and read chat messages." },
 ];
 
-export const ConfigureChatMode = memo(({ visible, selectedMode, onSelectMode, onClose }: ConfigureChatModeProps) => {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheet}>
-        <Text style={styles.title}>Configure Chat Mode</Text>
-        <Text style={styles.subtitle}>Choose how you want to interact with Vibemachine.</Text>
-        <View style={styles.optionsContainer}>
-          {CHAT_MODES.map((mode) => {
-            const isSelected = selectedMode === mode.id;
-            return (
-              <Pressable
-                key={mode.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                onPress={() => onSelectMode(mode.id)}
-                style={[styles.option, isSelected && styles.optionSelected]}
-              >
-                <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-                  {isSelected && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.optionCopy}>
-                  <Text style={styles.optionLabel}>{mode.label}</Text>
-                  <Text style={styles.optionDescription}>{mode.description}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
+export const ConfigureChatMode = memo(
+  ({
+    visible,
+    selectedMode,
+    onSelectMode,
+    onClose,
+  }: ConfigureChatModeProps) => {
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={styles.sheet}>
+          <Text style={styles.title}>Configure Chat Mode</Text>
+          <Text style={styles.subtitle}>
+            Choose how you want to interact with Vibemachine.
+          </Text>
+          <View style={styles.optionsContainer}>
+            {CHAT_MODES.map((mode) => {
+              const isSelected = selectedMode === mode.id;
+              return (
+                <Pressable
+                  key={mode.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => onSelectMode(mode.id)}
+                  style={[styles.option, isSelected && styles.optionSelected]}
+                >
+                  <View
+                    style={[
+                      styles.radioOuter,
+                      isSelected && styles.radioOuterSelected,
+                    ]}
+                  >
+                    {isSelected && <View style={styles.radioInner} />}
+                  </View>
+                  <View style={styles.optionCopy}>
+                    <Text style={styles.optionLabel}>{mode.label}</Text>
+                    <Text style={styles.optionDescription}>
+                      {mode.description}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
-});
+      </Modal>
+    );
+  },
+);
 
 const styles = StyleSheet.create({
   backdrop: {

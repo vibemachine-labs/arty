@@ -12,14 +12,46 @@ export type VoiceOption = {
 export const VOICES: VoiceOption[] = [
   { value: "alloy", label: "Alloy", description: "Balanced, clear (improved)" },
   { value: "ash", label: "Ash", description: "Warm, friendly (improved)" },
-  { value: "ballad", label: "Ballad", description: "Smooth, melodic (improved)" },
-  { value: "coral", label: "Coral", description: "Vibrant, energetic (improved)" },
-  { value: "echo", label: "Echo", description: "Calm, professional (improved)" },
-  { value: "sage", label: "Sage", description: "Thoughtful, steady (improved)" },
-  { value: "shimmer", label: "Shimmer", description: "Bright, cheerful (improved)" },
-  { value: "verse", label: "Verse", description: "Expressive, dynamic (improved)" },
-  { value: "cedar", label: "Cedar", description: "Natural, grounded (Realtime only)" },
-  { value: "marin", label: "Marin", description: "Expressive, conversational (Realtime only)" },
+  {
+    value: "ballad",
+    label: "Ballad",
+    description: "Smooth, melodic (improved)",
+  },
+  {
+    value: "coral",
+    label: "Coral",
+    description: "Vibrant, energetic (improved)",
+  },
+  {
+    value: "echo",
+    label: "Echo",
+    description: "Calm, professional (improved)",
+  },
+  {
+    value: "sage",
+    label: "Sage",
+    description: "Thoughtful, steady (improved)",
+  },
+  {
+    value: "shimmer",
+    label: "Shimmer",
+    description: "Bright, cheerful (improved)",
+  },
+  {
+    value: "verse",
+    label: "Verse",
+    description: "Expressive, dynamic (improved)",
+  },
+  {
+    value: "cedar",
+    label: "Cedar",
+    description: "Natural, grounded (Realtime only)",
+  },
+  {
+    value: "marin",
+    label: "Marin",
+    description: "Expressive, conversational (Realtime only)",
+  },
 ];
 
 export interface ConfigureVoiceProps {
@@ -44,7 +76,9 @@ export const ConfigureVoice: React.FC<ConfigureVoiceProps> = ({
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.lead}>Choose the voice that fits your session vibe.</Text>
+        <Text style={styles.lead}>
+          Choose the voice that fits your session vibe.
+        </Text>
         <View style={styles.voiceList}>
           {voices.map((voice) => {
             const isSelected = voice.value === selectedVoice;
@@ -63,9 +97,16 @@ export const ConfigureVoice: React.FC<ConfigureVoiceProps> = ({
               >
                 <View style={styles.voiceContent}>
                   <Text style={styles.voiceLabel}>{voice.label}</Text>
-                  <Text style={styles.voiceDescription}>{voice.description}</Text>
+                  <Text style={styles.voiceDescription}>
+                    {voice.description}
+                  </Text>
                 </View>
-                <Text style={[styles.voiceCheckmark, isSelected ? styles.voiceCheckmarkActive : null]}>
+                <Text
+                  style={[
+                    styles.voiceCheckmark,
+                    isSelected ? styles.voiceCheckmarkActive : null,
+                  ]}
+                >
                   {isSelected ? "●" : "○"}
                 </Text>
               </Pressable>
@@ -73,7 +114,8 @@ export const ConfigureVoice: React.FC<ConfigureVoiceProps> = ({
           })}
         </View>
         <Text style={styles.helperText}>
-          You can adjust the voice anytime. Voice previews will arrive in an upcoming update.
+          You can adjust the voice anytime. Voice previews will arrive in an
+          upcoming update.
         </Text>
       </ScrollView>
     </BottomSheet>

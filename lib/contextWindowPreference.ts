@@ -51,7 +51,9 @@ export const loadMaxConversationTurns = async (): Promise<number> => {
   }
 };
 
-export const saveMaxConversationTurns = async (turns: number): Promise<void> => {
+export const saveMaxConversationTurns = async (
+  turns: number,
+): Promise<void> => {
   try {
     await AsyncStorage.setItem(MAX_CONVERSATION_TURNS_KEY, turns.toString());
   } catch {
@@ -59,10 +61,11 @@ export const saveMaxConversationTurns = async (turns: number): Promise<void> => 
   }
 };
 
-export const loadContextWindowPreferences = async (): Promise<ContextWindowPreferences> => {
-  const [retentionRatio, maxConversationTurns] = await Promise.all([
-    loadRetentionRatio(),
-    loadMaxConversationTurns(),
-  ]);
-  return { retentionRatio, maxConversationTurns };
-};
+export const loadContextWindowPreferences =
+  async (): Promise<ContextWindowPreferences> => {
+    const [retentionRatio, maxConversationTurns] = await Promise.all([
+      loadRetentionRatio(),
+      loadMaxConversationTurns(),
+    ]);
+    return { retentionRatio, maxConversationTurns };
+  };

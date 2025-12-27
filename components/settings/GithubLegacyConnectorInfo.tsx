@@ -18,10 +18,9 @@ type GithubLegacyConnectorInfoProps = {
   onClose: () => void;
 };
 
-export const GithubLegacyConnectorInfo: React.FC<GithubLegacyConnectorInfoProps> = ({
-  visible,
-  onClose,
-}) => {
+export const GithubLegacyConnectorInfo: React.FC<
+  GithubLegacyConnectorInfoProps
+> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const [isEnabled, setIsEnabled] = useState(false);
 
@@ -30,7 +29,9 @@ export const GithubLegacyConnectorInfo: React.FC<GithubLegacyConnectorInfoProps>
     if (visible) {
       const loadEnabled = async () => {
         try {
-          const enabledValue = await AsyncStorage.getItem("github_legacy_connector_enabled");
+          const enabledValue = await AsyncStorage.getItem(
+            "github_legacy_connector_enabled",
+          );
           // Default to false (disabled) for legacy connectors
           setIsEnabled(enabledValue === "true");
         } catch {
@@ -44,7 +45,10 @@ export const GithubLegacyConnectorInfo: React.FC<GithubLegacyConnectorInfoProps>
   const handleToggleEnabled = async (value: boolean) => {
     setIsEnabled(value);
     try {
-      await AsyncStorage.setItem("github_legacy_connector_enabled", value.toString());
+      await AsyncStorage.setItem(
+        "github_legacy_connector_enabled",
+        value.toString(),
+      );
       // Emit event to trigger cache reload
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     } catch {
@@ -80,7 +84,9 @@ export const GithubLegacyConnectorInfo: React.FC<GithubLegacyConnectorInfoProps>
           ]}
         >
           <View style={styles.enableSection}>
-            <Text style={styles.enableLabel}>Enable Legacy GitHub Connector</Text>
+            <Text style={styles.enableLabel}>
+              Enable Legacy GitHub Connector
+            </Text>
             <Switch
               value={isEnabled}
               onValueChange={handleToggleEnabled}
@@ -90,11 +96,14 @@ export const GithubLegacyConnectorInfo: React.FC<GithubLegacyConnectorInfoProps>
           </View>
 
           <Text style={styles.bodyText}>
-            This is the legacy GitHub connector that uses Octokit and executes JavaScript snippets.
+            This is the legacy GitHub connector that uses Octokit and executes
+            JavaScript snippets.
             {"\n\n"}
-            It is disabled by default. The newer GitHub tools in the main GitHub connector are recommended.
+            It is disabled by default. The newer GitHub tools in the main GitHub
+            connector are recommended.
             {"\n\n"}
-            To use this connector, you must configure your GitHub personal access token in the GitHub connector settings.
+            To use this connector, you must configure your GitHub personal
+            access token in the GitHub connector settings.
           </Text>
         </View>
       </SafeAreaView>

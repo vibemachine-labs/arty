@@ -22,7 +22,9 @@ export interface ToolkitResult {
  * @param context - The session context to check
  * @returns true if the context is empty or has no keys
  */
-export function isToolSessionContextEmpty(context: ToolSessionContext): boolean {
+export function isToolSessionContextEmpty(
+  context: ToolSessionContext,
+): boolean {
   return !context || Object.keys(context).length === 0;
 }
 
@@ -31,12 +33,14 @@ export function isToolSessionContextEmpty(context: ToolSessionContext): boolean 
  * @param context - The session context to summarize
  * @returns A formatted string like "key=value, key2=value2" or empty string if empty
  */
-export function summarizeToolSessionContext(context: ToolSessionContext): string {
+export function summarizeToolSessionContext(
+  context: ToolSessionContext,
+): string {
   if (isToolSessionContextEmpty(context)) {
-    return '';
+    return "";
   }
-  
+
   return Object.entries(context)
     .map(([key, value]) => `${key}=${value}`)
-    .join(', ');
+    .join(", ");
 }

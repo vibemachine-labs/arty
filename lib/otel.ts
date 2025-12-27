@@ -1,14 +1,21 @@
 import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
 import { trace, type Tracer } from "@opentelemetry/api";
-import { BasicTracerProvider, BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import {
+  BasicTracerProvider,
+  BatchSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 
 import { getLogfireApiKey, getLogfireEnabled } from "./secure-storage";
 
 type NativeTracingModule = {
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
-  logfireEvent(tracerName: string, spanName: string, attributes?: Record<string, unknown>): void;
+  logfireEvent(
+    tracerName: string,
+    spanName: string,
+    attributes?: Record<string, unknown>,
+  ): void;
 };
 
 type LoggerOptions = {
@@ -24,10 +31,14 @@ type LoggerLike = {
 };
 
 const fallbackLogger: LoggerLike = {
-  debug: (message, _options, ...args) => console.debug("[Logfire]", message, ...args),
-  info: (message, _options, ...args) => console.info("[Logfire]", message, ...args),
-  warn: (message, _options, ...args) => console.warn("[Logfire]", message, ...args),
-  error: (message, _options, ...args) => console.error("[Logfire]", message, ...args),
+  debug: (message, _options, ...args) =>
+    console.debug("[Logfire]", message, ...args),
+  info: (message, _options, ...args) =>
+    console.info("[Logfire]", message, ...args),
+  warn: (message, _options, ...args) =>
+    console.warn("[Logfire]", message, ...args),
+  error: (message, _options, ...args) =>
+    console.error("[Logfire]", message, ...args),
 };
 
 let currentLogger: LoggerLike = fallbackLogger;
@@ -39,10 +50,14 @@ export const registerLogfireLogger = (logger: LoggerLike | undefined): void => {
 };
 
 const log: LoggerLike = {
-  debug: (message, options, ...args) => currentLogger.debug(message, options, ...args),
-  info: (message, options, ...args) => currentLogger.info(message, options, ...args),
-  warn: (message, options, ...args) => currentLogger.warn(message, options, ...args),
-  error: (message, options, ...args) => currentLogger.error(message, options, ...args),
+  debug: (message, options, ...args) =>
+    currentLogger.debug(message, options, ...args),
+  info: (message, options, ...args) =>
+    currentLogger.info(message, options, ...args),
+  warn: (message, options, ...args) =>
+    currentLogger.warn(message, options, ...args),
+  error: (message, options, ...args) =>
+    currentLogger.error(message, options, ...args),
 };
 
 const SERVICE_NAME = "vibemachine";
@@ -53,11 +68,15 @@ const MODULE_NAME = "VmWebrtc";
 
 const resolveNativeModule = (): NativeTracingModule | undefined => {
   if (Platform.OS !== "ios") {
-    console.debug("[Logfire] Native module skipped: non-iOS platform", Platform.OS);
+    console.debug(
+      "[Logfire] Native module skipped: non-iOS platform",
+      Platform.OS,
+    );
     return undefined;
   }
 
-  const candidate = requireOptionalNativeModule<NativeTracingModule>(MODULE_NAME);
+  const candidate =
+    requireOptionalNativeModule<NativeTracingModule>(MODULE_NAME);
   if (
     candidate &&
     typeof candidate.initializeLogfireTracing === "function" &&
@@ -67,7 +86,9 @@ const resolveNativeModule = (): NativeTracingModule | undefined => {
     return candidate as NativeTracingModule;
   }
 
-  console.warn("[Logfire] Native module unavailable or missing tracing methods");
+  console.warn(
+    "[Logfire] Native module unavailable or missing tracing methods",
+  );
   return undefined;
 };
 
@@ -124,7 +145,9 @@ export async function initializeLogfire(): Promise<void> {
 
     const apiKey = await getLogfireApiKey();
     if (!apiKey || apiKey.length === 0) {
-      log.warn("Logfire tracing is enabled but no API key is configured", { emit2logfire: false });
+      log.warn("Logfire tracing is enabled but no API key is configured", {
+        emit2logfire: false,
+      });
       return;
     }
 
@@ -133,14 +156,24 @@ export async function initializeLogfire(): Promise<void> {
     if (nativeTracingModule) {
       try {
         await initializeNativeTracer(apiKey);
-        log.info("✅ Logfire native tracing initialized", { emit2logfire: false });
+        log.info("✅ Logfire native tracing initialized", {
+          emit2logfire: false,
+        });
         try {
-          nativeTracingModule.logfireEvent(TRACER_NAME, "native_tracing_initialized", {
-            source: "initializeLogfire",
-            is_native_logger: true,
-          });
+          nativeTracingModule.logfireEvent(
+            TRACER_NAME,
+            "native_tracing_initialized",
+            {
+              source: "initializeLogfire",
+              is_native_logger: true,
+            },
+          );
         } catch (eventError) {
-          log.warn("Failed to emit native tracing init event", { emit2logfire: false }, eventError);
+          log.warn(
+            "Failed to emit native tracing init event",
+            { emit2logfire: false },
+            eventError,
+          );
         }
       } catch (nativeError) {
         log.error(
@@ -149,7 +182,9 @@ export async function initializeLogfire(): Promise<void> {
           nativeError,
         );
         initializeJsTracer(apiKey);
-        log.info("✅ Logfire JS tracing fallback initialized", { emit2logfire: false });
+        log.info("✅ Logfire JS tracing fallback initialized", {
+          emit2logfire: false,
+        });
       }
     } else {
       initializeJsTracer(apiKey);
@@ -158,13 +193,24 @@ export async function initializeLogfire(): Promise<void> {
 
     isInitialized = true;
   } catch (error) {
-    log.error("Failed to initialize Logfire tracing:", { emit2logfire: false }, error);
+    log.error(
+      "Failed to initialize Logfire tracing:",
+      { emit2logfire: false },
+      error,
+    );
   }
 }
 
-export function logfireEvent(name: string, attrs?: Record<string, unknown>): void {
+export function logfireEvent(
+  name: string,
+  attrs?: Record<string, unknown>,
+): void {
   if (!isInitialized) {
-    log.debug("Logfire tracing not initialized, skipping event:", { emit2logfire: false }, name);
+    log.debug(
+      "Logfire tracing not initialized, skipping event:",
+      { emit2logfire: false },
+      name,
+    );
     return;
   }
 
@@ -172,13 +218,21 @@ export function logfireEvent(name: string, attrs?: Record<string, unknown>): voi
     try {
       nativeTracingModule?.logfireEvent(TRACER_NAME, name, attrs);
     } catch (error) {
-      log.error("Failed to log event to Logfire (native path):", { emit2logfire: false }, error);
+      log.error(
+        "Failed to log event to Logfire (native path):",
+        { emit2logfire: false },
+        error,
+      );
     }
     return;
   }
 
   if (!tracer) {
-    log.debug("JS tracer not configured, skipping event:", { emit2logfire: false }, name);
+    log.debug(
+      "JS tracer not configured, skipping event:",
+      { emit2logfire: false },
+      name,
+    );
     return;
   }
 
@@ -187,7 +241,11 @@ export function logfireEvent(name: string, attrs?: Record<string, unknown>): voi
     if (attrs) span.setAttributes(attrs as any);
     span.end();
   } catch (error) {
-    log.error("Failed to log event to Logfire:", { emit2logfire: false }, error);
+    log.error(
+      "Failed to log event to Logfire:",
+      { emit2logfire: false },
+      error,
+    );
   }
 }
 

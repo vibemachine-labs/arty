@@ -91,7 +91,8 @@ export type RemoteMcpToolkitDefinition = ToolkitDefinitionBase & {
   type: "remote_mcp_server";
   remote_mcp_server: {
     url: string;
-    protocol: "sse" | "stdio" | "websocket";
+    protocol: "sse" | "stdio" | "websocket" | "http";
+    requires_auth_header?: boolean;
   };
   extra?: Record<string, string>;
   function_call_wrapper?: string;

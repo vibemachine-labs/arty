@@ -7,49 +7,190 @@ import { lookupGithubRepo } from "../github_helper";
 import { summarizeContent, MAX_CONTENT_LENGTH } from "./summarizer";
 
 /**
+ * Validated parameters with guaranteed string repoName.
+ */
+interface ValidatedDeepWikiParams {
+  repoName: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Type guard to check if a value is a ToolkitResult object.
+ * This helps catch bugs where we accidentally pass an object instead of a string.
+ */
+function isToolkitResult(value: unknown): value is ToolkitResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "result" in value &&
+    "updatedToolSessionContext" in value
+  );
+}
+
+/**
+ * Type guard to ensure repoName is a valid non-empty string.
+ * Catches cases where an object is accidentally passed instead of a string.
+ */
+function isValidRepoName(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/**
  * Validate and resolve a repository name parameter.
  *
  * @param params - The tool parameters object
- * @returns Updated params with validated repoName
- * @throws Error if repoName is missing or cannot be validated
+ * @returns Updated params with validated repoName (guaranteed to be a string)
+ * @throws Error if repoName is missing, invalid, or cannot be validated
  */
-async function validateRepoName(params: any): Promise<any> {
+async function validateRepoName(
+  params: Record<string, unknown>,
+): Promise<ValidatedDeepWikiParams> {
+  const { log } = await import("../../../../../lib/logger");
+
   // Check if repoName parameter exists
-  if (!params.repoName) {
+  if (!("repoName" in params) || params.repoName === undefined) {
+    log.error(
+      "[DeepWikiWrapper] Missing repoName parameter",
+      {},
+      {
+        receivedParams: JSON.stringify(params),
+        paramKeys: Object.keys(params),
+      },
+    );
     throw new Error("Missing required parameter: repoName");
   }
 
-  const { log } = await import("../../../../../lib/logger");
-  const originalRepoName = params.repoName;
+  const rawRepoName = params.repoName;
+
+  // DEFENSIVE: Check if repoName is accidentally a ToolkitResult object
+  // This catches bugs where we forget to extract .result from lookupGithubRepo
+  if (isToolkitResult(rawRepoName)) {
+    log.error(
+      "[DeepWikiWrapper] ❌ BUG DETECTED: repoName is a ToolkitResult object instead of a string!",
+      {},
+      {
+        receivedType: typeof rawRepoName,
+        receivedValue: JSON.stringify(rawRepoName),
+        expectedType: "string",
+        hint: "Someone passed the full ToolkitResult object instead of extracting .result",
+      },
+    );
+    throw new Error(
+      `BUG: repoName is a ToolkitResult object instead of a string. Received: ${JSON.stringify(rawRepoName)}. Expected a string like "owner/repo".`,
+    );
+  }
+
+  // DEFENSIVE: Ensure repoName is a valid string
+  if (!isValidRepoName(rawRepoName)) {
+    log.error(
+      "[DeepWikiWrapper] ❌ Invalid repoName type or empty value",
+      {},
+      {
+        receivedType: typeof rawRepoName,
+        receivedValue: JSON.stringify(rawRepoName),
+        expectedType: "non-empty string",
+      },
+    );
+    throw new Error(
+      `Invalid repoName: expected non-empty string, got ${typeof rawRepoName}: ${JSON.stringify(rawRepoName)}`,
+    );
+  }
+
+  const originalRepoName: string = rawRepoName;
 
   log.info(
     "[DeepWikiWrapper] Validating repository name",
     {},
     {
       originalRepoName,
+      originalRepoNameType: typeof originalRepoName,
     },
   );
 
   try {
     // Lookup and validate the repo using GitHub helper
-    const validatedRepoName = await lookupGithubRepo({
+    // lookupGithubRepo returns ToolkitResult, NOT a plain string
+    const lookupResult: ToolkitResult = await lookupGithubRepo({
       repoIdentifier: originalRepoName,
     });
 
+    log.debug(
+      "[DeepWikiWrapper] lookupGithubRepo returned",
+      {},
+      {
+        lookupResultType: typeof lookupResult,
+        lookupResultKeys:
+          typeof lookupResult === "object" && lookupResult !== null
+            ? Object.keys(lookupResult)
+            : "N/A",
+        lookupResultFull: JSON.stringify(lookupResult),
+      },
+    );
+
+    // DEFENSIVE: Verify we got a ToolkitResult
+    if (!isToolkitResult(lookupResult)) {
+      log.error(
+        "[DeepWikiWrapper] ❌ lookupGithubRepo did not return a ToolkitResult",
+        {},
+        {
+          receivedType: typeof lookupResult,
+          receivedValue: JSON.stringify(lookupResult),
+        },
+      );
+      throw new Error(
+        `lookupGithubRepo returned unexpected type: ${typeof lookupResult}`,
+      );
+    }
+
+    // Extract the result string from the ToolkitResult
+    const validatedRepoName: string = lookupResult.result;
+
+    // DEFENSIVE: Ensure the extracted result is a valid string
+    if (!isValidRepoName(validatedRepoName)) {
+      log.error(
+        "[DeepWikiWrapper] ❌ lookupGithubRepo.result is not a valid string",
+        {},
+        {
+          extractedResultType: typeof validatedRepoName,
+          extractedResultValue: JSON.stringify(validatedRepoName),
+          fullLookupResult: JSON.stringify(lookupResult),
+        },
+      );
+      throw new Error(
+        `lookupGithubRepo.result is not a valid string: ${JSON.stringify(validatedRepoName)}`,
+      );
+    }
+
     log.info(
-      "[DeepWikiWrapper] Repository name validated",
+      "[DeepWikiWrapper] ✅ Repository name validated successfully",
       {},
       {
         originalRepoName,
         validatedRepoName,
+        validatedRepoNameType: typeof validatedRepoName,
       },
     );
 
-    // Return updated params with validated repo name
-    return {
+    // Return updated params with validated repo name (guaranteed string)
+    const validatedParams: ValidatedDeepWikiParams = {
       ...params,
       repoName: validatedRepoName,
     };
+
+    // Final sanity check before returning
+    if (!isValidRepoName(validatedParams.repoName)) {
+      log.error(
+        "[DeepWikiWrapper] ❌ Final validation failed - repoName is not a string",
+        {},
+        {
+          finalRepoNameType: typeof validatedParams.repoName,
+          finalRepoNameValue: JSON.stringify(validatedParams.repoName),
+        },
+      );
+      throw new Error("Internal error: validated repoName is not a string");
+    }
+
+    return validatedParams;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log.debug(
@@ -78,8 +219,8 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
   ): ToolkitFunction {
     // Return a wrapped function with the same signature
     return async (
-      params: any,
-      context_params?: any,
+      params: Record<string, unknown>,
+      context_params?: Record<string, unknown>,
       toolSessionContext?: ToolSessionContext,
     ): Promise<ToolkitResult> => {
       const { log } = await import("../../../../../lib/logger");
@@ -91,8 +232,11 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
         {
           groupName,
           toolName,
-          params,
-          context_params,
+          params: JSON.stringify(params),
+          paramsRepoNameType: typeof params.repoName,
+          context_params: context_params
+            ? JSON.stringify(context_params)
+            : undefined,
           sessionContextKeys: toolSessionContext
             ? Object.keys(toolSessionContext)
             : [],
@@ -100,9 +244,20 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
       );
 
       // Validate and resolve repository name
-      let validatedParams: any;
+      let validatedParams: ValidatedDeepWikiParams;
       try {
         validatedParams = await validateRepoName(params);
+
+        // Log the validated params for debugging
+        log.debug(
+          "[DeepWikiWrapper] Params after validation",
+          {},
+          {
+            validatedParams: JSON.stringify(validatedParams),
+            validatedRepoNameType: typeof validatedParams.repoName,
+            validatedRepoNameValue: validatedParams.repoName,
+          },
+        );
       } catch (error) {
         // Log validation error
         log.warn(
@@ -113,12 +268,16 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
             toolName,
             errorMessage:
               error instanceof Error ? error.message : String(error),
+            originalRepoName: params.repoName,
+            originalRepoNameType: typeof params.repoName,
+            originalRepoNameValue: JSON.stringify(params.repoName),
           },
           error instanceof Error ? error : new Error(String(error)),
         );
 
         // Return a ToolkitResult with the error message
-        const repoName = params.repoName || "unknown";
+        const repoName =
+          typeof params.repoName === "string" ? params.repoName : "unknown";
         const errorMessage =
           error instanceof Error
             ? error.message
@@ -156,8 +315,7 @@ export class DeepWikiWrapper implements ToolkitFunctionWrapper {
           typeof result.result === "string" &&
           result.result.includes("Error fetching wiki")
         ) {
-          const repoName =
-            params.repoName || validatedParams.repoName || "unknown";
+          const repoName = validatedParams.repoName;
           const truncatedResponse = result.result.substring(0, 1000);
           const spelledOutName = repoName.split("").join(" ");
           const errorMessage = `DeepWiki could not fetch documentation for this repository. Response: ${truncatedResponse}... I searched for "${repoName}". Let me spell that out letter by letter so you can double check the spelling: ${spelledOutName}`;

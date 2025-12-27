@@ -1,19 +1,24 @@
 // MARK: - Toolkit Functions Registry
 
-import { log } from '../../../../lib/logger';
-import * as dailyPapers from './daily_papers';
-import * as googleDrive from './google_drive';
-import * as hackerNews from './hacker_news';
-import * as web from './web';
+import { log } from "../../../../lib/logger";
+import * as dailyPapers from "./daily_papers";
+import * as github from "./github_helper";
+import * as googleDrive from "./google_drive";
+import * as hackerNews from "./hacker_news";
+import * as web from "./web";
 
 // MARK: - Types
 
-import type { ToolSessionContext, ToolkitResult } from './types';
+import type { ToolSessionContext, ToolkitResult } from "./types";
 
 // Re-export types for convenience
 export type { ToolSessionContext, ToolkitResult };
 
-export type ToolkitFunction = (params: any, context_params?: any, toolSessionContext?: ToolSessionContext) => Promise<ToolkitResult>;
+export type ToolkitFunction = (
+  params: any,
+  context_params?: any,
+  toolSessionContext?: ToolSessionContext,
+) => Promise<ToolkitResult>;
 
 export interface ToolkitRegistry {
   [groupName: string]: {
@@ -33,6 +38,7 @@ const toolkitModules = {
   daily_papers: dailyPapers,
   web: web,
   google_drive: googleDrive,
+  github: github,
 };
 
 /**
@@ -40,33 +46,43 @@ const toolkitModules = {
  * This registry is mutable and can be extended at runtime with MCP tools.
  * Automatically populated from toolkit modules using convention over configuration.
  */
-export const toolkitRegistry: ToolkitRegistry = Object.entries(toolkitModules).reduce(
-  (registry, [groupName, module]) => {
-    registry[groupName] = Object.entries(module)
-      .filter(([_key, value]) => typeof value === 'function')
-      .reduce((tools, [toolName, toolFunction]) => {
+export const toolkitRegistry: ToolkitRegistry = Object.entries(
+  toolkitModules,
+).reduce((registry, [groupName, module]) => {
+  registry[groupName] = Object.entries(module)
+    .filter(([_key, value]) => typeof value === "function")
+    .reduce(
+      (tools, [toolName, toolFunction]) => {
         tools[toolName] = toolFunction as ToolkitFunction;
         return tools;
-      }, {} as { [toolName: string]: ToolkitFunction });
-    return registry;
-  },
-  {} as ToolkitRegistry
-);
+      },
+      {} as { [toolName: string]: ToolkitFunction },
+    );
+  return registry;
+}, {} as ToolkitRegistry);
 
 /**
  * Register a runtime MCP tool function in the toolkit registry.
  * This allows MCP tools to be treated the same as local tools.
  */
-export function registerMcpTool(groupName: string, toolName: string, toolFunction: ToolkitFunction): void {
+export function registerMcpTool(
+  groupName: string,
+  toolName: string,
+  toolFunction: ToolkitFunction,
+): void {
   if (!toolkitRegistry[groupName]) {
     toolkitRegistry[groupName] = {};
   }
   toolkitRegistry[groupName][toolName] = toolFunction;
 
-  log.info('[ToolkitRegistry] Registered MCP tool', {}, {
-    groupName,
-    toolName,
-  });
+  log.info(
+    "[ToolkitRegistry] Registered MCP tool",
+    {},
+    {
+      groupName,
+      toolName,
+    },
+  );
 }
 
 // MARK: - Executor
@@ -85,22 +101,32 @@ export async function executeToolkitFunction(
   toolName: string,
   params: any,
   context_params?: any,
-  toolSessionContext?: ToolSessionContext
+  toolSessionContext?: ToolSessionContext,
 ): Promise<ToolkitResult> {
-  log.info('[ToolkitRegistry] Executing toolkit function', {}, {
-    groupName,
-    toolName,
-    params,
-    toolSessionContext: toolSessionContext ? JSON.stringify(toolSessionContext) : 'undefined',
-    hasToolSessionContext: !!toolSessionContext,
-    contextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
-  });
+  log.info(
+    "[ToolkitRegistry] Executing toolkit function",
+    {},
+    {
+      groupName,
+      toolName,
+      params,
+      toolSessionContext: toolSessionContext
+        ? JSON.stringify(toolSessionContext)
+        : "undefined",
+      hasToolSessionContext: !!toolSessionContext,
+      contextKeys: toolSessionContext ? Object.keys(toolSessionContext) : [],
+    },
+  );
 
   // Check if group exists
   const group = toolkitRegistry[groupName];
   if (!group) {
     const error = `Unknown toolkit group: ${groupName}`;
-    log.error('[ToolkitRegistry] Group not found', {}, { groupName, availableGroups: Object.keys(toolkitRegistry) });
+    log.error(
+      "[ToolkitRegistry] Group not found",
+      {},
+      { groupName, availableGroups: Object.keys(toolkitRegistry) },
+    );
     throw new Error(error);
   }
 
@@ -108,36 +134,55 @@ export async function executeToolkitFunction(
   const toolFunction = group[toolName];
   if (!toolFunction) {
     const error = `Unknown tool '${toolName}' in group '${groupName}'`;
-    log.error('[ToolkitRegistry] Tool not found', {}, {
-      groupName,
-      toolName,
-      availableTools: Object.keys(group),
-    });
+    log.error(
+      "[ToolkitRegistry] Tool not found",
+      {},
+      {
+        groupName,
+        toolName,
+        availableTools: Object.keys(group),
+      },
+    );
     throw new Error(error);
   }
 
   // Execute the tool function
   try {
-    const toolkitResult = await toolFunction(params, context_params, toolSessionContext || {});
-    log.info('[ToolkitRegistry] Tool execution successful', {}, {
-      groupName,
-      toolName,
-      resultLength: toolkitResult.result.length,
-      result: toolkitResult.result,
-      sessionContextKeys: Object.keys(toolkitResult.updatedToolSessionContext),
-    });
+    const toolkitResult = await toolFunction(
+      params,
+      context_params,
+      toolSessionContext || {},
+    );
+    log.info(
+      "[ToolkitRegistry] Tool execution successful",
+      {},
+      {
+        groupName,
+        toolName,
+        resultLength: toolkitResult.result.length,
+        result: toolkitResult.result,
+        sessionContextKeys: Object.keys(
+          toolkitResult.updatedToolSessionContext,
+        ),
+      },
+    );
     return toolkitResult;
   } catch (error) {
-    log.error('[ToolkitRegistry] Tool execution failed', {}, {
-      groupName,
-      toolName,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      errorStack: error instanceof Error ? error.stack : undefined,
-    }, error);
+    log.error(
+      "[ToolkitRegistry] Tool execution failed",
+      {},
+      {
+        groupName,
+        toolName,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      },
+      error,
+    );
     throw error;
   }
 }
 
 // MARK: - Exports
 
-export { dailyPapers, googleDrive, hackerNews, web };
+export { dailyPapers, github, googleDrive, hackerNews, web };

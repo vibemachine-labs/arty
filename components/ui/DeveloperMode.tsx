@@ -16,7 +16,6 @@ import {
 import * as Clipboard from "expo-clipboard";
 
 import { OnboardingWizard } from "../../app/OnboardingWizard";
-import { RecordingScreen } from "./RecordingScreen";
 import {
   loadLogRedactionDisabled,
   loadShowRealtimeErrorAlerts,
@@ -47,7 +46,10 @@ const DeveloperModeHeader: React.FC<{
         accessibilityLabel="Cancel developer mode changes"
         accessibilityRole="button"
         onPress={onCancel}
-        style={({ pressed }) => [styles.headerButton, pressed && styles.headerButtonPressed]}
+        style={({ pressed }) => [
+          styles.headerButton,
+          pressed && styles.headerButtonPressed,
+        ]}
       >
         <Text style={styles.headerButtonText}>Cancel</Text>
       </Pressable>
@@ -76,33 +78,15 @@ const DeveloperModeHeader: React.FC<{
   );
 };
 
-const ManagerRecordingSection: React.FC<{ onOpenManager: () => void }> = ({
-  onOpenManager,
+const OnboardingSection: React.FC<{ onFinishOnboarding: () => void }> = ({
+  onFinishOnboarding,
 }) => {
-  return (
-    <View style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>Manager Recording</Text>
-      <Text style={styles.sectionSubtitle}>
-        Review iOS voice session audio captured during testing. Files stay on this device.
-      </Text>
-      <Pressable
-        accessibilityLabel="Open recording manager"
-        accessibilityRole="button"
-        onPress={onOpenManager}
-        style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
-      >
-        <Text style={styles.primaryButtonText}>Open Recording Manager</Text>
-      </Pressable>
-    </View>
-  );
-};
-
-const OnboardingSection: React.FC<{ onFinishOnboarding: () => void }> = ({ onFinishOnboarding }) => {
   return (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionTitle}>Onboarding Wizard</Text>
       <Text style={styles.sectionSubtitle}>
-        Walk through API key setup and Google Drive connector access so you can start voice chatting with your files.
+        Walk through API key setup and Google Drive connector access so you can
+        start voice chatting with your files.
       </Text>
       <OnboardingWizard
         onFinish={onFinishOnboarding}
@@ -134,7 +118,8 @@ const ErrorAlertsSection: React.FC<{
         <View style={styles.settingTextContainer}>
           <Text style={styles.sectionTitle}>Show Error Alerts</Text>
           <Text style={styles.sectionSubtitle}>
-            Display alert dialogs when realtime errors occur. Useful for debugging issues without interrupting the call.
+            Display alert dialogs when realtime errors occur. Useful for
+            debugging issues without interrupting the call.
           </Text>
         </View>
         <Switch
@@ -155,14 +140,23 @@ const LogfireTracingSection: React.FC<{
   onToggleEnabled: (value: boolean) => void;
   onApiKeyChange: (value: string) => void;
   onPaste: () => void;
-}> = ({ logfireEnabled, logfireApiKey, onToggleEnabled, onApiKeyChange, onPaste }) => {
+}> = ({
+  logfireEnabled,
+  logfireApiKey,
+  onToggleEnabled,
+  onApiKeyChange,
+  onPaste,
+}) => {
   return (
     <View style={styles.sectionCard}>
       <View style={styles.settingRow}>
         <View style={styles.settingTextContainer}>
-          <Text style={styles.sectionTitle}>Enable Pydantic Logfire Tracing</Text>
+          <Text style={styles.sectionTitle}>
+            Enable Pydantic Logfire Tracing
+          </Text>
           <Text style={styles.sectionSubtitle}>
-            Send OpenTelemetry traces to Pydantic Logfire for observability and debugging.
+            Send OpenTelemetry traces to Pydantic Logfire for observability and
+            debugging.
           </Text>
         </View>
         <Switch
@@ -215,7 +209,9 @@ const LogRedactionSection: React.FC<{
         <View style={styles.settingTextContainer}>
           <Text style={styles.sectionTitle}>Disable Log Redaction</Text>
           <Text style={styles.sectionSubtitle}>
-            Show the exact payloads captured in logs to debug connector issues. Only turn this off on trusted devices because sensitive data may appear.
+            Show the exact payloads captured in logs to debug connector issues.
+            Only turn this off on trusted devices because sensitive data may
+            appear.
           </Text>
         </View>
         <Switch
@@ -229,15 +225,18 @@ const LogRedactionSection: React.FC<{
       </View>
       {redactionDisabled && (
         <Text style={styles.warningText}>
-          Warning: Secrets such as API keys and bearer tokens will be visible in console output while this is enabled.
+          Warning: Secrets such as API keys and bearer tokens will be visible in
+          console output while this is enabled.
         </Text>
       )}
     </View>
   );
 };
 
-export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }) => {
-  const [recordingManagerVisible, setRecordingManagerVisible] = useState(false);
+export const DeveloperMode: React.FC<DeveloperModeProps> = ({
+  visible,
+  onClose,
+}) => {
   const [showErrorAlerts, setShowErrorAlerts] = useState(true);
   const [logfireEnabled, setLogfireEnabled] = useState(false);
   const [logfireApiKey, setLogfireApiKey] = useState("");
@@ -253,21 +252,16 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
 
   useEffect(() => {
     if (!visible) {
-      setRecordingManagerVisible(false);
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible) {
       return;
     }
     const loadSettings = async () => {
-      const [setting, enabled, apiKeyValue, redactionDisabled] = await Promise.all([
-        loadShowRealtimeErrorAlerts(),
-        getLogfireEnabled(),
-        getLogfireApiKey(),
-        loadLogRedactionDisabled(),
-      ]);
+      const [setting, enabled, apiKeyValue, redactionDisabled] =
+        await Promise.all([
+          loadShowRealtimeErrorAlerts(),
+          getLogfireEnabled(),
+          getLogfireApiKey(),
+          loadLogRedactionDisabled(),
+        ]);
       const apiKey = apiKeyValue || "";
       setShowErrorAlerts(setting);
       setLogfireEnabled(enabled);
@@ -282,10 +276,6 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
     };
     void loadSettings();
   }, [visible]);
-
-  const handleOpenRecordingManager = useCallback(() => {
-    setRecordingManagerVisible(true);
-  }, []);
 
   const handleToggleErrorAlerts = useCallback((value: boolean) => {
     setShowErrorAlerts(value);
@@ -327,7 +317,6 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
       setLogfireApiKey("");
       setLogRedactionDisabled(false);
     }
-    setRecordingManagerVisible(false);
   }, [initialSettings]);
 
   const persistSettings = useCallback(async () => {
@@ -368,13 +357,12 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
         logRedactionDisabled,
       });
       setLogfireApiKey(trimmedApiKey);
-      setRecordingManagerVisible(false);
       onClose();
     } catch (error) {
       console.error("Failed to save developer settings", error);
       Alert.alert(
         "Save failed",
-        "Unable to persist developer settings. Please try again."
+        "Unable to persist developer settings. Please try again.",
       );
     } finally {
       setIsSaving(false);
@@ -441,9 +429,6 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
               redactionDisabled={logRedactionDisabled}
               onToggle={handleToggleLogRedactionDisabled}
             />
-            <ManagerRecordingSection
-              onOpenManager={handleOpenRecordingManager}
-            />
             <OnboardingSection onFinishOnboarding={onClose} />
             <LogfireTracingSection
               logfireEnabled={logfireEnabled}
@@ -455,10 +440,6 @@ export const DeveloperMode: React.FC<DeveloperModeProps> = ({ visible, onClose }
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <RecordingScreen
-        visible={recordingManagerVisible}
-        onClose={() => setRecordingManagerVisible(false)}
-      />
     </Modal>
   );
 };

@@ -38,28 +38,6 @@ enum OpenAIWebRTCError: LocalizedError {
 }
 
 final class OpenAIWebRTCClient: NSObject {
-    @MainActor lazy var recordingManager: VoiceSessionRecordingManager = {
-        let manager = VoiceSessionRecordingManager()
-        manager.setMetricsHandler { [weak self] metrics in
-            guard let self else { return }
-            self.logger.log(
-                "[VmWebrtc] " + "Outgoing audio meters",
-                attributes: logAttributes(for: .debug, metadata: metrics.toMetadata()))
-            Task { @MainActor in
-                self.emitModuleEvent("onAudioMetrics", payload: metrics.toMetadata())
-            }
-        }
-        manager.setLogEmitter { [weak self] level, message, metadata in
-            guard let self else { return }
-            let logLevel = self.convertLogLevel(level)
-            self.logger.log(
-                "[VmWebrtc][\(logLevel.rawValue.uppercased())] " + message,
-                attributes: logAttributes(for: logLevel, metadata: metadata)
-            )
-        }
-        return manager
-    }()
-    var isRecordingEnabled: Bool = false
 
     public enum NativeLogLevel: String {
         case trace
@@ -454,7 +432,6 @@ final class OpenAIWebRTCClient: NSObject {
         voice: String?,
         vadMode: String?,
         audioSpeed: Double?,
-        enableRecording: Bool,
         maxConversationTurns: Int?,
         retentionRatio: Double?,
         transcriptionEnabled: Bool
@@ -525,10 +502,7 @@ final class OpenAIWebRTCClient: NSObject {
                     "hasBaseURL": (baseURL?.isEmpty == false),
                     "audioOutput": audioOutput.rawValue,
                     "voice": sessionVoice,
-                    "recordingEnabled": enableRecording,
                 ]))
-        // Persist recording preferences
-        self.isRecordingEnabled = enableRecording
 
         self.logger.log(
             "[VmWebrtc] " + "Resolved session instructions",
@@ -576,35 +550,6 @@ final class OpenAIWebRTCClient: NSObject {
                 metadata: [
                     "requestedOutput": audioOutput.rawValue
                 ]))
-
-        let audioSession = AVAudioSession.sharedInstance()
-
-        if enableRecording {
-            do {
-                try await recordingManager.startRecording(
-                    using: audioSession,
-                    apiKey: resolvedApiKey,
-                    voice: sessionVoice
-                )
-            } catch {
-                self.logger.log(
-                    "[VmWebrtc] " + "Failed to start recording",
-                    attributes: logAttributes(
-                        for: .warn,
-                        metadata: [
-                            "error": error.localizedDescription
-                        ]))
-            }
-        } else {
-            self.logger.log(
-                "[VmWebrtc] " + "Recording disabled by user preference",
-                attributes: logAttributes(
-                    for: .info,
-                    metadata: [
-                        "recordingRequested": enableRecording,
-                        "reason": "user_preference",
-                    ]))
-        }
 
         let connection = try makePeerConnection()
         firstCandidateTimestamp = nil
@@ -654,9 +599,6 @@ final class OpenAIWebRTCClient: NSObject {
             "[VmWebrtc] " + "OpenAI WebRTC connection flow finished",
             attributes: logAttributes(for: .info, metadata: ["state": state]))
 
-        if enableRecording {
-            await recordingManager.startConversationTracking()
-        }
         if state == "connected" || state == "completed" {
             eventHandler.startIdleMonitoring(timeout: Constants.idleTimeoutSeconds) { [weak self] in
                 guard let self else { return }
@@ -667,19 +609,6 @@ final class OpenAIWebRTCClient: NSObject {
         }
 
         return state
-    }
-
-    /// Convert saved transcript to OpenAI TTS voice and merge
-    /// Call this AFTER the call has ended if you want premium AI voice instead of Siri
-    /// - Parameters:
-    ///   - apiKey: OpenAI API key
-    ///   - voice: Optional override; if nil or empty, uses sessionVoice.
-    @MainActor
-    func convertTranscriptToOpenAIVoice(apiKey: String, voice: String? = nil) {
-        recordingManager.convertTranscriptToOpenAIVoice(
-            apiKey: apiKey,
-            voice: voice
-        )
     }
 
     @MainActor
@@ -745,21 +674,6 @@ final class OpenAIWebRTCClient: NSObject {
 
         hasSentInitialSessionConfig = false
 
-        // ============================================
-        // TTS Recording & Merge Workflow
-        // ============================================
-
-        if isRecordingEnabled {
-            recordingManager.stopRecordingAndProcess {
-                // Completion handler - nothing needed here
-            }
-        } else {
-            self.logger.log(
-                "[VmWebrtc] " + "Recording was disabled - skipping TTS generation and merge",
-                attributes: logAttributes(for: .info))
-            recordingManager.reset()
-        }
-
         stopMonitoringAudioRouteChanges()
         deactivateAudioSession()
 
@@ -768,8 +682,7 @@ final class OpenAIWebRTCClient: NSObject {
             attributes: logAttributes(
                 for: .info,
                 metadata: [
-                    "recordingEnabled": isRecordingEnabled,
-                    "hadPeerConnection": hadPeerConnection,
+                    "hadPeerConnection": hadPeerConnection
                 ]))
 
         return "closed"

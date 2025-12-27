@@ -435,6 +435,29 @@
         }
       ]
     },
+    "github": {
+      "name": "github",
+      "toolkits": [
+        {
+          "type": "function",
+          "name": "lookupGithubRepo",
+          "group": "github",
+          "description": "Resolve a repository identifier to its canonical owner/repo format. If the identifier contains a slash (e.g., 'owner/repo'), validates that the repo exists. Otherwise, treats the identifier as a search term and uses GitHub search to find the most popular matching repository. Returns the canonical 'Owner/Repo' string. Useful when you need to find a GitHub repository from a partial name, misspelled name, or phonetically similar name from voice input.",
+          "supported_auth": "api_key",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "repoIdentifier": {
+                "type": "string",
+                "description": "Repository identifier - either 'owner/repo' format or a search term like 'react' or 'arty'"
+              }
+            },
+            "required": ["repoIdentifier"]
+          }
+        }
+      ]
+    },
     "github_legacy": {
       "name": "github_legacy",
       "toolkits": [

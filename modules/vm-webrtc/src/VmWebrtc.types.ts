@@ -1,6 +1,6 @@
-import type { StyleProp, ViewStyle } from 'react-native';
-import { loadToolPromptAddition } from '../../../lib/toolPrompts';
-import type { VadMode } from '../../../lib/vadPreference';
+import type { StyleProp, ViewStyle } from "react-native";
+import { loadToolPromptAddition } from "../../../lib/toolPrompts";
+import type { VadMode } from "../../../lib/vadPreference";
 
 export type OnLoadEventPayload = {
   url: string;
@@ -20,17 +20,17 @@ export type BaseOpenAIConnectionOptions = {
   apiKey: string;
   model?: string;
   baseUrl?: string;
-  audioOutput?: 'handset' | 'speakerphone';
+  audioOutput?: "handset" | "speakerphone";
   voice?: string;
 };
 
 // Function tool definition (local/native tools)
 export type FunctionToolDefinition = {
-  type: 'function';
+  type: "function";
   name: string;
   description: string;
   parameters: {
-    type: 'object';
+    type: "object";
     properties: Record<
       string,
       {
@@ -48,12 +48,12 @@ export type FunctionToolDefinition = {
 // compatibility with LLM tool calling. The actual dispatch logic checks the
 // toolkit registry to determine if a tool is a remote MCP tool.
 export type McpToolDefinition = {
-  type: 'mcp';
+  type: "mcp";
   server_label: string;
   server_description: string;
   server_url: string;
   headers: Record<string, string>;
-  require_approval: 'never' | 'always' | 'auto';
+  require_approval: "never" | "always" | "auto";
 };
 
 // Union type for all tool definitions
@@ -62,7 +62,7 @@ export type McpToolDefinition = {
 export type ToolDefinition = FunctionToolDefinition;
 
 type ToolkitParameters = {
-  type: 'object';
+  type: "object";
   properties: Record<
     string,
     {
@@ -77,32 +77,35 @@ export type ToolkitDefinitionBase = {
   name: string;
   group: string;
   description: string;
-  supported_auth: 'no_auth_required' | 'api_key' | 'oauth2';
+  supported_auth: "no_auth_required" | "api_key" | "oauth2";
   parameters: ToolkitParameters;
 };
 
 export type FunctionToolkitDefinition = ToolkitDefinitionBase & {
-  type: 'function';
+  type: "function";
   tool_source_file?: string;
   extra: Record<string, string>;
 };
 
 export type RemoteMcpToolkitDefinition = ToolkitDefinitionBase & {
-  type: 'remote_mcp_server';
+  type: "remote_mcp_server";
   remote_mcp_server: {
     url: string;
-    protocol: 'sse' | 'stdio' | 'websocket';
+    protocol: "sse" | "stdio" | "websocket";
   };
   extra?: Record<string, string>;
   function_call_wrapper?: string;
 };
 
 export type LegacyConnectorToolkitDefinition = ToolkitDefinitionBase & {
-  type: 'legacy_connector';
+  type: "legacy_connector";
   extra?: Record<string, string>;
 };
 
-export type ToolkitDefinition = FunctionToolkitDefinition | RemoteMcpToolkitDefinition | LegacyConnectorToolkitDefinition;
+export type ToolkitDefinition =
+  | FunctionToolkitDefinition
+  | RemoteMcpToolkitDefinition
+  | LegacyConnectorToolkitDefinition;
 
 export type ToolkitGroup = {
   name: string;
@@ -124,17 +127,24 @@ export type ToolkitGroups = {
  * @param toolkit - The toolkit definition to convert
  * @param includeGroupInName - If true, prepends group name to tool name (e.g., "hacker_news__showTopStories")
  */
-const isFunctionToolkitDefinition = (toolkit: ToolkitDefinition): toolkit is FunctionToolkitDefinition =>
-  toolkit.type === 'function';
+const isFunctionToolkitDefinition = (
+  toolkit: ToolkitDefinition,
+): toolkit is FunctionToolkitDefinition => toolkit.type === "function";
 
-export async function exportToolDefinition(toolkit: ToolkitDefinition, includeGroupInName = true): Promise<ToolDefinition> {
+export async function exportToolDefinition(
+  toolkit: ToolkitDefinition,
+  includeGroupInName = true,
+): Promise<ToolDefinition> {
   if (!isFunctionToolkitDefinition(toolkit)) {
-    throw new Error(`Cannot export remote MCP toolkit "${toolkit.name}" as a function tool definition`);
+    throw new Error(
+      `Cannot export remote MCP toolkit "${toolkit.name}" as a function tool definition`,
+    );
   }
 
-  const toolName = includeGroupInName && toolkit.group
-    ? `${toolkit.group}__${toolkit.name}`
-    : toolkit.name;
+  const toolName =
+    includeGroupInName && toolkit.group
+      ? `${toolkit.group}__${toolkit.name}`
+      : toolkit.name;
 
   // Load user-configured prompt addition
   const promptAdditionKey = `${toolkit.group}.${toolkit.name}`;
@@ -148,11 +158,14 @@ export async function exportToolDefinition(toolkit: ToolkitDefinition, includeGr
     }
   } catch (error) {
     // If loading fails, just use the base description
-    console.warn(`Failed to load prompt addition for ${promptAdditionKey}:`, error);
+    console.warn(
+      `Failed to load prompt addition for ${promptAdditionKey}:`,
+      error,
+    );
   }
 
   return {
-    type: 'function',
+    type: "function",
     name: toolName,
     description,
     parameters: toolkit.parameters,
@@ -166,39 +179,41 @@ export async function exportToolDefinition(toolkit: ToolkitDefinition, includeGr
  * @param group - The toolkit group to convert
  * @param includeGroupInName - If true, prepends group name to tool names (default: true)
  */
-export async function exportToolDefinitions(group: ToolkitGroup, includeGroupInName = true): Promise<ToolDefinition[]> {
+export async function exportToolDefinitions(
+  group: ToolkitGroup,
+  includeGroupInName = true,
+): Promise<ToolDefinition[]> {
   const functionToolkits = group.toolkits.filter(isFunctionToolkitDefinition);
   const toolDefinitions = await Promise.all(
-    functionToolkits.map(toolkit => exportToolDefinition(toolkit, includeGroupInName))
+    functionToolkits.map((toolkit) =>
+      exportToolDefinition(toolkit, includeGroupInName),
+    ),
   );
   return toolDefinitions;
 }
-
-
 
 export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {
   instructions: string;
   toolDefinitions?: ToolDefinition[];
   vadMode?: VadMode;
   audioSpeed?: number;
-  enableRecording?: boolean;
-  maxConversationTurns?: number;  // Drop entire older messages (turn-cap)
-  retentionRatio?: number;         // 0.0-1.0, e.g. 0.8 = keep 80% most recent
-  transcriptionEnabled?: boolean;  // Enable input audio transcription with Whisper
+  maxConversationTurns?: number; // Drop entire older messages (turn-cap)
+  retentionRatio?: number; // 0.0-1.0, e.g. 0.8 = keep 80% most recent
+  transcriptionEnabled?: boolean; // Enable input audio transcription with Whisper
 };
 
 export type OpenAIConnectionState =
-  | 'new'
-  | 'connecting'
-  | 'connected'
-  | 'disconnected'
-  | 'failed'
-  | 'closed'
-  | 'completed'
-  | 'unknown';
+  | "new"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "failed"
+  | "closed"
+  | "completed"
+  | "unknown";
 
 export type IdleTimeoutEventPayload = {
-  reason: 'idleTimeout';
+  reason: "idleTimeout";
   timeoutSeconds: number;
   previousState?: OpenAIConnectionState;
   timestampMs: number;
@@ -230,7 +245,7 @@ export type RealtimeErrorEventPayload = {
 export type AudioMetricsEventPayload = Record<string, unknown>;
 
 export type TranscriptEventPayload = {
-  type: 'audio_transcript' | 'text';
+  type: "audio_transcript" | "text";
   transcript?: string;
   delta?: string;
   responseId?: string;

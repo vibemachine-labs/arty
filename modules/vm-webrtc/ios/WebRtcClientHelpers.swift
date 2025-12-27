@@ -1253,48 +1253,7 @@ extension OpenAIWebRTCClient: RTCDataChannelDelegate {
             if let eventDict = try JSONSerialization.jsonObject(with: buffer.data, options: [])
                 as? [String: Any]
             {
-
-                // ============================================
-                // NEW: Capture transcripts for TTS recording
-                // ============================================
-                if isRecordingEnabled, let eventType = eventDict["type"] as? String {
-
-                    // Capture USER transcript
-                    if eventType == "conversation.item.created" {
-                        if let item = eventDict["item"] as? [String: Any],
-                            let role = item["role"] as? String,
-                            role == "user",
-                            let content = item["content"] as? [[String: Any]],
-                            let firstContent = content.first,
-                            firstContent["type"] as? String == "input_audio",
-                            let transcript = firstContent["transcript"] as? String,
-                            !transcript.isEmpty
-                        {
-
-                            // Add to recording manager
-                            Task { @MainActor in
-                                await self.recordingManager.addUserTranscript(transcript)
-                            }
-                        }
-                    }
-
-                    // Capture AI transcript
-                    if eventType == "response.audio_transcript.done" {
-                        if let transcript = eventDict["transcript"] as? String,
-                            !transcript.isEmpty
-                        {
-
-                            // Add to recording manager
-                            Task { @MainActor in
-                                await self.recordingManager.addAITranscript(transcript)
-                            }
-                        }
-                    }
-                }
-
-                // ============================================
-                // EXISTING: Pass to event handler
-                // ============================================
+                // Pass to event handler
                 handleTokenUsageEventIfNeeded(eventDict)
                 eventHandler.handle(event: eventDict, context: makeEventHandlerContext())
 

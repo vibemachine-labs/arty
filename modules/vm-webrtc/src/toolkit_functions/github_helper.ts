@@ -4,6 +4,7 @@ import { Octokit } from "@octokit/rest";
 import { log } from "../../../../lib/logger";
 import { getGithubToken } from "../../../../lib/secure-storage";
 import { web_search } from "./web";
+import type { ToolkitResult } from "./types";
 
 export interface GithubRepoLookupParams {
   repoIdentifier: string; // e.g. "arty" or "org/repo"
@@ -29,7 +30,7 @@ export interface GithubRepoLookupParams {
  */
 export async function lookupGithubRepo(
   params: GithubRepoLookupParams,
-): Promise<string> {
+): Promise<ToolkitResult> {
   const { repoIdentifier } = params;
   log.info("[GithubHelper] Performing repo lookup", {}, { repoIdentifier });
 
@@ -141,7 +142,10 @@ export async function lookupGithubRepo(
           fullName: `${actualOwner}/${actualRepo}`,
         },
       );
-      return `${actualOwner}/${actualRepo}`;
+      return {
+        result: `${actualOwner}/${actualRepo}`,
+        updatedToolSessionContext: {},
+      };
     } catch (e) {
       log.warn(
         "[GithubHelper] Direct lookup failed - falling back to web search",
@@ -179,7 +183,7 @@ async function performWebSearchFallback(
   searchQuery: string,
   oct: Octokit,
   authUser: string | null,
-): Promise<string> {
+): Promise<ToolkitResult> {
   log.info(
     "[GithubHelper] Performing web search fallback",
     {},
@@ -209,9 +213,9 @@ async function performWebSearchFallback(
 
 NOTE: The search terms come from voice input, so there may be typos or phonetic misunderstandings.
 Consider similar-sounding or commonly confused variations. For example:
-- A word like “pace” could be misheard as “base” or “bace” when spoken quickly.  
-- A name like “Jordan” might be transcribed as “Jorden” due to slight pronunciation differences.  
-- Homophones such as “flower” and “flour” or “right” and “write” can be swapped in text outputs.  
+- A word like “pace” could be misheard as “base” or “bace” when spoken quickly.
+- A name like “Jordan” might be transcribed as “Jorden” due to slight pronunciation differences.
+- Homophones such as “flower” and “flour” or “right” and “write” can be swapped in text outputs.
 - Words may be run together or hyphenated differently
 
 IMPORTANT: Your response MUST be ONLY a valid JSON array of GitHub repositories, nothing else.
@@ -403,7 +407,10 @@ Rules:
         },
       );
 
-      return `${actualOwner}/${actualRepo}`;
+      return {
+        result: `${actualOwner}/${actualRepo}`,
+        updatedToolSessionContext: {},
+      };
     } catch (e) {
       log.debug(
         `🔧 [GithubHelper] Candidate repository validation failed`,

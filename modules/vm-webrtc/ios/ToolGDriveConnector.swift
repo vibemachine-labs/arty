@@ -169,8 +169,13 @@ public class ToolGDriveConnector: BaseTool {
             ]
         )
 
-        // Register string callback
-        registerStringCallback(requestId: requestId) { result, error in
+        // Register string callback (capture self weakly to avoid retain cycle)
+        registerStringCallback(requestId: requestId) { [weak self] result, error in
+            guard let self = self else {
+                // Self was deallocated, reject the promise to avoid hanging
+                promise.reject("E_GDRIVE_CONNECTOR_ERROR", "GDrive connector was deallocated")
+                return
+            }
             if let error = error {
                 self.logger.log(
                     "[ToolGDriveConnector] ❌ GDrive connector error: \(error.localizedDescription)")

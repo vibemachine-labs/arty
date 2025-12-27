@@ -728,6 +728,7 @@ final class OpenAIWebRTCClient: NSObject {
         }
         audioTrack = nil
 
+        let hadPeerConnection = peerConnection != nil
         if let connection = peerConnection {
             connection.delegate = nil
             connection.close()
@@ -768,7 +769,7 @@ final class OpenAIWebRTCClient: NSObject {
                 for: .info,
                 metadata: [
                     "recordingEnabled": isRecordingEnabled,
-                    "hadPeerConnection": peerConnection != nil,
+                    "hadPeerConnection": hadPeerConnection,
                 ]))
 
         return "closed"

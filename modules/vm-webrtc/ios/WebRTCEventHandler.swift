@@ -1631,7 +1631,7 @@ final class WebRTCEventHandler {
                         }
 
                         self.logger.log(
-                            "[WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
+                            "💬 [WebRTCEventHandler] Stored assistant transcript for item and updated conversation item",
                             attributes: logAttributes(
                                 for: .debug,
                                 metadata: [
@@ -1690,7 +1690,7 @@ final class WebRTCEventHandler {
                         }
                     } else {
                         self.logger.log(
-                            "[WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
+                            "💬 [WebRTCEventHandler] Stored assistant transcript for item (conversation item not found yet)",
                             attributes: logAttributes(
                                 for: .debug,
                                 metadata: [

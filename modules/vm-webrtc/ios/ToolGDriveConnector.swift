@@ -129,9 +129,15 @@ public class ToolGDriveConnector: BaseTool {
             ]
         )
 
-        if let callback = stringCallbacks[requestId] {
-            callback(result, nil)
+        // Retrieve and remove callback on queue, then invoke outside queue to avoid deadlocks
+        let callback = stringCallbacksQueue.sync { () -> ((String?, Error?) -> Void)? in
+            guard let cb = stringCallbacks[requestId] else { return nil }
             stringCallbacks.removeValue(forKey: requestId)
+            return cb
+        }
+
+        if let callback = callback {
+            callback(result, nil)
             self.logger.log(
                 "[ToolGDriveConnector] ✅ GDrive connector callback executed successfully",
                 attributes: [
@@ -220,16 +226,21 @@ public class ToolGDriveConnector: BaseTool {
     // MARK: - Private Methods
 
     private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
+    private let stringCallbacksQueue = DispatchQueue(
+        label: "com.arty.ToolGDriveConnector.stringCallbacks")
 
     private func registerStringCallback(
         requestId: String, callback: @escaping (String?, Error?) -> Void
     ) {
-        stringCallbacks[requestId] = callback
+        let count = stringCallbacksQueue.sync { () -> Int in
+            stringCallbacks[requestId] = callback
+            return stringCallbacks.count
+        }
         self.logger.log(
             "[ToolGDriveConnector] 🔐 registerStringCallback",
             attributes: [
                 "requestId": requestId,
-                "pendingCallbacks": stringCallbacks.count,
+                "pendingCallbacks": count,
             ]
         )
     }
@@ -251,7 +262,10 @@ public class ToolGDriveConnector: BaseTool {
         )
 
         // Call JavaScript GDrive connector via delegate (self)
-        requestGDriveOperation(codeSnippet: codeSnippet) { result, error in
+        // Capture self weakly to avoid retain cycle
+        requestGDriveOperation(codeSnippet: codeSnippet) { [weak self] result, error in
+            guard let self = self else { return }
+
             if let error = error {
                 self.logger.log(
                     "[VmWebrtc] GDrive connector request failed",

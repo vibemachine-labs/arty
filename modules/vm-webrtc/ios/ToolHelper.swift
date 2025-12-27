@@ -29,6 +29,9 @@ public class ToolHelper {
     // Track callback usage count to detect anomalies
     private var callbackUsageCount: [String: Int] = [:]
 
+    // Serial queue to synchronize access to callbacks and callbackUsageCount
+    private let callbackQueue = DispatchQueue(label: "com.arty.ToolHelper.callbacks")
+
     // MARK: - Initialization
 
     public init(module: Module, timeoutDuration: TimeInterval = 45.0) {
@@ -74,7 +77,9 @@ public class ToolHelper {
     ///   - requestId: Unique identifier for the request
     ///   - callback: Callback to invoke when response is received
     public func registerCallback(requestId: String, callback: @escaping (Int?, Error?) -> Void) {
-        callbacks[requestId] = callback
+        callbackQueue.sync {
+            callbacks[requestId] = callback
+        }
     }
 
     /// Execute a callback (without removing it)
@@ -86,13 +91,20 @@ public class ToolHelper {
     @discardableResult
     public func executeCallback(requestId: String, result: Int? = nil, error: Error? = nil) -> Bool
     {
-        // Track usage count for anomaly detection
-        let currentUsageCount = callbackUsageCount[requestId] ?? 0
-        let newUsageCount = currentUsageCount + 1
-        callbackUsageCount[requestId] = newUsageCount
+        // Retrieve callback and update usage count on queue, then invoke outside to avoid deadlocks
+        let (callback, newUsageCount, isAnomalous): (((Int?, Error?) -> Void)?, Int, Bool) =
+            callbackQueue.sync {
+                // Track usage count for anomaly detection
+                let currentUsageCount = callbackUsageCount[requestId] ?? 0
+                let count = currentUsageCount + 1
+                callbackUsageCount[requestId] = count
+
+                let cb = callbacks[requestId]
+                return (cb, count, count > 1)
+            }
 
         // Check for anomalous behavior (callback used more than once)
-        if newUsageCount > 1 {
+        if isAnomalous {
             self.logger.log(
                 "[ToolHelper] 🚨 ANOMALY DETECTED: Callback used multiple times!",
                 attributes: [
@@ -104,7 +116,7 @@ public class ToolHelper {
             )
         }
 
-        guard let callback = callbacks[requestId] else {
+        guard let callback = callback else {
             self.logger.log(
                 "[ToolHelper] No callback found for requestId",
                 attributes: [
@@ -187,10 +199,12 @@ public class ToolHelper {
         DispatchQueue.main.asyncAfter(deadline: .now() + timeoutDuration) { [weak self] in
             guard let self = self else { return }
 
-            // Check if callback has already been used
-            let usageCount = self.callbackUsageCount[requestId] ?? 0
+            // Check if callback has already been used (thread-safe access)
+            let (hasCallback, usageCount) = self.callbackQueue.sync {
+                (self.callbacks[requestId] != nil, self.callbackUsageCount[requestId] ?? 0)
+            }
 
-            if self.callbacks[requestId] != nil, usageCount == 0 {
+            if hasCallback, usageCount == 0 {
                 self.logger.log(
                     "[ToolHelper] Request timed out",
                     attributes: [

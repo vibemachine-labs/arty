@@ -10,6 +10,8 @@ public class ToolGPT5WebSearch: BaseTool {
     private let logger = VmWebrtcLogging.logger
 
     private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
+    private let stringCallbacksQueue = DispatchQueue(
+        label: "com.arty.ToolGPT5WebSearch.stringCallbacks")
     private let eventName = "onGPT5WebSearchRequest"
     private let requestTimeout: TimeInterval = 45.0
 
@@ -71,9 +73,15 @@ public class ToolGPT5WebSearch: BaseTool {
             "[ToolGPT5WebSearch] 📥 Received response from JavaScript: requestId=\(requestId), len=\(result.count)"
         )
 
-        if let callback = stringCallbacks[requestId] {
-            callback(result, nil)
+        // Retrieve and remove callback on queue, then invoke outside queue to avoid deadlocks
+        let callback = stringCallbacksQueue.sync { () -> ((String?, Error?) -> Void)? in
+            guard let cb = stringCallbacks[requestId] else { return nil }
             stringCallbacks.removeValue(forKey: requestId)
+            return cb
+        }
+
+        if let callback = callback {
+            callback(result, nil)
             self.logger.log("[ToolGPT5WebSearch] ✅ Callback executed for requestId=\(requestId)")
         } else {
             self.logger.log(
@@ -91,7 +99,9 @@ public class ToolGPT5WebSearch: BaseTool {
         requestId: String, callback: @escaping (String?, Error?) -> Void
     ) {
         self.logger.log("[ToolGPT5WebSearch] 🔐 registerStringCallback requestId=\(requestId)")
-        stringCallbacks[requestId] = callback
+        stringCallbacksQueue.sync {
+            stringCallbacks[requestId] = callback
+        }
     }
 
     private func requestWebSearch(query: String, completion: @escaping (String?, Error?) -> Void) {
@@ -118,7 +128,13 @@ public class ToolGPT5WebSearch: BaseTool {
         self.logger.log(
             "[ToolGPT5WebSearch] 📱 gpt5WebSearchOperationFromSwift called: requestId=\(requestId)")
 
-        registerStringCallback(requestId: requestId) { result, error in
+        // Capture self weakly to avoid retain cycle
+        registerStringCallback(requestId: requestId) { [weak self] result, error in
+            guard let self = self else {
+                // Self was deallocated, reject the promise to avoid hanging
+                promise.reject("E_GPT5_WEB_SEARCH_ERROR", "Web search was deallocated")
+                return
+            }
             if let error = error {
                 self.logger.log(
                     "[ToolGPT5WebSearch] ❌ web search error: \(error.localizedDescription)")

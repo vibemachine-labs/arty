@@ -10,6 +10,8 @@ public class ToolGPT5GDriveFixer: BaseTool {
     private let logger = VmWebrtcLogging.logger
 
     private var stringCallbacks: [String: (String?, Error?) -> Void] = [:]
+    private let stringCallbacksQueue = DispatchQueue(
+        label: "com.arty.ToolGPT5GDriveFixer.stringCallbacks")
 
     public init(module: Module, responder: ToolCallResponder) {
         self.module = module
@@ -64,9 +66,15 @@ public class ToolGPT5GDriveFixer: BaseTool {
             "[ToolGPT5GDriveFixer] 📥 Received response from JavaScript: requestId=\(requestId), len=\(result.count)"
         )
 
-        if let callback = stringCallbacks[requestId] {
-            callback(result, nil)
+        // Retrieve and remove callback on queue, then invoke outside queue to avoid deadlocks
+        let callback = stringCallbacksQueue.sync { () -> ((String?, Error?) -> Void)? in
+            guard let cb = stringCallbacks[requestId] else { return nil }
             stringCallbacks.removeValue(forKey: requestId)
+            return cb
+        }
+
+        if let callback = callback {
+            callback(result, nil)
             self.logger.log("[ToolGPT5GDriveFixer] ✅ Callback executed for requestId=\(requestId)")
         } else {
             self.logger.log("[ToolGPT5GDriveFixer] ⚠️ No callback found for requestId=\(requestId)")
@@ -82,7 +90,9 @@ public class ToolGPT5GDriveFixer: BaseTool {
         requestId: String, callback: @escaping (String?, Error?) -> Void
     ) {
         self.logger.log("[ToolGPT5GDriveFixer] 🔐 registerStringCallback requestId=\(requestId)")
-        stringCallbacks[requestId] = callback
+        stringCallbacksQueue.sync {
+            stringCallbacks[requestId] = callback
+        }
     }
 
     private func requestFixOperation(
@@ -120,7 +130,13 @@ public class ToolGPT5GDriveFixer: BaseTool {
             "[ToolGPT5GDriveFixer] 📱 gpt5GDriveFixerOperationFromSwift called: requestId=\(requestId)"
         )
 
-        registerStringCallback(requestId: requestId) { result, error in
+        // Capture self weakly to avoid retain cycle
+        registerStringCallback(requestId: requestId) { [weak self] result, error in
+            guard let self = self else {
+                // Self was deallocated, reject the promise to avoid hanging
+                promise.reject("E_GPT5_FIXER_ERROR", "GPT5 fixer was deallocated")
+                return
+            }
             if let error = error {
                 self.logger.log(
                     "[ToolGPT5GDriveFixer] ❌ gpt5 fixer error: \(error.localizedDescription)")

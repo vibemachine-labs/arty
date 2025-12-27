@@ -511,7 +511,7 @@ export default function Index() {
       <View style={styles.container}>
         <View style={styles.header}>
           <HamburgerButton onPress={() => setMenuVisible(true)} />
-          <Text style={styles.headerTitle}>⭐🤖 A.R.T.Y</Text>
+          <Text style={styles.headerTitle}>🤖 A.R.T.Y ✨</Text>
           <View style={styles.headerSpacer} />
         </View>
         {renderChatSurface}

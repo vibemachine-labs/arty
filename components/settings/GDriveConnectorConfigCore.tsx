@@ -521,7 +521,7 @@ export const GDriveConnectorConfigCore: React.FC<
                   </Text>
                   <Text style={styles.advancedDescription}>
                     You can use your own Client ID for maximum internal control.
-                    You will need to confgure it with all required permissions.
+                    You will need to configure it with all required permissions.
                     Documentation still pending.
                   </Text>
 

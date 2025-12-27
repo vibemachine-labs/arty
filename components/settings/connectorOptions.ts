@@ -1,4 +1,13 @@
-export type ConnectorId = "github" | "gdrive" | "web" | "hacker_news" | "deepwiki" | "daily_papers" | "github_legacy" | "gdrive_legacy";
+export type ConnectorId =
+  | "github"
+  | "gdrive"
+  | "web"
+  | "hacker_news"
+  | "deepwiki"
+  | "context7"
+  | "daily_papers"
+  | "github_legacy"
+  | "gdrive_legacy";
 
 export type ConnectorOption = {
   id: ConnectorId;
@@ -44,6 +53,13 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     icon: "📚",
     backgroundColor: "#F0F4FF",
     iconBackgroundColor: "#E0EAFF",
+  },
+  {
+    id: "context7",
+    name: "Context7",
+    icon: "📖",
+    backgroundColor: "#F4F0FF",
+    iconBackgroundColor: "#E8DCFF",
   },
   {
     id: "daily_papers",

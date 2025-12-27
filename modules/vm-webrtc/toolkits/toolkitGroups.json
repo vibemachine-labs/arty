@@ -435,6 +435,29 @@
         }
       ]
     },
+    "context7": {
+      "name": "context7",
+      "toolkits": [
+        {
+          "type": "remote_mcp_server",
+          "name": "context7",
+          "group": "context7",
+          "description": "Context7 MCP Server provides up-to-date, version-specific documentation and code examples for any library. It provides two core tools: resolve-library-id (to resolve a library name into a Context7-compatible library ID) and get-library-docs (to fetch documentation for a library using its ID, with optional topic filtering and pagination). Context7 works best when you specify exact library IDs (e.g., /vercel/next.js, /facebook/react) but can also search for libraries by name. Use the topic parameter to focus on specific areas like 'routing', 'hooks', or 'authentication'. Results support pagination up to 10 pages per topic. API key is optional but provides higher rate limits and access to private repositories.",
+          "supported_auth": "api_key_optional",
+          "extra": {},
+          "remote_mcp_server": {
+            "url": "https://mcp.context7.com/mcp",
+            "protocol": "http",
+            "requires_auth_header": true
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      ]
+    },
     "github": {
       "name": "github",
       "toolkits": [

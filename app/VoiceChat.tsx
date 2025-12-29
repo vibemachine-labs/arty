@@ -366,6 +366,11 @@ export function VoiceChat({
       return;
     }
 
+    // Set connecting state immediately so button updates right away
+    setIsConnecting(true);
+    setIsSessionActive(false);
+    setSessionCostUsd(0);
+
     try {
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
@@ -399,9 +404,6 @@ export function VoiceChat({
           selectedLanguage,
         },
       );
-      setIsConnecting(true);
-      setIsSessionActive(false);
-      setSessionCostUsd(0);
       const customConnectionOptions: OpenAIConnectionOptions = {
         ...baseConnectionOptions,
         voice: selectedVoice,

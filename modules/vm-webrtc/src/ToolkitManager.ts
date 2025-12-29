@@ -696,7 +696,6 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
   const allTools = rebuildToolkitDefinitionsCache();
 
   // Get list of static tool groups
-  const groups = await getFilteredToolkitGroups();
   const staticGroups = groups.list
     .filter((g) => g.toolkits.some((t) => t.type === "function"))
     .map((g) => ({

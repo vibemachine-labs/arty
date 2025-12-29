@@ -110,6 +110,7 @@ export type ToolkitDefinition =
 
 export type ToolkitGroup = {
   name: string;
+  description?: string;
   toolkits: ToolkitDefinition[];
 };
 
@@ -135,6 +136,7 @@ const isFunctionToolkitDefinition = (
 export async function exportToolDefinition(
   toolkit: ToolkitDefinition,
   includeGroupInName = true,
+  groupDescription?: string,
 ): Promise<ToolDefinition> {
   if (!isFunctionToolkitDefinition(toolkit)) {
     throw new Error(
@@ -147,15 +149,19 @@ export async function exportToolDefinition(
       ? `${toolkit.group}__${toolkit.name}`
       : toolkit.name;
 
+  // Start with group description if provided
+  let description = groupDescription
+    ? `${groupDescription} ${toolkit.description}`
+    : toolkit.description;
+
   // Load user-configured prompt addition
   const promptAdditionKey = `${toolkit.group}.${toolkit.name}`;
-  let description = toolkit.description;
 
   try {
     const promptAddition = await loadToolPromptAddition(promptAdditionKey);
     if (promptAddition && promptAddition.trim().length > 0) {
       // Append the prompt addition at the end so users can "correct" the base prompt
-      description = `${toolkit.description}\n\n${promptAddition.trim()}`;
+      description = `${description}\n\n${promptAddition.trim()}`;
     }
   } catch (error) {
     // If loading fails, just use the base description

@@ -1,6 +1,6 @@
 export type ConnectorId =
   | "github"
-  | "gdrive"
+  | "google_drive"
   | "web"
   | "hacker_news"
   | "deepwiki"
@@ -27,7 +27,7 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     iconBackgroundColor: "#E7F0FF",
   },
   {
-    id: "gdrive",
+    id: "google_drive",
     name: "Google Drive",
     icon: "📂",
     backgroundColor: "#FFF8EF",

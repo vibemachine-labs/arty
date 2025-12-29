@@ -154,9 +154,24 @@ export async function exportToolDefinition(
     ? `${groupDescription} ${toolkit.description}`
     : toolkit.description;
 
-  // Load user-configured prompt addition
-  const promptAdditionKey = `${toolkit.group}.${toolkit.name}`;
+  // Load group-level prompt addition first
+  const groupPromptKey = `_group_.${toolkit.group}`;
+  try {
+    const groupPromptAddition = await loadToolPromptAddition(groupPromptKey);
+    if (groupPromptAddition && groupPromptAddition.trim().length > 0) {
+      // Prepend group-level customization to description
+      description = `${groupPromptAddition.trim()}\n\n${description}`;
+    }
+  } catch (error) {
+    // If loading fails, just continue without group prompt
+    console.warn(
+      `Failed to load group prompt addition for ${groupPromptKey}:`,
+      error,
+    );
+  }
 
+  // Load tool-specific user-configured prompt addition
+  const promptAdditionKey = `${toolkit.group}.${toolkit.name}`;
   try {
     const promptAddition = await loadToolPromptAddition(promptAdditionKey);
     if (promptAddition && promptAddition.trim().length > 0) {

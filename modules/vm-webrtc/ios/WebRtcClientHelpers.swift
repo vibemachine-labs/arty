@@ -719,11 +719,11 @@ extension OpenAIWebRTCClient {
             let prettyString = String(data: prettyData, encoding: .utf8)
         {
             self.logger.log(
-                "[VmWebrtc] " + "📑 Sending session.update payload",
+                "📑 [VmWebrtc] Sending session.update payload",
                 attributes: logAttributes(for: .debug, metadata: ["session": prettyString]))
         } else {
             self.logger.log(
-                "[VmWebrtc] " + "📑 Sending session.update payload (fallback formatting)",
+                "📑 [VmWebrtc] Sending session.update payload (fallback formatting)",
                 attributes: logAttributes(for: .debug, metadata: ["session": session]))
         }
 

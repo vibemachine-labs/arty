@@ -580,10 +580,26 @@ async function mcpToolToToolDefinition(
     ? `${groupDescription} ${tool.description || ""}`
     : tool.description || "";
 
-  // Load user-configured prompt addition
+  // Load group-level prompt addition first
   const { loadToolPromptAddition } = await import("../../../lib/toolPrompts");
-  const promptAdditionKey = `${groupName}.${tool.name}`;
+  const groupPromptKey = `_group_.${groupName}`;
 
+  try {
+    const groupPromptAddition = await loadToolPromptAddition(groupPromptKey);
+    if (groupPromptAddition && groupPromptAddition.trim().length > 0) {
+      // Prepend group-level customization to description
+      description = `${groupPromptAddition.trim()}\n\n${description}`;
+    }
+  } catch (error) {
+    // If loading fails, just continue without group prompt
+    console.warn(
+      `Failed to load group prompt addition for MCP tool ${groupPromptKey}:`,
+      error,
+    );
+  }
+
+  // Load tool-specific user-configured prompt addition
+  const promptAdditionKey = `${groupName}.${tool.name}`;
   try {
     const promptAddition = await loadToolPromptAddition(promptAdditionKey);
     if (promptAddition && promptAddition.trim().length > 0) {

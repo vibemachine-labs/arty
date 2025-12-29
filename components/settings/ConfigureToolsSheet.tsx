@@ -33,6 +33,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   const [promptModalVisible, setPromptModalVisible] = useState(false);
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
+  const [isGroupPrompt, setIsGroupPrompt] = useState(false);
 
   // Build tool groups from toolkitGroups.json
   const toolGroups = useMemo(() => {
@@ -163,6 +164,23 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
     onClose();
     requestAnimationFrame(() => {
       setActiveTool(tool);
+      setIsGroupPrompt(false);
+      setPromptModalVisible(true);
+    });
+  };
+
+  const handleCustomizeGroupPrompt = () => {
+    if (!selectedGroupId) return;
+
+    onClose();
+    requestAnimationFrame(() => {
+      // Create a pseudo-tool to represent the group
+      setActiveTool({
+        name: selectedGroupId,
+        description: "",
+        group: selectedGroupId,
+      });
+      setIsGroupPrompt(true);
       setPromptModalVisible(true);
     });
   };
@@ -172,8 +190,15 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
     setActiveTool(null);
   }, []);
 
+  const getPromptKey = useCallback(() => {
+    if (!activeTool) return "";
+    return isGroupPrompt
+      ? `_group_.${activeTool.group}`
+      : `${activeTool.group}.${activeTool.name}`;
+  }, [activeTool, isGroupPrompt]);
+
   const activeToolValue = activeTool
-    ? (promptDrafts[`${activeTool.group}.${activeTool.name}`] ?? "")
+    ? (promptDrafts[getPromptKey()] ?? "")
     : "";
 
   const handleActivePromptChange = useCallback(
@@ -183,30 +208,27 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
       }
       setPromptDrafts((prev) => ({
         ...prev,
-        [`${activeTool.group}.${activeTool.name}`]: text,
+        [getPromptKey()]: text,
       }));
     },
-    [activeTool],
+    [activeTool, getPromptKey],
   );
 
   const loadActiveToolPrompt = useCallback(() => {
     if (!activeTool) {
       return Promise.resolve("");
     }
-    return loadToolPromptAddition(`${activeTool.group}.${activeTool.name}`);
-  }, [activeTool]);
+    return loadToolPromptAddition(getPromptKey());
+  }, [activeTool, getPromptKey]);
 
   const saveActiveToolPrompt = useCallback(
     (text: string) => {
       if (!activeTool) {
         return Promise.resolve();
       }
-      return saveToolPromptAddition(
-        `${activeTool.group}.${activeTool.name}`,
-        text,
-      );
+      return saveToolPromptAddition(getPromptKey(), text);
     },
-    [activeTool],
+    [activeTool, getPromptKey],
   );
 
   return (
@@ -224,6 +246,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
               groupName={selectedGroupName}
               onToolPress={handleToolPress}
               onBack={handleBackToGroups}
+              onCustomizeGroupPrompt={handleCustomizeGroupPrompt}
               loading={loadingMcpTools}
             />
           )}
@@ -239,15 +262,18 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
           onSaveSuccess={() => {
             setPromptDrafts((prev) => ({
               ...prev,
-              [`${activeTool.group}.${activeTool.name}`]:
-                activeToolValue.trim(),
+              [getPromptKey()]: activeToolValue.trim(),
             }));
             closePromptModal();
           }}
           loadPromptAddition={loadActiveToolPrompt}
           savePromptAddition={saveActiveToolPrompt}
           basePrompt={activeTool.description.trim()}
-          title={`Configure ${activeTool.name}`}
+          title={
+            isGroupPrompt
+              ? `Customize ${selectedGroupName} Group`
+              : `Configure ${activeTool.name}`
+          }
         />
       ) : null}
     </>

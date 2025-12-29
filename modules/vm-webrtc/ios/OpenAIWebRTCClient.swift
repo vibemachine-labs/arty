@@ -493,6 +493,13 @@ final class OpenAIWebRTCClient: NSObject {
 
         eventHandler.stopIdleMonitoring(reason: "starting_new_connection")
 
+        // Emit initial status update
+        emitModuleEvent(
+            "onVoiceSessionStatus",
+            payload: [
+                "status_update": "Connecting to OpenAI..."
+            ])
+
         self.logger.log(
             "[VmWebrtc] " + "Starting OpenAI WebRTC connection",
             attributes: logAttributes(
@@ -551,6 +558,12 @@ final class OpenAIWebRTCClient: NSObject {
                     "requestedOutput": audioOutput.rawValue
                 ]))
 
+        emitModuleEvent(
+            "onVoiceSessionStatus",
+            payload: [
+                "status_update": "Setting up audio session..."
+            ])
+
         let connection = try makePeerConnection()
         firstCandidateTimestamp = nil
         self.logger.log(
@@ -561,6 +574,13 @@ final class OpenAIWebRTCClient: NSObject {
                     "hasAudioTrack": audioTrack != nil,
                     "hasDataChannel": dataChannel != nil,
                 ]))
+
+        emitModuleEvent(
+            "onVoiceSessionStatus",
+            payload: [
+                "status_update": "Establishing peer connection..."
+            ])
+
         let offer = try await createOffer(connection: connection)
         self.logger.log(
             "[VmWebrtc] " + "Created local SDP offer",
@@ -568,6 +588,13 @@ final class OpenAIWebRTCClient: NSObject {
         try await setLocalDescription(offer, for: connection)
         self.logger.log(
             "[VmWebrtc] " + "Local description applied", attributes: logAttributes(for: .debug))
+
+        emitModuleEvent(
+            "onVoiceSessionStatus",
+            payload: [
+                "status_update": "Gathering network candidates..."
+            ])
+
         let iceWait = try await waitForIceGathering(
             on: connection, timeout: iceGatheringGracePeriod)
         self.logger.log(
@@ -587,6 +614,12 @@ final class OpenAIWebRTCClient: NSObject {
             throw OpenAIWebRTCError.missingLocalDescription
         }
 
+        emitModuleEvent(
+            "onVoiceSessionStatus",
+            payload: [
+                "status_update": "Connecting to OpenAI endpoint..."
+            ])
+
         let answerSDP = try await exchangeSDPWithOpenAI(
             apiKey: resolvedApiKey, endpointURL: endpointURL, offerSDP: localSDP)
         let remoteDescription = RTCSessionDescription(type: .answer, sdp: answerSDP)
@@ -594,12 +627,24 @@ final class OpenAIWebRTCClient: NSObject {
         self.logger.log(
             "[VmWebrtc] " + "Remote description applied", attributes: logAttributes(for: .debug))
 
+        emitModuleEvent(
+            "onVoiceSessionStatus",
+            payload: [
+                "status_update": "Finalizing connection..."
+            ])
+
         let state = try await waitForConnection(toReach: connection, timeout: 15)
         self.logger.log(
             "[VmWebrtc] " + "OpenAI WebRTC connection flow finished",
             attributes: logAttributes(for: .info, metadata: ["state": state]))
 
         if state == "connected" || state == "completed" {
+            emitModuleEvent(
+                "onVoiceSessionStatus",
+                payload: [
+                    "status_update": "Connected"
+                ])
+
             eventHandler.startIdleMonitoring(timeout: Constants.idleTimeoutSeconds) { [weak self] in
                 guard let self else { return }
                 Task { @MainActor in

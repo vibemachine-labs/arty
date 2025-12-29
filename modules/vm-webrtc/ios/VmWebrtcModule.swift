@@ -340,5 +340,13 @@ public class VmWebrtcModule: Module {
             }
         }
 
+        Function("emitVoiceSessionStatus") { (statusUpdate: String) in
+            self.sendEvent(
+                "onVoiceSessionStatus",
+                [
+                    "status_update": statusUpdate
+                ])
+        }
+
     }
 }

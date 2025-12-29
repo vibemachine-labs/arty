@@ -21,6 +21,7 @@ import { loadTranscriptionPreference } from "../lib/transcriptionPreference";
 import type { VadMode } from "../lib/vadPreference";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
+  emitVoiceSessionStatus,
   muteUnmuteOutgoingAudio,
   openOpenAIConnectionAsync,
   type AudioMetricsEventPayload,
@@ -464,6 +465,10 @@ export function VoiceChat({
                 errorMessage: lastError.message,
               },
             );
+            // Emit retry status
+            emitVoiceSessionStatus(
+              `Connection failed, retrying (${attempt + 1}/${maxRetries})...`,
+            );
             // Wait before retrying
             await new Promise((resolve) => setTimeout(resolve, delay));
           } else {
@@ -500,6 +505,10 @@ export function VoiceChat({
       );
       const message =
         error instanceof Error ? error.message : "Unexpected error";
+
+      // Emit error status
+      emitVoiceSessionStatus(`Connection failed: ${message}`);
+
       Alert.alert("VmWebrtc", message);
       setIsSessionActive(false);
       setFrequencyBins([]);

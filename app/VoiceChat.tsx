@@ -467,10 +467,23 @@ export function VoiceChat({
                 errorMessage: lastError.message,
               },
             );
-            // Emit retry status
-            emitVoiceSessionStatus(
-              `Connection failed, retrying (${attempt + 1}/${maxRetries})...`,
-            );
+            // Emit retry status (safe, won't abort retry loop if native module unavailable)
+            try {
+              emitVoiceSessionStatus(
+                `Connection failed, retrying (${attempt + 1}/${maxRetries})...`,
+              );
+            } catch (statusError) {
+              log.warn(
+                "Failed to emit voice session status during retry",
+                {},
+                {
+                  error:
+                    statusError instanceof Error
+                      ? statusError.message
+                      : String(statusError),
+                },
+              );
+            }
             // Wait before retrying
             await new Promise((resolve) => setTimeout(resolve, delay));
           } else {

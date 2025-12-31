@@ -54,6 +54,7 @@ declare class VmWebrtcModule extends NativeModule<VmWebrtcModuleEvents> {
   sendGPT5WebSearchResponse(requestId: string, result: string): void;
   sendToolkitResponse(requestId: string, result: string): void;
   muteUnmuteOutgoingAudio(shouldMute: boolean): void;
+  emitVoiceSessionStatus(statusUpdate: string): void;
   initializeLogfireTracing(serviceName: string, apiKey: string): Promise<void>;
   logfireEvent(
     tracerName: string,
@@ -201,6 +202,19 @@ export const muteUnmuteOutgoingAudio = (shouldMute: boolean) => {
     { shouldMute },
   );
   module.muteUnmuteOutgoingAudio(shouldMute);
+};
+
+export const emitVoiceSessionStatus = (statusUpdate: string) => {
+  if (!module) {
+    throw makeUnavailableError();
+  }
+
+  log.debug(
+    `[${MODULE_NAME}] emitVoiceSessionStatus invoked`,
+    {},
+    { statusUpdate },
+  );
+  module.emitVoiceSessionStatus(statusUpdate);
 };
 
 // Github Connector function that can be called from Swift

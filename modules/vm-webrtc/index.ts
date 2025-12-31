@@ -6,6 +6,7 @@ export {
   openOpenAIConnectionAsync,
   closeOpenAIConnectionAsync,
   muteUnmuteOutgoingAudio,
+  emitVoiceSessionStatus,
 } from "./src/VmWebrtcModule";
 export { default as VmWebrtcView } from "./src/VmWebrtcView";
 export * from "./src/VmWebrtc.types";

@@ -2,6 +2,7 @@
   "byName": {
     "hacker_news": {
       "name": "hacker_news",
+      "description": "Access Hacker News stories, comments, and user profiles.",
       "toolkits": [
         {
           "type": "function",
@@ -130,6 +131,7 @@
     },
     "daily_papers": {
       "name": "daily_papers",
+      "description": "Search and browse recent AI/ML research papers from Hugging Face.",
       "toolkits": [
         {
           "type": "function",
@@ -231,6 +233,7 @@
     },
     "web": {
       "name": "web",
+      "description": "Search the web and fetch content from URLs.",
       "toolkits": [
         {
           "type": "function",
@@ -272,6 +275,7 @@
     },
     "google_drive": {
       "name": "google_drive",
+      "description": "Search and access files in Google Drive.",
       "toolkits": [
         {
           "type": "function",
@@ -414,6 +418,7 @@
     },
     "deepwiki": {
       "name": "deepwiki",
+      "description": "Access structured documentation for public GitHub repositories.",
       "toolkits": [
         {
           "type": "remote_mcp_server",
@@ -437,6 +442,7 @@
     },
     "context7": {
       "name": "context7",
+      "description": "Access version-specific documentation for any software library.",
       "toolkits": [
         {
           "type": "remote_mcp_server",
@@ -460,6 +466,7 @@
     },
     "github": {
       "name": "github",
+      "description": "Look up and validate GitHub repositories.",
       "toolkits": [
         {
           "type": "function",
@@ -483,6 +490,7 @@
     },
     "github_legacy": {
       "name": "github_legacy",
+      "description": "Legacy GitHub connector (disabled by default).",
       "toolkits": [
         {
           "type": "legacy_connector",
@@ -501,6 +509,7 @@
     },
     "gdrive_legacy": {
       "name": "gdrive_legacy",
+      "description": "Legacy Google Drive connector (disabled by default).",
       "toolkits": [
         {
           "type": "legacy_connector",

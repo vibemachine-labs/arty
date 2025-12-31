@@ -12,6 +12,7 @@ export interface ToolListProps {
   groupName: string;
   onToolPress: (tool: Tool) => void;
   onBack: () => void;
+  onCustomizeGroupPrompt?: () => void;
   loading?: boolean;
 }
 
@@ -20,6 +21,7 @@ export const ToolList: React.FC<ToolListProps> = ({
   groupName,
   onToolPress,
   onBack,
+  onCustomizeGroupPrompt,
   loading = false,
 }) => {
   const handleToolPress = (tool: Tool) => {
@@ -45,6 +47,28 @@ export const ToolList: React.FC<ToolListProps> = ({
         Configure individual tools in the {groupName} group. Tap a tool to
         customize its prompt.
       </Text>
+
+      {onCustomizeGroupPrompt && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Customize overall tool group prompt"
+          onPress={onCustomizeGroupPrompt}
+          style={({ pressed }) => [
+            styles.groupPromptButton,
+            pressed ? styles.groupPromptButtonPressed : null,
+          ]}
+        >
+          <View style={styles.groupPromptInfo}>
+            <Text style={styles.groupPromptTitle}>
+              Customize Overall Tool Group Prompt
+            </Text>
+            <Text style={styles.groupPromptDescription}>
+              Add custom instructions that apply to all tools in this group
+            </Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      )}
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -112,6 +136,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     color: "#3A3A3C",
+  },
+  groupPromptButton: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0F9FF",
+    borderWidth: 2,
+    borderColor: "#0A84FF",
+  },
+  groupPromptButtonPressed: {
+    backgroundColor: "#E0F2FE",
+  },
+  groupPromptInfo: {
+    flex: 1,
+    gap: 4,
+    marginRight: 12,
+  },
+  groupPromptTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0A84FF",
+  },
+  groupPromptDescription: {
+    fontSize: 14,
+    color: "#3A3A3C",
+    lineHeight: 18,
   },
   loadingContainer: {
     paddingVertical: 32,

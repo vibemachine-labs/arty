@@ -48,7 +48,7 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
       setGithubConfigVisible(true);
-    } else if (connectorId === "gdrive") {
+    } else if (connectorId === "google_drive") {
       setGDriveConfigVisible(true);
     } else if (connectorId === "web") {
       setWebInfoVisible(true);

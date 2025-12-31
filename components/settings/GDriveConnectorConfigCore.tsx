@@ -207,10 +207,13 @@ const ButtonCard = ({
             <Text
               style={[
                 styles.actionTitle,
-                variant === "primary" ? styles.actionTitlePrimary : null,
-                variant === "destructive"
-                  ? styles.actionTitleDestructive
-                  : null,
+                disabled
+                  ? styles.actionTitleDisabled
+                  : variant === "primary"
+                    ? styles.actionTitlePrimary
+                    : variant === "destructive"
+                      ? styles.actionTitleDestructive
+                      : null,
               ]}
             >
               {title}
@@ -451,9 +454,9 @@ export const GDriveConnectorConfigCore: React.FC<
                 </Text>
               </View>
             ) : !hasClientId ? (
-              <View style={styles.statusBannerDisconnected}>
-                <Text style={styles.statusIcon}>•</Text>
-                <Text style={styles.statusTextDisconnected}>
+              <View style={styles.statusBannerError}>
+                <Text style={styles.statusIconError}>⚠️</Text>
+                <Text style={styles.statusTextError}>
                   Status: Not connected yet (missing client id)
                 </Text>
               </View>
@@ -688,9 +691,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 10,
   },
+  statusBannerError: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFEBEE",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#FFCDD2",
+  },
   statusIcon: { fontSize: 16, marginRight: 8 },
+  statusIconError: { fontSize: 16, marginRight: 8 },
   statusTextConnected: { fontSize: 15, fontWeight: "600", color: "#2E7D32" },
   statusTextDisconnected: { fontSize: 15, fontWeight: "600", color: "#6E6E73" },
+  statusTextError: { fontSize: 15, fontWeight: "600", color: "#C62828" },
   actionsGroup: {
     gap: 12,
     marginTop: 8,
@@ -713,7 +729,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   actionCardPressed: { opacity: 0.9 },
-  actionCardDisabled: { opacity: 0.5 },
+  actionCardDisabled: {
+    backgroundColor: "#E5E5EA",
+    opacity: 1,
+  },
   cardPrimary: { backgroundColor: "#0A84FF" },
   cardSecondary: {
     backgroundColor: "#F2F2F7",
@@ -732,6 +751,7 @@ const styles = StyleSheet.create({
   },
   actionTitlePrimary: { color: "#FFFFFF" },
   actionTitleDestructive: { color: "#FFFFFF" },
+  actionTitleDisabled: { color: "#8E8E93" },
   actionSubtitle: {
     fontSize: 14,
     color: "#6E6E73",

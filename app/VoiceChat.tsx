@@ -21,6 +21,7 @@ import { loadTranscriptionPreference } from "../lib/transcriptionPreference";
 import type { VadMode } from "../lib/vadPreference";
 import VmWebrtcModule, {
   closeOpenAIConnectionAsync,
+  emitVoiceSessionStatus,
   muteUnmuteOutgoingAudio,
   openOpenAIConnectionAsync,
   type AudioMetricsEventPayload,
@@ -365,6 +366,11 @@ export function VoiceChat({
       return;
     }
 
+    // Set connecting state immediately so button updates right away
+    setIsConnecting(true);
+    setIsSessionActive(false);
+    setSessionCostUsd(0);
+
     try {
       // Reset token usage tracker for new session
       tokenUsageTracker.current.reset();
@@ -398,9 +404,6 @@ export function VoiceChat({
           selectedLanguage,
         },
       );
-      setIsConnecting(true);
-      setIsSessionActive(false);
-      setSessionCostUsd(0);
       const customConnectionOptions: OpenAIConnectionOptions = {
         ...baseConnectionOptions,
         voice: selectedVoice,
@@ -464,6 +467,23 @@ export function VoiceChat({
                 errorMessage: lastError.message,
               },
             );
+            // Emit retry status (safe, won't abort retry loop if native module unavailable)
+            try {
+              emitVoiceSessionStatus(
+                `Connection failed, retrying (${attempt + 1}/${maxRetries})...`,
+              );
+            } catch (statusError) {
+              log.warn(
+                "Failed to emit voice session status during retry",
+                {},
+                {
+                  error:
+                    statusError instanceof Error
+                      ? statusError.message
+                      : String(statusError),
+                },
+              );
+            }
             // Wait before retrying
             await new Promise((resolve) => setTimeout(resolve, delay));
           } else {
@@ -500,6 +520,10 @@ export function VoiceChat({
       );
       const message =
         error instanceof Error ? error.message : "Unexpected error";
+
+      // Emit error status
+      emitVoiceSessionStatus(`Connection failed: ${message}`);
+
       Alert.alert("VmWebrtc", message);
       setIsSessionActive(false);
       setFrequencyBins([]);

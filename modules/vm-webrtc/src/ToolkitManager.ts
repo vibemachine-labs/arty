@@ -239,9 +239,15 @@ async function buildStaticToolkitDefinitions(): Promise<ToolDefinition[]> {
   const groups = await getFilteredToolkitGroups();
 
   for (const group of groups.list) {
+    const groupDescription = group.description;
+
     for (const toolkit of group.toolkits) {
       if (toolkit.type === "function") {
-        const toolDefinition = await exportToolDefinition(toolkit, true);
+        const toolDefinition = await exportToolDefinition(
+          toolkit,
+          true,
+          groupDescription,
+        );
         staticTools.push(toolDefinition);
       } else if (toolkit.type === "legacy_connector") {
         // Import legacy connector definitions dynamically
@@ -556,6 +562,7 @@ let toolkitDefinitionsPromise: Promise<ToolDefinition[]> | null = null;
 async function mcpToolToToolDefinition(
   tool: Tool,
   groupName: string,
+  groupDescription?: string,
 ): Promise<ToolDefinition> {
   // Convert MCP input schema properties to our format
   const properties: Record<string, { type: string; description: string }> = {};
@@ -568,16 +575,36 @@ async function mcpToolToToolDefinition(
     };
   }
 
-  // Load user-configured prompt addition
-  const { loadToolPromptAddition } = await import("../../../lib/toolPrompts");
-  const promptAdditionKey = `${groupName}.${tool.name}`;
-  let description = tool.description || "";
+  // Start with group description if provided
+  let description = groupDescription
+    ? `${groupDescription} ${tool.description || ""}`
+    : tool.description || "";
 
+  // Load group-level prompt addition first
+  const { loadToolPromptAddition } = await import("../../../lib/toolPrompts");
+  const groupPromptKey = `_group_.${groupName}`;
+
+  try {
+    const groupPromptAddition = await loadToolPromptAddition(groupPromptKey);
+    if (groupPromptAddition && groupPromptAddition.trim().length > 0) {
+      // Prepend group-level customization to description
+      description = `${groupPromptAddition.trim()}\n\n${description}`;
+    }
+  } catch (error) {
+    // If loading fails, just continue without group prompt
+    console.warn(
+      `Failed to load group prompt addition for MCP tool ${groupPromptKey}:`,
+      error,
+    );
+  }
+
+  // Load tool-specific user-configured prompt addition
+  const promptAdditionKey = `${groupName}.${tool.name}`;
   try {
     const promptAddition = await loadToolPromptAddition(promptAdditionKey);
     if (promptAddition && promptAddition.trim().length > 0) {
       // Append the prompt addition at the end so users can "correct" the base prompt
-      description = `${tool.description || ""}\n\n${promptAddition.trim()}`;
+      description = `${description}\n\n${promptAddition.trim()}`;
     }
   } catch (error) {
     // If loading fails, just use the base description
@@ -654,6 +681,7 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
     staticToolkitDefinitionsCache = await buildStaticToolkitDefinitions();
   }
 
+  const groups = await getFilteredToolkitGroups();
   const rawToolkits = await getRawToolkitDefinitions();
   const remoteMcpToolkits = rawToolkits.filter(
     (toolkit): toolkit is RemoteMcpToolkitDefinition =>
@@ -665,7 +693,14 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
     [];
 
   for (const toolkit of remoteMcpToolkits) {
-    const definitions = await loadRemoteToolkitDefinitions(toolkit);
+    // Find the group description for this toolkit
+    const group = groups.list.find((g) => g.name === toolkit.group);
+    const groupDescription = group?.description;
+
+    const definitions = await loadRemoteToolkitDefinitions(
+      toolkit,
+      groupDescription,
+    );
     dynamicCount += definitions.length;
     mcpServerDetails.push({
       group: toolkit.group,
@@ -677,7 +712,6 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
   const allTools = rebuildToolkitDefinitionsCache();
 
   // Get list of static tool groups
-  const groups = await getFilteredToolkitGroups();
   const staticGroups = groups.list
     .filter((g) => g.toolkits.some((t) => t.type === "function"))
     .map((g) => ({
@@ -803,11 +837,16 @@ async function registerMcpToolsForServer(
 async function convertToolsForCache(
   tools: Tool[],
   groupName: string,
+  groupDescription?: string,
 ): Promise<RemoteToolkitCacheEntry["tools"]> {
   const converted = await Promise.all(
     tools.map(async (tool) => ({
       name: tool.name,
-      definition: await mcpToolToToolDefinition(tool, groupName),
+      definition: await mcpToolToToolDefinition(
+        tool,
+        groupName,
+        groupDescription,
+      ),
     })),
   );
   return converted;
@@ -816,6 +855,7 @@ async function convertToolsForCache(
 async function fetchAndCacheRemoteToolkitDefinitions(
   toolkit: RemoteMcpToolkitDefinition,
   serverUrl: string,
+  groupDescription?: string,
 ): Promise<ToolDefinition[]> {
   const client = getOrCreateMcpClient(serverUrl);
   const discoveryOptions = await buildRequestOptions(toolkit);
@@ -845,7 +885,11 @@ async function fetchAndCacheRemoteToolkitDefinitions(
     return [];
   }
 
-  const cachedTools = await convertToolsForCache(result.tools, toolkit.group);
+  const cachedTools = await convertToolsForCache(
+    result.tools,
+    toolkit.group,
+    groupDescription,
+  );
   await registerMcpToolsForServer(toolkit, serverUrl, cachedTools, client);
   setDynamicToolkitDefinitionsForServer(
     serverUrl,
@@ -875,6 +919,7 @@ async function fetchAndCacheRemoteToolkitDefinitions(
 function scheduleRemoteToolkitRefresh(
   toolkit: RemoteMcpToolkitDefinition,
   serverUrl: string,
+  groupDescription?: string,
 ): void {
   if (remoteCacheRefreshPromises.has(serverUrl)) {
     log.debug(
@@ -903,6 +948,7 @@ function scheduleRemoteToolkitRefresh(
       const newDefinitions = await fetchAndCacheRemoteToolkitDefinitions(
         toolkit,
         serverUrl,
+        groupDescription,
       );
 
       log.info(
@@ -939,6 +985,7 @@ function scheduleRemoteToolkitRefresh(
 
 async function loadRemoteToolkitDefinitions(
   toolkit: RemoteMcpToolkitDefinition,
+  groupDescription?: string,
 ): Promise<ToolDefinition[]> {
   const serverUrl = toolkit.remote_mcp_server?.url;
   if (!serverUrl) {
@@ -979,7 +1026,7 @@ async function loadRemoteToolkitDefinitions(
 
     // Schedule background refresh if cache is stale
     if (isCacheStale) {
-      scheduleRemoteToolkitRefresh(toolkit, serverUrl);
+      scheduleRemoteToolkitRefresh(toolkit, serverUrl, groupDescription);
     }
 
     return definitions;
@@ -996,7 +1043,11 @@ async function loadRemoteToolkitDefinitions(
   );
 
   try {
-    return await fetchAndCacheRemoteToolkitDefinitions(toolkit, serverUrl);
+    return await fetchAndCacheRemoteToolkitDefinitions(
+      toolkit,
+      serverUrl,
+      groupDescription,
+    );
   } catch (error: unknown) {
     log.error(
       "[ToolkitManager] Failed to fetch tools from MCP server for toolkit definitions",

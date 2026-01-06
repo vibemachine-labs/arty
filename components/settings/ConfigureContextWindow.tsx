@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Switch, Text, View } from "react-native";
 import Slider from "@react-native-community/slider";
 
 import { BottomSheet } from "../ui/BottomSheet";
@@ -8,8 +8,10 @@ interface ConfigureContextWindowProps {
   visible: boolean;
   retentionRatio: number;
   maxConversationTurns: number;
+  disableCompaction: boolean;
   onRetentionRatioChange: (value: number) => void;
   onMaxConversationTurnsChange: (value: number) => void;
+  onDisableCompactionChange: (value: boolean) => void;
   onClose: () => void;
 }
 
@@ -17,8 +19,10 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
   visible,
   retentionRatio,
   maxConversationTurns,
+  disableCompaction,
   onRetentionRatioChange,
   onMaxConversationTurnsChange,
+  onDisableCompactionChange,
   onClose,
 }) => {
   const handleTurnsSliderChange = (value: number) => {
@@ -80,7 +84,25 @@ export const ConfigureContextWindow: React.FC<ConfigureContextWindowProps> = ({
             onValueChange={handleTurnsSliderChange}
             minimumTrackTintColor="#0A84FF"
             maximumTrackTintColor="#D1D1D6"
+            disabled={disableCompaction}
           />
+        </View>
+
+        {/* Disable Compaction */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Disable Compaction</Text>
+            <Switch
+              value={disableCompaction}
+              onValueChange={onDisableCompactionChange}
+              trackColor={{ false: "#D1D1D6", true: "#0A84FF" }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+          <Text style={styles.settingSubtitle}>
+            When enabled, conversation history will not be compacted regardless
+            of the max turns setting
+          </Text>
         </View>
       </View>
     </BottomSheet>

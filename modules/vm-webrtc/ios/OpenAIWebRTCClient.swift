@@ -88,6 +88,7 @@ final class OpenAIWebRTCClient: NSObject {
     private var maxConversationTurns: Int?
     var retentionRatio: Double?
     private let retentionRatioScale: Int = 2
+    private var disableCompaction: Bool = false
     var transcriptionEnabled: Bool = false
     let logger = VmWebrtcLogging.logger
 
@@ -434,6 +435,7 @@ final class OpenAIWebRTCClient: NSObject {
         audioSpeed: Double?,
         maxConversationTurns: Int?,
         retentionRatio: Double?,
+        disableCompaction: Bool?,
         transcriptionEnabled: Bool
     ) async throws -> String {
         let sanitizedInstructions = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -482,10 +484,12 @@ final class OpenAIWebRTCClient: NSObject {
         // Store context control settings
         self.maxConversationTurns = maxConversationTurns
         self.retentionRatio = retentionRatio
+        self.disableCompaction = disableCompaction ?? false
         self.transcriptionEnabled = transcriptionEnabled
 
         // Configure conversation turn limit in event handler
         eventHandler.configureConversationTurnLimit(maxTurns: maxConversationTurns)
+        eventHandler.configureDisableCompaction(disabled: self.disableCompaction)
         eventHandler.resetConversationTracking()
 
         // Pass API key to event handler

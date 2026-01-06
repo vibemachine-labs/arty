@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableWithoutFeedback,
@@ -59,8 +60,19 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
               <View style={styles.handleContainer}>
                 <View style={styles.handle} />
               </View>
-              {title ? <View style={styles.header}><Text style={styles.title}>{title}</Text></View> : null}
-              {children}
+              {title ? (
+                <View style={styles.header}>
+                  <Text style={styles.title}>{title}</Text>
+                </View>
+              ) : null}
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={true}
+                bounces={true}
+              >
+                {children}
+              </ScrollView>
             </Animated.View>
           </TouchableWithoutFeedback>
         </View>
@@ -82,6 +94,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 24,
     paddingTop: 8,
+    maxHeight: SCREEN_HEIGHT * 0.85,
   },
   handleContainer: {
     alignItems: "center",
@@ -101,5 +114,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1C1C1E",
     textAlign: "center",
+  },
+  scrollView: {
+    flexGrow: 0,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
 });

@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SHOW_REALTIME_ERROR_ALERTS_KEY = "developer.showRealtimeErrorAlerts";
 const DISABLE_LOG_REDACTION_KEY = "developer.disableLogRedaction";
+const DISABLE_COMPACTION_KEY = "developer.disableCompaction";
 const DEV_SETTINGS_PREFIX = "[DeveloperSettings]";
 
 const warn = (message: string, error: unknown) => {
@@ -61,5 +62,29 @@ export const saveLogRedactionDisabled = async (
     );
   } catch (error) {
     warn("Failed to persist log redaction preference", error);
+  }
+};
+
+export const loadCompactionDisabled = async (): Promise<boolean> => {
+  try {
+    const stored = await AsyncStorage.getItem(DISABLE_COMPACTION_KEY);
+    if (stored === null) {
+      return false; // Default: compaction is enabled
+    }
+    return stored === "true";
+  } catch (error) {
+    warn("Failed to load compaction disabled preference", error);
+    return false; // Default: compaction is enabled
+  }
+};
+
+export const saveCompactionDisabled = async (value: boolean): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(
+      DISABLE_COMPACTION_KEY,
+      value ? "true" : "false",
+    );
+  } catch (error) {
+    warn("Failed to persist compaction disabled preference", error);
   }
 };

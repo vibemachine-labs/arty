@@ -160,6 +160,7 @@ final class WebRTCEventHandler {
     private var maxConversationTurns: Int?
     private var maxContentLength: Int = 10000  // Default max total content length before compaction
     private var compactionInProgress: Bool = false  // Prevent duplicate compaction runs
+    private var disableCompaction: Bool = false  // Disable compaction completely when true
     private let conversationQueue = DispatchQueue(
         label: "com.vibemachine.webrtc.conversation-tracker")
     private let idleQueue = DispatchQueue(label: "com.vibemachine.webrtc.idle-monitor")
@@ -2092,6 +2093,21 @@ final class WebRTCEventHandler {
         }
     }
 
+    func configureDisableCompaction(disabled: Bool) {
+        conversationQueue.async {
+            self.disableCompaction = disabled
+
+            self.logger.log(
+                "[WebRTCEventHandler] [Compaction] Configuration updated",
+                attributes: logAttributes(
+                    for: .info,
+                    metadata: [
+                        "disableCompaction": disabled
+                    ])
+            )
+        }
+    }
+
     func resetConversationTracking() {
         conversationQueue.async {
             self.conversationItems.removeAll()
@@ -2454,6 +2470,16 @@ final class WebRTCEventHandler {
     /// - `conversationItems` is ordered oldest → newest.
     /// - Compaction is triggered when total content length exceeds maxContentLength.
     func compactConversationItems(context: ToolContext) async {
+        // Check if compaction is disabled
+        let isDisabled = conversationQueue.sync { self.disableCompaction }
+        guard !isDisabled else {
+            self.logger.log(
+                "[WebRTCEventHandler] [Compact] Compaction is disabled by user setting",
+                attributes: logAttributes(for: .debug)
+            )
+            return
+        }
+
         let totalContentLength = conversationQueue.sync {
             self.conversationItems.reduce(0) { $0 + ($1.fullContent?.count ?? 0) }
         }

@@ -221,6 +221,7 @@ export type OpenAIConnectionOptions = BaseOpenAIConnectionOptions & {
   audioSpeed?: number;
   maxConversationTurns?: number; // Drop entire older messages (turn-cap)
   retentionRatio?: number; // 0.0-1.0, e.g. 0.8 = keep 80% most recent
+  disableCompaction?: boolean; // Disable compaction completely when true
   transcriptionEnabled?: boolean; // Enable input audio transcription with Whisper
 };
 

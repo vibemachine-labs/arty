@@ -50,6 +50,7 @@ type VoiceChatProps = {
   mainPromptAddition: string;
   retentionRatio: number;
   maxConversationTurns: number;
+  disableCompaction: boolean;
   selectedLanguage: string;
 };
 
@@ -62,6 +63,7 @@ export function VoiceChat({
   mainPromptAddition,
   retentionRatio,
   maxConversationTurns,
+  disableCompaction,
   selectedLanguage,
 }: VoiceChatProps) {
   const [isConnecting, setIsConnecting] = useState(false);
@@ -413,6 +415,7 @@ export function VoiceChat({
         audioSpeed: voiceSpeed,
         maxConversationTurns,
         retentionRatio,
+        disableCompaction,
         transcriptionEnabled,
         toolDefinitions,
       };

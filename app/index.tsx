@@ -30,6 +30,10 @@ import {
   saveRetentionRatio,
 } from "../lib/contextWindowPreference";
 import {
+  loadCompactionDisabled,
+  saveCompactionDisabled,
+} from "../lib/developerSettings";
+import {
   DEFAULT_LANGUAGE,
   loadLanguagePreference,
   saveLanguagePreference,
@@ -118,6 +122,7 @@ export default function Index() {
   const [maxConversationTurns, setMaxConversationTurns] = useState<number>(
     DEFAULT_MAX_CONVERSATION_TURNS,
   );
+  const [disableCompaction, setDisableCompaction] = useState(false);
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(
     DEFAULT_TRANSCRIPTION_ENABLED,
   );
@@ -198,17 +203,20 @@ export default function Index() {
 
     const hydrateContextWindowPreferences = async () => {
       const stored = await loadContextWindowPreferences();
+      const compactionDisabled = await loadCompactionDisabled();
       if (!isMounted) {
         return;
       }
       setRetentionRatio(stored.retentionRatio);
       setMaxConversationTurns(stored.maxConversationTurns);
+      setDisableCompaction(compactionDisabled);
       log.info(
         "Context window preferences loaded from storage",
         {},
         {
           retentionRatio: stored.retentionRatio,
           maxConversationTurns: stored.maxConversationTurns,
+          disableCompaction: compactionDisabled,
         },
       );
     };
@@ -350,6 +358,16 @@ export default function Index() {
       "Retention ratio preference updated and saved",
       {},
       { retentionRatio: value },
+    );
+  }, []);
+
+  const handleDisableCompactionChange = useCallback((value: boolean) => {
+    setDisableCompaction(value);
+    void saveCompactionDisabled(value);
+    log.info(
+      "Disable compaction preference updated and saved",
+      {},
+      { disableCompaction: value },
     );
   }, []);
 
@@ -500,6 +518,7 @@ export default function Index() {
         mainPromptAddition={mainPromptAddition}
         retentionRatio={retentionRatio}
         maxConversationTurns={maxConversationTurns}
+        disableCompaction={disableCompaction}
         selectedLanguage={selectedLanguage}
       />
     ) : (
@@ -561,8 +580,10 @@ export default function Index() {
         visible={contextWindowVisible}
         retentionRatio={retentionRatio}
         maxConversationTurns={maxConversationTurns}
+        disableCompaction={disableCompaction}
         onRetentionRatioChange={handleRetentionRatioChange}
         onMaxConversationTurnsChange={handleMaxConversationTurnsChange}
+        onDisableCompactionChange={handleDisableCompactionChange}
         onClose={() => setContextWindowVisible(false)}
       />
       <ConfigureTranscription

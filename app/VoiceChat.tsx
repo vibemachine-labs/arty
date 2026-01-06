@@ -546,6 +546,7 @@ export function VoiceChat({
     voiceSpeed,
     maxConversationTurns,
     retentionRatio,
+    disableCompaction,
     selectedLanguage,
   ]);
 

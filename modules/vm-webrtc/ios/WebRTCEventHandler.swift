@@ -2473,6 +2473,10 @@ final class WebRTCEventHandler {
         // Check if compaction is disabled
         let isDisabled = conversationQueue.sync { self.disableCompaction }
         guard !isDisabled else {
+            // Reset compactionInProgress flag to prevent permanent lock
+            conversationQueue.sync {
+                self.compactionInProgress = false
+            }
             self.logger.log(
                 "[WebRTCEventHandler] [Compact] Compaction is disabled by user setting",
                 attributes: logAttributes(for: .debug)

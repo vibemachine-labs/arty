@@ -1,15 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { BottomSheet } from "../ui/BottomSheet";
 import { ConfigurePromptModal } from "./ConfigurePromptModal";
+import { LanguageLessonConfigModal } from "./LanguageLessonConfigModal";
 import { ToolGroupList, type ToolGroup } from "./ToolGroupList";
 import { ToolList, type Tool } from "./ToolList";
-import {
-  CONNECTOR_OPTIONS,
-  type ConnectorId,
-  type ConnectorOption,
-} from "./connectorOptions";
+import { CONNECTOR_OPTIONS, type ConnectorOption } from "./connectorOptions";
 import {
   loadToolPromptAddition,
   saveToolPromptAddition,
@@ -24,6 +21,35 @@ export interface ConfigureToolsSheetProps {
 
 type ViewMode = "groups" | "tools";
 
+type GroupDisplayOption = Pick<
+  ConnectorOption,
+  "name" | "icon" | "backgroundColor" | "iconBackgroundColor"
+>;
+
+const DEFAULT_GROUP_OPTION: GroupDisplayOption = {
+  name: "",
+  icon: "🛠️",
+  backgroundColor: "#F5F5F7",
+  iconBackgroundColor: "#ECECF0",
+};
+
+const GROUP_OPTION_OVERRIDES: Record<string, Partial<GroupDisplayOption>> = {
+  language_lesson: {
+    name: "Language Lesson",
+    icon: "🧠",
+    backgroundColor: "#ECF6FF",
+    iconBackgroundColor: "#D7EAFF",
+  },
+};
+
+function humanizeGroupName(groupId: string): string {
+  return groupId
+    .split("_")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   visible,
   onClose,
@@ -34,6 +60,8 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
   const [isGroupPrompt, setIsGroupPrompt] = useState(false);
+  const [languageLessonConfigVisible, setLanguageLessonConfigVisible] =
+    useState(false);
 
   // Build tool groups from toolkitGroups.json
   const toolGroups = useMemo(() => {
@@ -43,12 +71,14 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
     Object.keys(toolkitGroups).forEach((groupKey) => {
       const group = toolkitGroups[groupKey as keyof typeof toolkitGroups];
       const connectorOption = CONNECTOR_OPTIONS.find(
-        (opt) => opt.id === (groupKey as ConnectorId),
+        (opt) => opt.id === groupKey,
       );
-
-      if (!connectorOption) {
-        return;
-      }
+      const overrideOption = GROUP_OPTION_OVERRIDES[groupKey] || {};
+      const mergedOption: GroupDisplayOption = {
+        ...DEFAULT_GROUP_OPTION,
+        ...connectorOption,
+        ...overrideOption,
+      };
 
       const toolkits = group.toolkits || [];
       const isRemoteMcp = toolkits.some(
@@ -57,10 +87,13 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
 
       groups.push({
         id: groupKey,
-        name: connectorOption.name,
-        icon: connectorOption.icon,
-        backgroundColor: connectorOption.backgroundColor,
-        iconBackgroundColor: connectorOption.iconBackgroundColor,
+        name:
+          mergedOption.name && mergedOption.name.length > 0
+            ? mergedOption.name
+            : humanizeGroupName(groupKey),
+        icon: mergedOption.icon,
+        backgroundColor: mergedOption.backgroundColor,
+        iconBackgroundColor: mergedOption.iconBackgroundColor,
         toolCount: isRemoteMcp ? 0 : toolkits.length,
         isRemoteMcp,
       });
@@ -161,6 +194,17 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   };
 
   const handleToolPress = (tool: Tool) => {
+    if (
+      tool.group === "language_lesson" &&
+      tool.name === "get_next_language_exercise"
+    ) {
+      onClose();
+      requestAnimationFrame(() => {
+        setLanguageLessonConfigVisible(true);
+      });
+      return;
+    }
+
     onClose();
     requestAnimationFrame(() => {
       setActiveTool(tool);
@@ -276,6 +320,11 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
           }
         />
       ) : null}
+
+      <LanguageLessonConfigModal
+        visible={languageLessonConfigVisible}
+        onClose={() => setLanguageLessonConfigVisible(false)}
+      />
     </>
   );
 };

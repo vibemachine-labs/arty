@@ -5,6 +5,7 @@ import * as dailyPapers from "./daily_papers";
 import * as github from "./github_helper";
 import * as googleDrive from "./google_drive";
 import * as hackerNews from "./hacker_news";
+import * as languageLesson from "./language_lesson";
 import * as web from "./web";
 
 // MARK: - Types
@@ -39,6 +40,7 @@ const toolkitModules = {
   web: web,
   google_drive: googleDrive,
   github: github,
+  language_lesson: languageLesson,
 };
 
 /**
@@ -185,4 +187,4 @@ export async function executeToolkitFunction(
 
 // MARK: - Exports
 
-export { dailyPapers, github, googleDrive, hackerNews, web };
+export { dailyPapers, github, googleDrive, hackerNews, languageLesson, web };

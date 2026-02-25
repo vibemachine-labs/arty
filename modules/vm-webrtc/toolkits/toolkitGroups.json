@@ -488,6 +488,40 @@
         }
       ]
     },
+    "language_lesson": {
+      "name": "language_lesson",
+      "description": "Run interactive language drills from predefined issue exercise sets.",
+      "toolkits": [
+        {
+          "type": "function",
+          "name": "get_next_language_exercise",
+          "group": "language_lesson",
+          "description": "Get the next language exercise and optionally score/update the previous exercise attempt. To start a session, call with empty params. For follow-up calls, provide previous_exercise_id, user_score (0-10), and optional performance_notes.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "previous_exercise_id": {
+                "type": "string",
+                "description": "The exercise ID that the user just completed. Omit on first call."
+              },
+              "user_score": {
+                "type": "number",
+                "description": "Assistant-estimated score for the previous exercise attempt on a 0-10 scale.",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "performance_notes": {
+                "type": "string",
+                "description": "Optional notes on why the score was assigned and what the learner should improve."
+              }
+            },
+            "required": []
+          }
+        }
+      ]
+    },
     "github_legacy": {
       "name": "github_legacy",
       "description": "Legacy GitHub connector (disabled by default).",

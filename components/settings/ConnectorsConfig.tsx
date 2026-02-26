@@ -24,6 +24,7 @@ import { Context7ConnectorInfo } from "./Context7ConnectorInfo";
 import { DailyPapersConnectorInfo } from "./DailyPapersConnectorInfo";
 import { GithubLegacyConnectorInfo } from "./GithubLegacyConnectorInfo";
 import { GDriveLegacyConnectorInfo } from "./GDriveLegacyConnectorInfo";
+import { LanguageLessonConnectorInfo } from "./LanguageLessonConnectorInfo";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -42,6 +43,8 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
   const [deepwikiInfoVisible, setDeepwikiInfoVisible] = useState(false);
   const [context7InfoVisible, setContext7InfoVisible] = useState(false);
   const [dailyPapersInfoVisible, setDailyPapersInfoVisible] = useState(false);
+  const [languageLessonInfoVisible, setLanguageLessonInfoVisible] =
+    useState(false);
   const [githubLegacyInfoVisible, setGithubLegacyInfoVisible] = useState(false);
   const [gdriveLegacyInfoVisible, setGDriveLegacyInfoVisible] = useState(false);
 
@@ -60,6 +63,8 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       setContext7InfoVisible(true);
     } else if (connectorId === "daily_papers") {
       setDailyPapersInfoVisible(true);
+    } else if (connectorId === "language_lesson") {
+      setLanguageLessonInfoVisible(true);
     } else if (connectorId === "github_legacy") {
       setGithubLegacyInfoVisible(true);
     } else if (connectorId === "gdrive_legacy") {
@@ -173,6 +178,11 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       <DailyPapersConnectorInfo
         visible={dailyPapersInfoVisible}
         onClose={() => setDailyPapersInfoVisible(false)}
+      />
+
+      <LanguageLessonConnectorInfo
+        visible={languageLessonInfoVisible}
+        onClose={() => setLanguageLessonInfoVisible(false)}
       />
 
       <GithubLegacyConnectorInfo

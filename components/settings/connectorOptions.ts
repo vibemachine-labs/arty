@@ -6,6 +6,7 @@ export type ConnectorId =
   | "deepwiki"
   | "context7"
   | "daily_papers"
+  | "language_lesson"
   | "github_legacy"
   | "gdrive_legacy";
 
@@ -67,6 +68,13 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     icon: "📰",
     backgroundColor: "#FFF0F5",
     iconBackgroundColor: "#FFE4EC",
+  },
+  {
+    id: "language_lesson",
+    name: "Language Lesson",
+    icon: "🗣️",
+    backgroundColor: "#EEF7FF",
+    iconBackgroundColor: "#DDEEFF",
   },
   {
     id: "github_legacy",

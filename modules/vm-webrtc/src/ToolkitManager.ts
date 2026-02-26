@@ -41,15 +41,17 @@ function getConnectorStorageKey(groupName: string): string {
 
 /**
  * Check if a toolkit group is enabled based on stored settings.
- * Returns true by default if no setting is found, except for legacy connectors which default to false.
+ * Returns true by default if no setting is found, except for
+ * legacy connectors and explicitly default-disabled groups.
  */
 async function isToolkitGroupEnabled(groupName: string): Promise<boolean> {
   const storageKey = getConnectorStorageKey(groupName);
 
-  // Legacy connectors default to disabled
+  // Legacy connectors and selected groups default to disabled
   const isLegacyConnector =
     groupName === "github_legacy" || groupName === "gdrive_legacy";
-  const defaultEnabled = !isLegacyConnector;
+  const isDefaultDisabledGroup = groupName === "language_lesson";
+  const defaultEnabled = !isLegacyConnector && !isDefaultDisabledGroup;
 
   try {
     const enabledValue = await AsyncStorage.getItem(storageKey);
@@ -66,6 +68,7 @@ async function isToolkitGroupEnabled(groupName: string): Promise<boolean> {
         enabledValue,
         isEnabled,
         isLegacyConnector,
+        isDefaultDisabledGroup,
         defaultEnabled,
       },
     );

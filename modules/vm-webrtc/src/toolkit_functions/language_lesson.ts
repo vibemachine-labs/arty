@@ -12,7 +12,7 @@ export interface GetNextLanguageExerciseParams {
  * Stub implementation for the language lesson exercise flow.
  * Step 1 implementation:
  * - First call (no previous exercise result): return first exercise in config.
- * - Follow-up calls with previous results: not implemented yet.
+ * - Follow-up calls: log previous result only (no progression/storage yet).
  */
 export async function get_next_language_exercise(
   params: GetNextLanguageExerciseParams = {},
@@ -36,29 +36,36 @@ export async function get_next_language_exercise(
     },
   );
 
-  const isInitialCall =
-    (!previous_exercise_id || previous_exercise_id.trim().length === 0) &&
-    user_score === null;
+  const normalizedPreviousExerciseId = (previous_exercise_id || "").trim();
+  const hasPreviousExerciseId = normalizedPreviousExerciseId.length > 0;
+  const hasUserScore = user_score !== null && user_score !== undefined;
+
+  const isInitialCall = !hasPreviousExerciseId && !hasUserScore;
 
   if (!isInitialCall) {
-    return {
-      result: JSON.stringify(
-        {
-          status: "not_implemented",
-          mode: "follow_up",
-          message:
-            "Step 2 is not implemented yet. Only initial exercise fetch is implemented.",
-          input: {
-            previous_exercise_id,
-            user_score,
-            performance_notes,
+    const hasValidUserScore =
+      typeof user_score === "number" && Number.isFinite(user_score);
+
+    if (!hasPreviousExerciseId || !hasValidUserScore) {
+      return {
+        result: JSON.stringify(
+          {
+            status: "invalid_follow_up_input",
+            mode: "follow_up",
+            message:
+              "Follow-up calls require both previous_exercise_id and numeric user_score.",
+            input: {
+              previous_exercise_id,
+              user_score,
+              performance_notes,
+            },
           },
-        },
-        null,
-        2,
-      ),
-      updatedToolSessionContext: toolSessionContext,
-    };
+          null,
+          2,
+        ),
+        updatedToolSessionContext: toolSessionContext,
+      };
+    }
   }
 
   const parsedConfigResult = await loadParsedLanguageLessonConfig();
@@ -71,12 +78,118 @@ export async function get_next_language_exercise(
       result: JSON.stringify(
         {
           status: "config_invalid",
-          mode: "initial",
+          mode: isInitialCall ? "initial" : "follow_up",
           message:
             "Language lesson config is invalid or missing. Update the JSON in Configure Tools.",
           config_hash: parsedConfigResult.hash,
           summary: parsedConfigResult.summary,
           validationErrors: parsedConfigResult.validationErrors,
+        },
+        null,
+        2,
+      ),
+      updatedToolSessionContext: toolSessionContext,
+    };
+  }
+
+  if (!isInitialCall) {
+    const languageIssues = parsedConfigResult.parsedConfig.language_issues;
+    let matchedIssueIndex = -1;
+    let matchedExerciseIndex = -1;
+    let matchedIssue:
+      | (typeof parsedConfigResult.parsedConfig.language_issues)[number]
+      | null = null;
+    let matchedExercise:
+      | (typeof parsedConfigResult.parsedConfig.language_issues)[number]["exercises"][number]
+      | null = null;
+
+    for (let issueIndex = 0; issueIndex < languageIssues.length; issueIndex++) {
+      const issue = languageIssues[issueIndex];
+      const exerciseIndex = issue.exercises.findIndex(
+        (exercise) => exercise.exercise_id === normalizedPreviousExerciseId,
+      );
+
+      if (exerciseIndex >= 0) {
+        matchedIssueIndex = issueIndex;
+        matchedExerciseIndex = exerciseIndex;
+        matchedIssue = issue;
+        matchedExercise = issue.exercises[exerciseIndex];
+        break;
+      }
+    }
+
+    if (!matchedIssue || !matchedExercise) {
+      return {
+        result: JSON.stringify(
+          {
+            status: "previous_exercise_not_found",
+            mode: "follow_up",
+            message:
+              "Could not find previous_exercise_id in current language lesson config.",
+            config_hash: parsedConfigResult.hash,
+            summary: parsedConfigResult.summary,
+            input: {
+              previous_exercise_id: normalizedPreviousExerciseId,
+              user_score,
+              performance_notes,
+            },
+          },
+          null,
+          2,
+        ),
+        updatedToolSessionContext: toolSessionContext,
+      };
+    }
+
+    const followUpLogPayload = {
+      previous_exercise_id: normalizedPreviousExerciseId,
+      user_score,
+      performance_notes,
+      config_hash: parsedConfigResult.hash,
+      matched_issue_index: matchedIssueIndex,
+      matched_exercise_index: matchedExerciseIndex,
+      matched_issue: {
+        errorId: matchedIssue.errorId,
+        title: matchedIssue.title,
+        area: matchedIssue.area,
+        impact: matchedIssue.impact,
+        description: matchedIssue.description,
+        theory: matchedIssue.theory,
+        categoryCode: matchedIssue.categoryCode,
+        subcategoryCode: matchedIssue.subcategoryCode,
+        subcategoryName: matchedIssue.subcategoryName,
+      },
+      matched_exercise: matchedExercise,
+      toolSessionContext,
+    };
+
+    log.info(
+      "[language_lesson] Logged previous exercise result (no progression yet)",
+      {},
+      followUpLogPayload,
+    );
+
+    return {
+      result: JSON.stringify(
+        {
+          status: "previous_result_logged",
+          mode: "follow_up",
+          message:
+            "Previous exercise result logged. Progression/selection is not enabled yet.",
+          config_hash: parsedConfigResult.hash,
+          summary: parsedConfigResult.summary,
+          logged_result: {
+            previous_exercise_id: normalizedPreviousExerciseId,
+            user_score,
+            performance_notes,
+            issue_index: matchedIssueIndex,
+            exercise_index: matchedExerciseIndex,
+            issue_error_id: matchedIssue.errorId,
+            issue_title: matchedIssue.title,
+            exercise_type: matchedExercise.type,
+            logged_at: new Date().toISOString(),
+          },
+          next_exercise: null,
         },
         null,
         2,

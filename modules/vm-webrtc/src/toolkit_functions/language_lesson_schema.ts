@@ -189,7 +189,8 @@ const exercisePresentationRulesSchema = z
   .optional()
   .transform((value) => ({
     max_hint_level:
-      value?.max_hint_level ?? DEFAULT_EXERCISE_PRESENTATION_RULES.max_hint_level,
+      value?.max_hint_level ??
+      DEFAULT_EXERCISE_PRESENTATION_RULES.max_hint_level,
     shuffle_exercises:
       value?.shuffle_exercises ??
       DEFAULT_EXERCISE_PRESENTATION_RULES.shuffle_exercises,
@@ -223,14 +224,14 @@ const exercisesSpecSchema = z
 const languageIssueSchema = z
   .object({
     title: nonEmptyString,
-    area: nonEmptyString,
-    impact: nonEmptyString,
-    description: nonEmptyString,
-    theory: nonEmptyString,
-    examples: z.array(languageIssueExampleSchema).optional().default([]),
-    categoryCode: nonEmptyString,
-    subcategoryCode: nonEmptyString,
-    subcategoryName: nonEmptyString,
+    area: z.string().optional(),
+    impact: z.string().optional(),
+    description: z.string().optional(),
+    theory: z.string().optional(),
+    examples: z.array(languageIssueExampleSchema).optional(),
+    categoryCode: z.string().optional(),
+    subcategoryCode: z.string().optional(),
+    subcategoryName: z.string().optional(),
     errorId: nonEmptyString,
     exercises_spec: exercisesSpecSchema,
     exercises: z.array(languageExerciseSchema).min(1),

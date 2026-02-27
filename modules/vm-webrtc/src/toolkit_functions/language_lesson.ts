@@ -71,6 +71,13 @@ interface CompletedExercisePayload {
   exercise_id: string;
 }
 
+interface GradingResultPayload {
+  user_score: number;
+  performance_notes: string | null;
+  passed: boolean;
+  passing_score_threshold: number;
+}
+
 interface FollowUpInputPayload {
   previous_exercise_id: string | null;
   user_score: number | null;
@@ -104,6 +111,7 @@ interface LanguageExerciseToolResponse {
   issue: LanguageIssuePayload | null;
   next_exercise: LanguageExercise | null;
   completed_exercise: CompletedExercisePayload | null;
+  grading_result: GradingResultPayload | null;
   input: FollowUpInputPayload | null;
   validationErrors: string[];
   error: string | null;
@@ -220,9 +228,9 @@ function buildNextActionSuggestion(status: LanguageExerciseToolStatus): string {
     case "next_exercise_ready":
       return "Present next_exercise to the user now. After the user responds, call language_lesson__grade_user_exercise with previous_exercise_id, user_score, and optional performance_notes.";
     case "ready_for_next_exercise":
-      return "Call language_lesson__start_next_exercise to fetch the next unfinished exercise.";
+      return "Tell the user their score and why using grading_result, then call language_lesson__start_next_exercise to fetch the next unfinished exercise.";
     case "retry_current_exercise":
-      return "Ask the user to retry the exercise in next_exercise, then call language_lesson__grade_user_exercise again with previous_exercise_id, user_score, and performance_notes.";
+      return "Tell the user their score and why using grading_result, ask them to retry the exercise in next_exercise, then call language_lesson__grade_user_exercise again with previous_exercise_id, user_score, and performance_notes.";
     case "all_exercises_finished":
       return "Congratulate the user for finishing all exercises and ask if they want to practice a new issue.";
     case "no_exercises_available":
@@ -253,6 +261,7 @@ function buildLanguageExerciseToolResponse(params: {
   issue?: LanguageIssuePayload | null;
   next_exercise?: LanguageExercise | null;
   completed_exercise?: CompletedExercisePayload | null;
+  grading_result?: GradingResultPayload | null;
   input?: FollowUpInputPayload | null;
   validationErrors?: string[];
   error?: string | null;
@@ -272,6 +281,7 @@ function buildLanguageExerciseToolResponse(params: {
     issue: params.issue ?? null,
     next_exercise: params.next_exercise ?? null,
     completed_exercise: params.completed_exercise ?? null,
+    grading_result: params.grading_result ?? null,
     input: params.input ?? null,
     validationErrors: params.validationErrors ?? [],
     error: params.error ?? null,
@@ -944,12 +954,18 @@ export async function grade_user_exercise(
       status: "ready_for_next_exercise",
       mode: "follow_up",
       message:
-        "Pending exercise was graded as passing and persisted. Call language_lesson__start_next_exercise to fetch the next unfinished exercise.",
+        "Pending exercise was graded as passing and persisted. Tell the user their score and why this score was assigned, then call language_lesson__start_next_exercise to fetch the next unfinished exercise.",
       config_hash: reloadOutcome.reloadedConfigResult.hash,
       summary: reloadOutcome.reloadedConfigResult.summary,
       progress: progressAfter,
       completed_exercise: {
         exercise_id: validatedInput.previousExerciseId,
+      },
+      grading_result: {
+        user_score: validatedInput.userScore,
+        performance_notes: validatedInput.performanceNotes,
+        passed,
+        passing_score_threshold: PASSING_SCORE_THRESHOLD,
       },
     });
 
@@ -1013,7 +1029,7 @@ export async function grade_user_exercise(
     status: "retry_current_exercise",
     mode: "follow_up",
     message:
-      "Pending exercise score was below passing threshold and was persisted. Ask the user to retry this same exercise.",
+      "Pending exercise score was below passing threshold and was persisted. Tell the user their score and why this score was assigned, then ask the user to retry this same exercise.",
     config_hash: reloadOutcome.reloadedConfigResult.hash,
     summary: reloadOutcome.reloadedConfigResult.summary,
     progress: progressAfter,
@@ -1027,6 +1043,12 @@ export async function grade_user_exercise(
     },
     issue: buildIssuePayload(retryLocator.issue),
     next_exercise: retryLocator.exercise,
+    grading_result: {
+      user_score: validatedInput.userScore,
+      performance_notes: validatedInput.performanceNotes,
+      passed,
+      passing_score_threshold: PASSING_SCORE_THRESHOLD,
+    },
     input: {
       previous_exercise_id: validatedInput.previousExerciseId,
       user_score: validatedInput.userScore,

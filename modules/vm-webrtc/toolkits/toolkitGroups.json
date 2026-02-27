@@ -509,7 +509,7 @@
           "type": "function",
           "name": "grade_user_exercise",
           "group": "language_lesson",
-          "description": "Grade the user's attempt for the pending exercise and update persistent lesson progress. If the score is good enough, call language_lesson__start_next_exercise to fetch the next exercise. If the score is not good enough, this tool returns retry guidance and current-exercise context so the user can retry before moving on.",
+          "description": "Grade the user's attempt for the pending exercise and update persistent lesson progress. Always tell the user their score and why that score was assigned (use the returned grading_result fields). If the score is good enough, then call language_lesson__start_next_exercise to fetch and present the next exercise. If the score is not good enough, this tool returns retry guidance and current-exercise context so the user can retry before moving on.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {

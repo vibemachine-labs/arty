@@ -490,13 +490,26 @@
     },
     "language_lesson": {
       "name": "language_lesson",
-      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets. This is a stateful tool flow: after each learner attempt, call language_lesson__get_next_language_exercise again to score/update progress and fetch the next exercise until completion or user exit.",
+      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets. Use a 3-step stateful flow: (1) call language_lesson__start_first_exercise, (2) after each learner response call language_lesson__grade_user_exercise, (3) if grading passes call language_lesson__start_next_exercise. Repeat until completion or user exit.",
       "toolkits": [
         {
           "type": "function",
-          "name": "get_next_language_exercise",
+          "name": "start_first_exercise",
           "group": "language_lesson",
-          "description": "Get the first or next language exercise and score/update the previous attempt. To start a session, call with empty params. For follow-up calls, provide previous_exercise_id, user_score (0-10), and optional performance_notes. Important: when status is next_exercise_ready, do not just narrate progression; call this tool again after the user answers to continue the drill loop.",
+          "description": "Start the language lesson and return the first unfinished exercise. This tool takes no input. Present the returned exercise to the user. After the user answers, grade the attempt and call language_lesson__grade_user_exercise with previous_exercise_id, user_score (0-10), and optional performance_notes.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        },
+        {
+          "type": "function",
+          "name": "grade_user_exercise",
+          "group": "language_lesson",
+          "description": "Grade the user's attempt for the pending exercise and update persistent lesson progress. If the score is good enough, call language_lesson__start_next_exercise to fetch the next exercise. If the score is not good enough, this tool returns retry guidance and current-exercise context so the user can retry before moving on.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {
@@ -504,17 +517,35 @@
             "properties": {
               "previous_exercise_id": {
                 "type": "string",
-                "description": "The exercise ID that the user just completed. Omit on first call."
+                "description": "The pending exercise ID that the user just attempted and that still needs grading."
               },
               "user_score": {
                 "type": "number",
-                "description": "Assistant-estimated score for the previous exercise attempt on a 0-10 scale.",
+                "description": "Assistant-estimated score for the user's attempt on a 0-10 scale.",
                 "minimum": 0,
                 "maximum": 10
               },
               "performance_notes": {
                 "type": "string",
                 "description": "Optional notes on why the score was assigned and what the learner should improve."
+              }
+            },
+            "required": ["previous_exercise_id", "user_score"]
+          }
+        },
+        {
+          "type": "function",
+          "name": "start_next_exercise",
+          "group": "language_lesson",
+          "description": "Start the next unfinished exercise after language_lesson__grade_user_exercise reports a passing result and indicates to continue. Include previous_exercise_id so the tool can log which pending exercise was just completed. If there are no exercises left, this tool returns completion status so you can congratulate the user.",
+          "supported_auth": "no_auth_required",
+          "extra": {},
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "previous_exercise_id": {
+                "type": "string",
+                "description": "The exercise ID that was just successfully graded and completed."
               }
             },
             "required": []

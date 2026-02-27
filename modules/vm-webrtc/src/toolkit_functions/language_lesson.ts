@@ -68,11 +68,6 @@ interface ExerciseOverview {
 
 interface CompletedExercisePayload {
   exercise_id: string;
-  issue_error_id: string;
-  issue_title: string;
-  score: number;
-  notes: string | null;
-  finished_at: string | null;
 }
 
 interface FollowUpInputPayload {
@@ -106,7 +101,7 @@ interface LanguageExerciseToolResponse {
   progress: ProgressSummary | null;
   overview: ExerciseOverview | null;
   issue: LanguageIssuePayload | null;
-  exercise: LanguageExercise | null;
+  next_exercise: LanguageExercise | null;
   completed_exercise: CompletedExercisePayload | null;
   input: FollowUpInputPayload | null;
   validationErrors: string[];
@@ -243,7 +238,7 @@ function buildLanguageExerciseToolResponse(params: {
   progress?: ProgressSummary | null;
   overview?: ExerciseOverview | null;
   issue?: LanguageIssuePayload | null;
-  exercise?: LanguageExercise | null;
+  next_exercise?: LanguageExercise | null;
   completed_exercise?: CompletedExercisePayload | null;
   input?: FollowUpInputPayload | null;
   validationErrors?: string[];
@@ -262,7 +257,7 @@ function buildLanguageExerciseToolResponse(params: {
     progress: params.progress ?? null,
     overview: params.overview ?? null,
     issue: params.issue ?? null,
-    exercise: params.exercise ?? null,
+    next_exercise: params.next_exercise ?? null,
     completed_exercise: params.completed_exercise ?? null,
     input: params.input ?? null,
     validationErrors: params.validationErrors ?? [],
@@ -742,11 +737,6 @@ async function handleFollowUpCall(
       progress: progressAfter,
       completed_exercise: {
         exercise_id: previousExerciseLocator.exercise.exercise_id,
-        issue_error_id: previousExerciseLocator.issue.errorId,
-        issue_title: previousExerciseLocator.issue.title,
-        score: numericScore,
-        notes: normalizedPerformanceNotes,
-        finished_at: previousExerciseLocator.exercise.finished_at || null,
       },
     });
 
@@ -773,17 +763,12 @@ async function handleFollowUpCall(
     status: "next_exercise_ready",
     mode: "follow_up",
     message:
-      "Previous exercise was marked finished and persisted. Returning the next exercise to give to the user. The exercise details are in the exercise field, and see the issue field for more context.",
+      "Previous exercise was marked finished and persisted. Returning the next exercise to give to the user. The exercise details are in the next_exercise field, and see the issue field for more context.",
     config_hash: reloadOutcome.reloadedConfigResult.hash,
     summary: reloadOutcome.reloadedConfigResult.summary,
     progress: progressAfter,
     completed_exercise: {
       exercise_id: previousExerciseLocator.exercise.exercise_id,
-      issue_error_id: previousExerciseLocator.issue.errorId,
-      issue_title: previousExerciseLocator.issue.title,
-      score: numericScore,
-      notes: normalizedPerformanceNotes,
-      finished_at: previousExerciseLocator.exercise.finished_at || null,
     },
     overview: {
       issueIndex: nextLocator.issueIndex,
@@ -794,7 +779,7 @@ async function handleFollowUpCall(
       exerciseCountInIssue: nextLocator.issue.exercises.length,
     },
     issue: buildIssuePayload(nextLocator.issue),
-    exercise: nextLocator.exercise,
+    next_exercise: nextLocator.exercise,
   });
 
   log.info(
@@ -886,7 +871,7 @@ function handleInitialCall(
       exerciseCountInIssue: initialLocator.issue.exercises.length,
     },
     issue: buildIssuePayload(initialLocator.issue),
-    exercise: initialLocator.exercise,
+    next_exercise: initialLocator.exercise,
   });
 
   log.info(

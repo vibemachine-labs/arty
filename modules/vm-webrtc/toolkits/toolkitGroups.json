@@ -490,7 +490,7 @@
     },
     "language_lesson": {
       "name": "language_lesson",
-      "description": "Run interactive language drills from predefined issue exercise sets.",
+      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets.",
       "toolkits": [
         {
           "type": "function",

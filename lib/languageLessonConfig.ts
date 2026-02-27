@@ -165,3 +165,16 @@ export async function saveLanguageLessonExercisesJson(
     },
   );
 }
+
+export async function saveLanguageLessonConfigRaw(
+  value: string,
+): Promise<void> {
+  await saveLanguageLessonExercisesJson(value);
+}
+
+export async function saveParsedLanguageLessonConfig(
+  config: NormalizedLanguageLessonConfig,
+): Promise<void> {
+  const raw = JSON.stringify(config, null, 2);
+  await saveLanguageLessonExercisesJson(raw);
+}

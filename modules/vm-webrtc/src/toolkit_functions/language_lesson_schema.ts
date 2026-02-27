@@ -20,16 +20,21 @@ const DEFAULT_EXERCISE_FEEDBACK = {
 };
 
 const DEFAULT_SPOKEN_FEEDBACK = {
-  on_fail: undefined as
-    | string
-    | { level: number; text: string }[]
-    | undefined,
+  on_fail: undefined as string | { level: number; text: string }[] | undefined,
   on_pass: undefined as string | undefined,
 };
 
 const DEFAULT_EXERCISE_METADATA = {
   difficulty: undefined as number | undefined,
   tags: [] as string[],
+};
+
+const exerciseProgressStateFields = {
+  status: z.enum(["pending", "finished"]).optional(),
+  attempts: z.number().int().min(0).optional(),
+  last_score: z.number().nullable().optional(),
+  last_notes: z.string().nullable().optional(),
+  finished_at: z.string().nullable().optional(),
 };
 
 const DEFAULT_EXERCISE_PRESENTATION_RULES = {
@@ -167,6 +172,7 @@ const translateExerciseSchema = z
     checks: exerciseChecksSchema,
     feedback: exerciseFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict();
 
@@ -192,6 +198,7 @@ const chooseOneExerciseSchema = z
     rationale: nonEmptyString.optional(),
     feedback: exerciseFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict()
   .superRefine((exercise, ctx) => {
@@ -216,6 +223,7 @@ const correctTheSentenceExerciseSchema = z
     checks: exerciseChecksSchema,
     feedback: exerciseFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict();
 
@@ -266,6 +274,7 @@ const spokenTranslationExerciseSchema = z
       .strict(),
     spoken_feedback: spokenFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict();
 
@@ -295,6 +304,7 @@ const listenAndDiscriminateExerciseSchema = z
       .strict(),
     spoken_feedback: spokenFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict();
 
@@ -312,6 +322,7 @@ const spokenCorrectionExerciseSchema = z
       .strict(),
     spoken_feedback: spokenFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict();
 
@@ -329,6 +340,7 @@ const spokenPatternCompletionExerciseSchema = z
       .strict(),
     spoken_feedback: spokenFeedbackSchema,
     metadata: exerciseMetadataSchema,
+    ...exerciseProgressStateFields,
   })
   .strict();
 
@@ -373,8 +385,7 @@ const exercisePresentationRulesSchema = z
         value?.shuffle_exercises ??
         DEFAULT_EXERCISE_PRESENTATION_RULES.shuffle_exercises,
       speak_theory_before_first_exercise: speakTheoryBeforeFirstExercise,
-      spoken_corrections_after_each_attempt:
-        spokenCorrectionsAfterEachAttempt,
+      spoken_corrections_after_each_attempt: spokenCorrectionsAfterEachAttempt,
       allow_self_correction_window_seconds:
         value?.allow_self_correction_window_seconds ??
         DEFAULT_EXERCISE_PRESENTATION_RULES.allow_self_correction_window_seconds,

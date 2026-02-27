@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "@/modules/vm-webrtc";
+import { LanguageLessonConfigModal } from "./LanguageLessonConfigModal";
 
 type LanguageLessonConnectorInfoProps = {
   visible: boolean;
@@ -23,6 +24,7 @@ export const LanguageLessonConnectorInfo: React.FC<
 > = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const [isEnabled, setIsEnabled] = useState(false);
+  const [configModalVisible, setConfigModalVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -91,11 +93,33 @@ export const LanguageLessonConnectorInfo: React.FC<
           </View>
 
           <Text style={styles.bodyText}>
-            This enables the language lesson toolkit group. Use Configure Tools
-            to paste or update the lesson JSON content.
+            This enables the language lesson toolkit group. The lesson JSON is
+            shared across all language lesson tools.
           </Text>
+
+          <View style={styles.jsonSection}>
+            <Text style={styles.jsonTitle}>Lesson JSON</Text>
+            <Text style={styles.jsonDescription}>
+              Paste or update your lesson JSON for the entire language lesson
+              flow.
+            </Text>
+            <Pressable
+              onPress={() => setConfigModalVisible(true)}
+              style={({ pressed }) => [
+                styles.editButton,
+                pressed && styles.editButtonPressed,
+              ]}
+            >
+              <Text style={styles.editButtonText}>Edit Lesson JSON</Text>
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
+
+      <LanguageLessonConfigModal
+        visible={configModalVisible}
+        onClose={() => setConfigModalVisible(false)}
+      />
     </Modal>
   );
 };
@@ -158,5 +182,38 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#1C1C1E",
     textAlign: "left",
+    marginBottom: 24,
+  },
+  jsonSection: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 10,
+  },
+  jsonTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1C1C1E",
+  },
+  jsonDescription: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: "#3A3A3C",
+  },
+  editButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#0A84FF",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  editButtonPressed: {
+    opacity: 0.85,
+  },
+  editButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

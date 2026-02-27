@@ -226,11 +226,11 @@ function buildNextActionSuggestion(status: LanguageExerciseToolStatus): string {
     case "all_exercises_finished":
       return "Congratulate the user for finishing all exercises and ask if they want to practice a new issue.";
     case "no_exercises_available":
-      return "Tell the user no exercises are currently configured and ask them to add language lesson JSON in Configure Tools.";
+      return "Tell the user no exercises are currently configured and ask them to add language lesson JSON in Language Lesson settings.";
     case "invalid_follow_up_input":
       return "Apologize to the user and tell them we hit an internal error that is not their fault. Ask them what they want help with next.";
     case "config_invalid":
-      return "Tell the user the lesson JSON is invalid or missing and ask them to fix it in Configure Tools.";
+      return "Tell the user the lesson JSON is invalid or missing and ask them to fix it in Language Lesson settings.";
     case "persist_failed":
     case "persist_reload_invalid":
       return "Tell the user progress could not be saved reliably and ask them to retry the exercise flow.";
@@ -366,7 +366,7 @@ async function loadValidatedConfigOrResult(
       status: "config_invalid",
       mode,
       message:
-        "Language lesson config is invalid or missing. Update the JSON in Configure Tools.",
+        "Language lesson config is invalid or missing. Update the JSON in Language Lesson settings.",
       config_hash: parsedConfigResult.hash,
       summary: parsedConfigResult.summary,
       validationErrors: parsedConfigResult.validationErrors,

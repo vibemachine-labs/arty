@@ -46,6 +46,73 @@ interface LoadedConfigState {
   progressBefore: ProgressSummary;
 }
 
+type LanguageExerciseToolMode = "initial" | "follow_up";
+
+type LanguageExerciseToolStatus =
+  | "next_exercise_ready"
+  | "all_exercises_finished"
+  | "no_exercises_available"
+  | "invalid_follow_up_input"
+  | "config_invalid"
+  | "persist_failed"
+  | "persist_reload_invalid"
+  | "previous_exercise_not_found";
+
+interface ExerciseOverview {
+  issueIndex: number;
+  exerciseIndex: number;
+  issueCount: number;
+  totalExerciseCount: number;
+  exerciseCountInIssue: number;
+}
+
+interface CompletedExercisePayload {
+  exercise_id: string;
+  issue_error_id: string;
+  issue_title: string;
+  score: number;
+  notes: string | null;
+  finished_at: string | null;
+}
+
+interface FollowUpInputPayload {
+  previous_exercise_id: string | null;
+  user_score: number | null;
+  performance_notes: string | null;
+}
+
+interface LanguageIssuePayload {
+  errorId: string;
+  title: string;
+  area?: string | null;
+  impact?: string | null;
+  description?: string | null;
+  theory?: string | null;
+  theory_voice?: LanguageIssue["theory_voice"];
+  categoryCode?: string | null;
+  subcategoryCode?: string | null;
+  subcategoryName?: string | null;
+}
+
+interface LanguageExerciseToolResponse {
+  type: "language_exercise_tool_response";
+  version: "1.0";
+  status: LanguageExerciseToolStatus;
+  mode: LanguageExerciseToolMode;
+  message: string;
+  next_action_suggestion: string;
+  config_hash: string | null;
+  summary: LoadParsedLanguageLessonConfigResult["summary"] | null;
+  progress: ProgressSummary | null;
+  overview: ExerciseOverview | null;
+  issue: LanguageIssuePayload | null;
+  exercise: LanguageExercise | null;
+  completed_exercise: CompletedExercisePayload | null;
+  input: FollowUpInputPayload | null;
+  validationErrors: string[];
+  error: string | null;
+}
+
 function isExerciseFinished(exercise: LanguageExercise): boolean {
   return exercise.status === "finished";
 }
@@ -129,7 +196,7 @@ function summarizeProgress(
   };
 }
 
-function buildIssuePayload(issue: LanguageIssue) {
+function buildIssuePayload(issue: LanguageIssue): LanguageIssuePayload {
   return {
     errorId: issue.errorId,
     title: issue.title,
@@ -141,6 +208,65 @@ function buildIssuePayload(issue: LanguageIssue) {
     categoryCode: issue.categoryCode,
     subcategoryCode: issue.subcategoryCode,
     subcategoryName: issue.subcategoryName,
+  };
+}
+
+function buildNextActionSuggestion(status: LanguageExerciseToolStatus): string {
+  switch (status) {
+    case "next_exercise_ready":
+      return "Ask the user if they want to continue to the next exercise or do something else. If they want to continue, present the returned exercise immediately.";
+    case "all_exercises_finished":
+      return "Congratulate the user for finishing all exercises and ask if they want to practice a new issue.";
+    case "no_exercises_available":
+      return "Tell the user no exercises are currently configured and ask them to add language lesson JSON in Configure Tools.";
+    case "invalid_follow_up_input":
+      return "Apologize to the user and tell them we hit an internal error that is not their fault.  Ask them what they want help with next.";
+    case "config_invalid":
+      return "Tell the user the lesson JSON is invalid or missing and ask them to fix it in Configure Tools.";
+    case "persist_failed":
+    case "persist_reload_invalid":
+      return "Tell the user progress could not be saved reliably and ask them to retry the exercise flow.";
+    case "previous_exercise_not_found":
+      return "Tell the user the previous exercise id was not found and tell them we hit an internal erorr that is not their fault.  Ask them what they want help with next..";
+    default:
+      return "Continue the lesson flow based on the returned status.";
+  }
+}
+
+function buildLanguageExerciseToolResponse(params: {
+  status: LanguageExerciseToolStatus;
+  mode: LanguageExerciseToolMode;
+  message: string;
+  next_action_suggestion?: string;
+  config_hash?: string | null;
+  summary?: LoadParsedLanguageLessonConfigResult["summary"] | null;
+  progress?: ProgressSummary | null;
+  overview?: ExerciseOverview | null;
+  issue?: LanguageIssuePayload | null;
+  exercise?: LanguageExercise | null;
+  completed_exercise?: CompletedExercisePayload | null;
+  input?: FollowUpInputPayload | null;
+  validationErrors?: string[];
+  error?: string | null;
+}): LanguageExerciseToolResponse {
+  return {
+    type: "language_exercise_tool_response",
+    version: "1.0",
+    status: params.status,
+    mode: params.mode,
+    message: params.message,
+    next_action_suggestion:
+      params.next_action_suggestion || buildNextActionSuggestion(params.status),
+    config_hash: params.config_hash ?? null,
+    summary: params.summary ?? null,
+    progress: params.progress ?? null,
+    overview: params.overview ?? null,
+    issue: params.issue ?? null,
+    exercise: params.exercise ?? null,
+    completed_exercise: params.completed_exercise ?? null,
+    input: params.input ?? null,
+    validationErrors: params.validationErrors ?? [],
+    error: params.error ?? null,
   };
 }
 
@@ -248,7 +374,7 @@ function validateInvocationOrResult(
     return null;
   }
 
-  const returnPayload = {
+  const returnPayload = buildLanguageExerciseToolResponse({
     status: "invalid_follow_up_input",
     mode: "follow_up",
     message:
@@ -258,7 +384,7 @@ function validateInvocationOrResult(
       user_score: invocationState.user_score,
       performance_notes: invocationState.performance_notes,
     },
-  };
+  });
 
   log.warn(
     "[language_lesson] Returning invalid follow-up input",
@@ -297,7 +423,7 @@ async function loadValidatedConfigOrResult(
     parsedConfigResult.validationErrors.length > 0 ||
     !parsedConfigResult.parsedConfig
   ) {
-    const returnPayload = {
+    const returnPayload = buildLanguageExerciseToolResponse({
       status: "config_invalid",
       mode: invocationState.isInitialCall ? "initial" : "follow_up",
       message:
@@ -305,7 +431,7 @@ async function loadValidatedConfigOrResult(
       config_hash: parsedConfigResult.hash,
       summary: parsedConfigResult.summary,
       validationErrors: parsedConfigResult.validationErrors,
-    };
+    });
 
     log.warn(
       "[language_lesson] Returning config_invalid",
@@ -370,13 +496,14 @@ async function persistUpdatedConfigOrErrorResult(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    const returnPayload = {
+    const returnPayload = buildLanguageExerciseToolResponse({
       status: "persist_failed",
       mode: "follow_up",
       message: "Failed to persist updated language lesson progress.",
       error: errorMessage,
       config_hash: parsedConfigResult.hash,
-    };
+      summary: parsedConfigResult.summary,
+    });
 
     log.error(
       "[language_lesson] Failed to persist updated lesson progress",
@@ -429,7 +556,7 @@ async function reloadPersistedConfigOrResult(
     reloadedConfigResult.validationErrors.length > 0 ||
     !reloadedConfigResult.parsedConfig
   ) {
-    const returnPayload = {
+    const returnPayload = buildLanguageExerciseToolResponse({
       status: "persist_reload_invalid",
       mode: "follow_up",
       message:
@@ -437,7 +564,7 @@ async function reloadPersistedConfigOrResult(
       config_hash: reloadedConfigResult.hash,
       summary: reloadedConfigResult.summary,
       validationErrors: reloadedConfigResult.validationErrors,
-    };
+    });
 
     log.error(
       "[language_lesson] Persisted config failed reload validation",
@@ -479,19 +606,20 @@ async function handleFollowUpCall(
   );
 
   if (!previousExerciseLocator) {
-    const returnPayload = {
+    const returnPayload = buildLanguageExerciseToolResponse({
       status: "previous_exercise_not_found",
       mode: "follow_up",
       message:
         "Could not find previous_exercise_id in current language lesson config.",
       config_hash: loadedConfigState.parsedConfigResult.hash,
       summary: loadedConfigState.parsedConfigResult.summary,
+      progress: loadedConfigState.progressBefore,
       input: {
         previous_exercise_id: invocationState.normalizedPreviousExerciseId,
         user_score: numericScore,
         performance_notes: normalizedPerformanceNotes,
       },
-    };
+    });
 
     log.warn(
       "[language_lesson] Returning previous_exercise_not_found",
@@ -596,7 +724,7 @@ async function handleFollowUpCall(
       previousExerciseLocator.issue.errorId,
     );
 
-    const returnPayload = {
+    const returnPayload = buildLanguageExerciseToolResponse({
       status: "all_exercises_finished",
       mode: "follow_up",
       message: "All exercises are finished.",
@@ -609,9 +737,9 @@ async function handleFollowUpCall(
         issue_title: previousExerciseLocator.issue.title,
         score: numericScore,
         notes: normalizedPerformanceNotes,
-        finished_at: previousExerciseLocator.exercise.finished_at,
+        finished_at: previousExerciseLocator.exercise.finished_at || null,
       },
-    };
+    });
 
     log.info(
       "[language_lesson] Returning all_exercises_finished",
@@ -632,8 +760,8 @@ async function handleFollowUpCall(
     reloadOutcome.reloadedConfigResult.hash,
   );
 
-  const returnPayload = {
-    status: "exercise_ready",
+  const returnPayload = buildLanguageExerciseToolResponse({
+    status: "next_exercise_ready",
     mode: "follow_up",
     message:
       "Previous exercise was marked finished and persisted. Returning next unfinished exercise.",
@@ -646,7 +774,7 @@ async function handleFollowUpCall(
       issue_title: previousExerciseLocator.issue.title,
       score: numericScore,
       notes: normalizedPerformanceNotes,
-      finished_at: previousExerciseLocator.exercise.finished_at,
+      finished_at: previousExerciseLocator.exercise.finished_at || null,
     },
     overview: {
       issueIndex: nextLocator.issueIndex,
@@ -658,7 +786,7 @@ async function handleFollowUpCall(
     },
     issue: buildIssuePayload(nextLocator.issue),
     exercise: nextLocator.exercise,
-  };
+  });
 
   log.info(
     "[language_lesson] Returning next unfinished exercise after follow-up",
@@ -696,22 +824,22 @@ function handleInitialCall(
   if (!initialLocator) {
     const returnPayload =
       loadedConfigState.progressBefore.totalExerciseCount === 0
-        ? {
+        ? buildLanguageExerciseToolResponse({
             status: "no_exercises_available",
             mode: "initial",
             message: "No exercises were found in the language lesson config.",
             config_hash: loadedConfigState.parsedConfigResult.hash,
             summary: loadedConfigState.parsedConfigResult.summary,
             progress: loadedConfigState.progressBefore,
-          }
-        : {
+          })
+        : buildLanguageExerciseToolResponse({
             status: "all_exercises_finished",
             mode: "initial",
             message: "All exercises are already finished.",
             config_hash: loadedConfigState.parsedConfigResult.hash,
             summary: loadedConfigState.parsedConfigResult.summary,
             progress: loadedConfigState.progressBefore,
-          };
+          });
 
     log.warn(
       "[language_lesson] No initial unfinished exercise available",
@@ -733,9 +861,10 @@ function handleInitialCall(
     loadedConfigState.parsedConfigResult.hash,
   );
 
-  const returnPayload = {
-    status: "exercise_ready",
+  const returnPayload = buildLanguageExerciseToolResponse({
+    status: "next_exercise_ready",
     mode: "initial",
+    message: "Returning next unfinished exercise.",
     config_hash: loadedConfigState.parsedConfigResult.hash,
     summary: loadedConfigState.parsedConfigResult.summary,
     progress: loadedConfigState.progressBefore,
@@ -749,7 +878,7 @@ function handleInitialCall(
     },
     issue: buildIssuePayload(initialLocator.issue),
     exercise: initialLocator.exercise,
-  };
+  });
 
   log.info(
     "[language_lesson] Returning initial unfinished exercise",

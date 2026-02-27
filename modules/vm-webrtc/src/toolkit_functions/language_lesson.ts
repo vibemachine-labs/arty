@@ -304,6 +304,15 @@ function buildToolkitResult(
   payload: unknown,
   updatedToolSessionContext: ToolSessionContext,
 ): ToolkitResult {
+  log.info(
+    "[language_lesson] Emitting normalized tool response",
+    {},
+    {
+      payload,
+      updatedToolSessionContext,
+    },
+  );
+
   return {
     result: JSON.stringify(payload, null, 2),
     updatedToolSessionContext,

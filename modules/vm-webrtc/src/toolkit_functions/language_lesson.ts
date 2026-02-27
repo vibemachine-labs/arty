@@ -209,7 +209,7 @@ function buildIssuePayload(issue: LanguageIssue): LanguageIssuePayload {
 function buildNextActionSuggestion(status: LanguageExerciseToolStatus): string {
   switch (status) {
     case "next_exercise_ready":
-      return "Assume the user wants to keep going, so give the next exercise to the user. The next exercise details are in the next_exercise field.";
+      return "Assume the user wants to keep going. Give the next exercise to the user using next_exercise, then after the user responds call language_lesson__get_next_language_exercise again with previous_exercise_id, user_score, and performance_notes.";
     case "all_exercises_finished":
       return "Congratulate the user for finishing all exercises and ask if they want to practice a new issue.";
     case "no_exercises_available":
@@ -763,7 +763,7 @@ async function handleFollowUpCall(
     status: "next_exercise_ready",
     mode: "follow_up",
     message:
-      "Previous exercise was marked finished and persisted. Returning the next exercise to give to the user. The next exercise details are in the next_exercise field, and see the issue field for more context.",
+      "Previous exercise was marked finished and persisted. Returning the next exercise to give to the user. The next exercise details are in the next_exercise field, and see the issue field for more context. After the user answers, call language_lesson__get_next_language_exercise again.",
     config_hash: reloadOutcome.reloadedConfigResult.hash,
     summary: reloadOutcome.reloadedConfigResult.summary,
     progress: progressAfter,
@@ -859,7 +859,7 @@ function handleInitialCall(
     status: "next_exercise_ready",
     mode: "initial",
     message:
-      "Returning the next exercise to give to the user. The next exercise details are in the next_exercise field.",
+      "Returning the next exercise to give to the user. The next exercise details are in the next_exercise field. After the user answers, call language_lesson__get_next_language_exercise again.",
     config_hash: loadedConfigState.parsedConfigResult.hash,
     summary: loadedConfigState.parsedConfigResult.summary,
     progress: loadedConfigState.progressBefore,

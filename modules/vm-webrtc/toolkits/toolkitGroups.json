@@ -490,13 +490,13 @@
     },
     "language_lesson": {
       "name": "language_lesson",
-      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets.",
+      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets. This is a stateful tool flow: after each learner attempt, call language_lesson__get_next_language_exercise again to score/update progress and fetch the next exercise until completion or user exit.",
       "toolkits": [
         {
           "type": "function",
           "name": "get_next_language_exercise",
           "group": "language_lesson",
-          "description": "Get the first or the next language exercise and optionally score/update the previous exercise attempt. To start a session, call with empty params. For follow-up calls, provide previous_exercise_id, user_score (0-10), and optional performance_notes.",
+          "description": "Get the first or next language exercise and score/update the previous attempt. To start a session, call with empty params. For follow-up calls, provide previous_exercise_id, user_score (0-10), and optional performance_notes. Important: when status is next_exercise_ready, do not just narrate progression; call this tool again after the user answers to continue the drill loop.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {

@@ -214,7 +214,7 @@ function buildIssuePayload(issue: LanguageIssue): LanguageIssuePayload {
 function buildNextActionSuggestion(status: LanguageExerciseToolStatus): string {
   switch (status) {
     case "next_exercise_ready":
-      return "Ask the user if they want to continue to the next exercise or do something else. If they want to continue, present the returned exercise immediately.";
+      return "Assume the user wants to keep going, so give the next exercise to the user.";
     case "all_exercises_finished":
       return "Congratulate the user for finishing all exercises and ask if they want to practice a new issue.";
     case "no_exercises_available":
@@ -773,7 +773,7 @@ async function handleFollowUpCall(
     status: "next_exercise_ready",
     mode: "follow_up",
     message:
-      "Previous exercise was marked finished and persisted. Returning next unfinished exercise.",
+      "Previous exercise was marked finished and persisted. Returning the next exercise to give to the user. The exercise details are in the exercise field, and see the issue field for more context.",
     config_hash: reloadOutcome.reloadedConfigResult.hash,
     summary: reloadOutcome.reloadedConfigResult.summary,
     progress: progressAfter,

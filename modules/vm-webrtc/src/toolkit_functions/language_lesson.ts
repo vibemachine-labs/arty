@@ -2,6 +2,7 @@ import { log } from "../../../../lib/logger";
 import {
   loadParsedLanguageLessonConfig,
   saveParsedLanguageLessonConfig,
+  type LoadParsedLanguageLessonConfigResult,
 } from "../../../../lib/languageLessonConfig";
 import type { NormalizedLanguageLessonConfig } from "./language_lesson_schema";
 import type { ToolSessionContext, ToolkitResult } from "./types";
@@ -27,6 +28,22 @@ interface ProgressSummary {
   totalExerciseCount: number;
   finishedExerciseCount: number;
   pendingExerciseCount: number;
+}
+
+interface InvocationState {
+  previous_exercise_id: string | null;
+  user_score: number | null;
+  performance_notes: string | null;
+  normalizedPreviousExerciseId: string;
+  hasPreviousExerciseId: boolean;
+  hasUserScore: boolean;
+  isInitialCall: boolean;
+}
+
+interface LoadedConfigState {
+  parsedConfigResult: LoadParsedLanguageLessonConfigResult;
+  mutableConfig: NormalizedLanguageLessonConfig;
+  progressBefore: ProgressSummary;
 }
 
 function isExerciseFinished(exercise: LanguageExercise): boolean {
@@ -154,19 +171,20 @@ function buildUpdatedToolSessionContext(
   return updated;
 }
 
-/**
- * POC implementation:
- * - Initial call: return first unfinished exercise.
- * - Follow-up call: mark previous exercise finished in persisted JSON, save,
- *   then return next unfinished exercise.
- *
- * This intentionally mutates user lesson JSON in storage for rapid prototyping.
- */
-export async function get_next_language_exercise(
-  params: GetNextLanguageExerciseParams = {},
-  _context_params?: any,
-  toolSessionContext: ToolSessionContext = {},
-): Promise<ToolkitResult> {
+function buildToolkitResult(
+  payload: unknown,
+  updatedToolSessionContext: ToolSessionContext,
+): ToolkitResult {
+  return {
+    result: JSON.stringify(payload, null, 2),
+    updatedToolSessionContext,
+  };
+}
+
+function buildInvocationState(
+  params: GetNextLanguageExerciseParams,
+  toolSessionContext: ToolSessionContext,
+): InvocationState {
   const {
     previous_exercise_id = null,
     user_score = null,
@@ -189,68 +207,84 @@ export async function get_next_language_exercise(
   const hasUserScore = user_score !== null && user_score !== undefined;
   const isInitialCall = !hasPreviousExerciseId && !hasUserScore;
 
+  const invocationState: InvocationState = {
+    previous_exercise_id,
+    user_score,
+    performance_notes,
+    normalizedPreviousExerciseId,
+    hasPreviousExerciseId,
+    hasUserScore,
+    isInitialCall,
+  };
+
   log.info(
     "[language_lesson] Determined invocation mode",
     {},
     {
-      isInitialCall,
-      hasPreviousExerciseId,
-      hasUserScore,
-      normalizedPreviousExerciseId,
-      previous_exercise_id,
-      user_score,
-      performance_notes,
+      ...invocationState,
       toolSessionContext,
     },
   );
 
-  if (!isInitialCall) {
-    const hasValidUserScore =
-      typeof user_score === "number" && Number.isFinite(user_score);
+  return invocationState;
+}
 
-    if (!hasPreviousExerciseId || !hasValidUserScore) {
-      const returnPayload = {
-        status: "invalid_follow_up_input",
-        mode: "follow_up",
-        message:
-          "Follow-up calls require both previous_exercise_id and numeric user_score.",
-        input: {
-          previous_exercise_id,
-          user_score,
-          performance_notes,
-        },
-      };
-
-      log.warn(
-        "[language_lesson] Returning invalid follow-up input",
-        {},
-        {
-          hasPreviousExerciseId,
-          hasUserScore,
-          hasValidUserScore,
-          normalizedPreviousExerciseId,
-          previous_exercise_id,
-          user_score,
-          performance_notes,
-          toolSessionContext,
-          returnPayload,
-        },
-      );
-
-      return {
-        result: JSON.stringify(returnPayload, null, 2),
-        updatedToolSessionContext: toolSessionContext,
-      };
-    }
+function validateInvocationOrResult(
+  invocationState: InvocationState,
+  toolSessionContext: ToolSessionContext,
+): ToolkitResult | null {
+  if (invocationState.isInitialCall) {
+    return null;
   }
 
+  const hasValidUserScore =
+    typeof invocationState.user_score === "number" &&
+    Number.isFinite(invocationState.user_score);
+
+  if (invocationState.hasPreviousExerciseId && hasValidUserScore) {
+    return null;
+  }
+
+  const returnPayload = {
+    status: "invalid_follow_up_input",
+    mode: "follow_up",
+    message:
+      "Follow-up calls require both previous_exercise_id and numeric user_score.",
+    input: {
+      previous_exercise_id: invocationState.previous_exercise_id,
+      user_score: invocationState.user_score,
+      performance_notes: invocationState.performance_notes,
+    },
+  };
+
+  log.warn(
+    "[language_lesson] Returning invalid follow-up input",
+    {},
+    {
+      ...invocationState,
+      hasValidUserScore,
+      toolSessionContext,
+      returnPayload,
+    },
+  );
+
+  return buildToolkitResult(returnPayload, toolSessionContext);
+}
+
+async function loadValidatedConfigOrResult(
+  invocationState: InvocationState,
+  toolSessionContext: ToolSessionContext,
+): Promise<{
+  loadedConfigState: LoadedConfigState | null;
+  toolkitResult: ToolkitResult | null;
+}> {
   const parsedConfigResult = await loadParsedLanguageLessonConfig();
 
   log.info(
     "[language_lesson] Loaded parsed language lesson config",
     {},
     {
-      isInitialCall,
+      invocationState,
       parsedConfigResult,
       toolSessionContext,
     },
@@ -262,7 +296,7 @@ export async function get_next_language_exercise(
   ) {
     const returnPayload = {
       status: "config_invalid",
-      mode: isInitialCall ? "initial" : "follow_up",
+      mode: invocationState.isInitialCall ? "initial" : "follow_up",
       message:
         "Language lesson config is invalid or missing. Update the JSON in Configure Tools.",
       config_hash: parsedConfigResult.hash,
@@ -274,7 +308,7 @@ export async function get_next_language_exercise(
       "[language_lesson] Returning config_invalid",
       {},
       {
-        isInitialCall,
+        invocationState,
         parsedConfigResult,
         returnPayload,
         toolSessionContext,
@@ -282,8 +316,8 @@ export async function get_next_language_exercise(
     );
 
     return {
-      result: JSON.stringify(returnPayload, null, 2),
-      updatedToolSessionContext: toolSessionContext,
+      loadedConfigState: null,
+      toolkitResult: buildToolkitResult(returnPayload, toolSessionContext),
     };
   }
 
@@ -294,6 +328,7 @@ export async function get_next_language_exercise(
     "[language_lesson] Current progress before operation",
     {},
     {
+      invocationState,
       progressBefore,
       config_hash: parsedConfigResult.hash,
       summary: parsedConfigResult.summary,
@@ -301,236 +336,248 @@ export async function get_next_language_exercise(
     },
   );
 
-  if (!isInitialCall) {
-    const numericScore = user_score as number;
-    const normalizedPerformanceNotes =
-      performance_notes && performance_notes.trim().length > 0
-        ? performance_notes
-        : null;
-
-    const previousExerciseLocator = findExerciseById(
+  return {
+    loadedConfigState: {
+      parsedConfigResult,
       mutableConfig,
-      normalizedPreviousExerciseId,
-    );
+      progressBefore,
+    },
+    toolkitResult: null,
+  };
+}
 
-    if (!previousExerciseLocator) {
-      const returnPayload = {
-        status: "previous_exercise_not_found",
-        mode: "follow_up",
-        message:
-          "Could not find previous_exercise_id in current language lesson config.",
-        config_hash: parsedConfigResult.hash,
-        summary: parsedConfigResult.summary,
-        input: {
-          previous_exercise_id: normalizedPreviousExerciseId,
-          user_score: numericScore,
-          performance_notes: normalizedPerformanceNotes,
-        },
-      };
+function normalizePerformanceNotes(performanceNotes: string | null): string | null {
+  if (!performanceNotes || performanceNotes.trim().length === 0) {
+    return null;
+  }
 
-      log.warn(
-        "[language_lesson] Returning previous_exercise_not_found",
-        {},
-        {
-          normalizedPreviousExerciseId,
-          previous_exercise_id,
-          user_score: numericScore,
-          performance_notes: normalizedPerformanceNotes,
-          availableExerciseIds: mutableConfig.language_issues.flatMap((issue) =>
-            issue.exercises.map((exercise) => exercise.exercise_id),
-          ),
-          returnPayload,
-          toolSessionContext,
-        },
-      );
+  return performanceNotes;
+}
 
-      return {
-        result: JSON.stringify(returnPayload, null, 2),
-        updatedToolSessionContext: toolSessionContext,
-      };
-    }
+async function persistUpdatedConfigOrResult(
+  mutableConfig: NormalizedLanguageLessonConfig,
+  parsedConfigResult: LoadParsedLanguageLessonConfigResult,
+  previousExerciseId: string,
+  toolSessionContext: ToolSessionContext,
+): Promise<ToolkitResult | null> {
+  try {
+    await saveParsedLanguageLessonConfig(mutableConfig);
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
 
-    const previousExerciseBeforeUpdate = { ...previousExerciseLocator.exercise };
-    const existingAttempts =
-      typeof previousExerciseLocator.exercise.attempts === "number"
-        ? previousExerciseLocator.exercise.attempts
-        : 0;
+    const returnPayload = {
+      status: "persist_failed",
+      mode: "follow_up",
+      message: "Failed to persist updated language lesson progress.",
+      error: errorMessage,
+      config_hash: parsedConfigResult.hash,
+    };
 
-    previousExerciseLocator.exercise.attempts = existingAttempts + 1;
-    previousExerciseLocator.exercise.last_score = numericScore;
-    previousExerciseLocator.exercise.last_notes = normalizedPerformanceNotes;
-    previousExerciseLocator.exercise.status = "finished";
-    previousExerciseLocator.exercise.finished_at = new Date().toISOString();
-
-    log.info(
-      "[language_lesson] Updated previous exercise state before persistence",
+    log.error(
+      "[language_lesson] Failed to persist updated lesson progress",
       {},
       {
-        previous_exercise_id: normalizedPreviousExerciseId,
-        previousExerciseBeforeUpdate,
-        previousExerciseAfterUpdate: previousExerciseLocator.exercise,
-        issueIndex: previousExerciseLocator.issueIndex,
-        exerciseIndex: previousExerciseLocator.exerciseIndex,
-        config_hash_before_save: parsedConfigResult.hash,
-        progressBefore,
-        toolSessionContext,
-      },
-    );
-
-    try {
-      await saveParsedLanguageLessonConfig(mutableConfig);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-
-      const returnPayload = {
-        status: "persist_failed",
-        mode: "follow_up",
-        message: "Failed to persist updated language lesson progress.",
-        error: errorMessage,
-        config_hash: parsedConfigResult.hash,
-      };
-
-      log.error(
-        "[language_lesson] Failed to persist updated lesson progress",
-        {},
-        {
-          errorMessage,
-          returnPayload,
-          mutableConfig,
-          toolSessionContext,
-        },
-        error instanceof Error ? error : new Error(String(error)),
-      );
-
-      return {
-        result: JSON.stringify(returnPayload, null, 2),
-        updatedToolSessionContext: toolSessionContext,
-      };
-    }
-
-    log.info(
-      "[language_lesson] Persisted updated lesson progress",
-      {},
-      {
-        previous_exercise_id: normalizedPreviousExerciseId,
-        config_hash_before_save: parsedConfigResult.hash,
+        errorMessage,
+        returnPayload,
         mutableConfig,
         toolSessionContext,
       },
+      error instanceof Error ? error : new Error(String(error)),
     );
 
-    const reloadedConfigResult = await loadParsedLanguageLessonConfig();
+    return buildToolkitResult(returnPayload, toolSessionContext);
+  }
 
-    log.info(
-      "[language_lesson] Reloaded config after persistence",
+  log.info(
+    "[language_lesson] Persisted updated lesson progress",
+    {},
+    {
+      previous_exercise_id: previousExerciseId,
+      config_hash_before_save: parsedConfigResult.hash,
+      mutableConfig,
+      toolSessionContext,
+    },
+  );
+
+  return null;
+}
+
+async function reloadPersistedConfigOrResult(
+  toolSessionContext: ToolSessionContext,
+): Promise<{
+  reloadedConfigResult: LoadParsedLanguageLessonConfigResult | null;
+  reloadedConfig: NormalizedLanguageLessonConfig | null;
+  toolkitResult: ToolkitResult | null;
+}> {
+  const reloadedConfigResult = await loadParsedLanguageLessonConfig();
+
+  log.info(
+    "[language_lesson] Reloaded config after persistence",
+    {},
+    {
+      reloadedConfigResult,
+      toolSessionContext,
+    },
+  );
+
+  if (
+    reloadedConfigResult.validationErrors.length > 0 ||
+    !reloadedConfigResult.parsedConfig
+  ) {
+    const returnPayload = {
+      status: "persist_reload_invalid",
+      mode: "follow_up",
+      message:
+        "Progress was saved but reloading the updated config failed validation.",
+      config_hash: reloadedConfigResult.hash,
+      summary: reloadedConfigResult.summary,
+      validationErrors: reloadedConfigResult.validationErrors,
+    };
+
+    log.error(
+      "[language_lesson] Persisted config failed reload validation",
       {},
       {
+        returnPayload,
         reloadedConfigResult,
         toolSessionContext,
       },
     );
 
-    if (
-      reloadedConfigResult.validationErrors.length > 0 ||
-      !reloadedConfigResult.parsedConfig
-    ) {
-      const returnPayload = {
-        status: "persist_reload_invalid",
-        mode: "follow_up",
-        message:
-          "Progress was saved but reloading the updated config failed validation.",
-        config_hash: reloadedConfigResult.hash,
-        summary: reloadedConfigResult.summary,
-        validationErrors: reloadedConfigResult.validationErrors,
-      };
+    return {
+      reloadedConfigResult: null,
+      reloadedConfig: null,
+      toolkitResult: buildToolkitResult(returnPayload, toolSessionContext),
+    };
+  }
 
-      log.error(
-        "[language_lesson] Persisted config failed reload validation",
-        {},
-        {
-          returnPayload,
-          reloadedConfigResult,
-          toolSessionContext,
-        },
-      );
+  return {
+    reloadedConfigResult,
+    reloadedConfig: reloadedConfigResult.parsedConfig,
+    toolkitResult: null,
+  };
+}
 
-      return {
-        result: JSON.stringify(returnPayload, null, 2),
-        updatedToolSessionContext: toolSessionContext,
-      };
-    }
+async function handleFollowUpCall(
+  invocationState: InvocationState,
+  loadedConfigState: LoadedConfigState,
+  toolSessionContext: ToolSessionContext,
+): Promise<ToolkitResult> {
+  const numericScore = invocationState.user_score as number;
+  const normalizedPerformanceNotes = normalizePerformanceNotes(
+    invocationState.performance_notes,
+  );
 
-    const nextLocator = findFirstUnfinishedExercise(
-      reloadedConfigResult.parsedConfig,
-    );
-    const progressAfter = summarizeProgress(reloadedConfigResult.parsedConfig);
+  const previousExerciseLocator = findExerciseById(
+    loadedConfigState.mutableConfig,
+    invocationState.normalizedPreviousExerciseId,
+  );
 
-    log.info(
-      "[language_lesson] Selected next unfinished exercise after save",
+  if (!previousExerciseLocator) {
+    const returnPayload = {
+      status: "previous_exercise_not_found",
+      mode: "follow_up",
+      message:
+        "Could not find previous_exercise_id in current language lesson config.",
+      config_hash: loadedConfigState.parsedConfigResult.hash,
+      summary: loadedConfigState.parsedConfigResult.summary,
+      input: {
+        previous_exercise_id: invocationState.normalizedPreviousExerciseId,
+        user_score: numericScore,
+        performance_notes: normalizedPerformanceNotes,
+      },
+    };
+
+    log.warn(
+      "[language_lesson] Returning previous_exercise_not_found",
       {},
       {
-        nextLocator,
-        progressAfter,
-        config_hash_after_save: reloadedConfigResult.hash,
+        invocationState,
+        user_score: numericScore,
+        performance_notes: normalizedPerformanceNotes,
+        availableExerciseIds: loadedConfigState.mutableConfig.language_issues.flatMap(
+          (issue) => issue.exercises.map((exercise) => exercise.exercise_id),
+        ),
+        returnPayload,
         toolSessionContext,
       },
     );
 
-    if (!nextLocator) {
-      const updatedToolSessionContext = buildUpdatedToolSessionContext(
-        toolSessionContext,
-        null,
-        reloadedConfigResult.hash,
-        previousExerciseLocator.issue.errorId,
-      );
+    return buildToolkitResult(returnPayload, toolSessionContext);
+  }
 
-      const returnPayload = {
-        status: "all_exercises_finished",
-        mode: "follow_up",
-        message: "All exercises are finished.",
-        config_hash: reloadedConfigResult.hash,
-        summary: reloadedConfigResult.summary,
-        progress: progressAfter,
-        completed_exercise: {
-          exercise_id: previousExerciseLocator.exercise.exercise_id,
-          issue_error_id: previousExerciseLocator.issue.errorId,
-          issue_title: previousExerciseLocator.issue.title,
-          score: numericScore,
-          notes: normalizedPerformanceNotes,
-          finished_at: previousExerciseLocator.exercise.finished_at,
-        },
-      };
+  const previousExerciseBeforeUpdate = { ...previousExerciseLocator.exercise };
+  const existingAttempts =
+    typeof previousExerciseLocator.exercise.attempts === "number"
+      ? previousExerciseLocator.exercise.attempts
+      : 0;
 
-      log.info(
-        "[language_lesson] Returning all_exercises_finished",
-        {},
-        {
-          returnPayload,
-          updatedToolSessionContext,
-          toolSessionContext,
-        },
-      );
+  previousExerciseLocator.exercise.attempts = existingAttempts + 1;
+  previousExerciseLocator.exercise.last_score = numericScore;
+  previousExerciseLocator.exercise.last_notes = normalizedPerformanceNotes;
+  previousExerciseLocator.exercise.status = "finished";
+  previousExerciseLocator.exercise.finished_at = new Date().toISOString();
 
-      return {
-        result: JSON.stringify(returnPayload, null, 2),
-        updatedToolSessionContext,
-      };
-    }
+  log.info(
+    "[language_lesson] Updated previous exercise state before persistence",
+    {},
+    {
+      previous_exercise_id: invocationState.normalizedPreviousExerciseId,
+      previousExerciseBeforeUpdate,
+      previousExerciseAfterUpdate: previousExerciseLocator.exercise,
+      issueIndex: previousExerciseLocator.issueIndex,
+      exerciseIndex: previousExerciseLocator.exerciseIndex,
+      config_hash_before_save: loadedConfigState.parsedConfigResult.hash,
+      progressBefore: loadedConfigState.progressBefore,
+      toolSessionContext,
+    },
+  );
 
+  const persistResult = await persistUpdatedConfigOrResult(
+    loadedConfigState.mutableConfig,
+    loadedConfigState.parsedConfigResult,
+    invocationState.normalizedPreviousExerciseId,
+    toolSessionContext,
+  );
+
+  if (persistResult) {
+    return persistResult;
+  }
+
+  const reloadOutcome = await reloadPersistedConfigOrResult(toolSessionContext);
+  if (reloadOutcome.toolkitResult || !reloadOutcome.reloadedConfigResult) {
+    return reloadOutcome.toolkitResult as ToolkitResult;
+  }
+
+  const nextLocator = findFirstUnfinishedExercise(reloadOutcome.reloadedConfig!);
+  const progressAfter = summarizeProgress(reloadOutcome.reloadedConfig!);
+
+  log.info(
+    "[language_lesson] Selected next unfinished exercise after save",
+    {},
+    {
+      nextLocator,
+      progressAfter,
+      config_hash_after_save: reloadOutcome.reloadedConfigResult.hash,
+      toolSessionContext,
+    },
+  );
+
+  if (!nextLocator) {
     const updatedToolSessionContext = buildUpdatedToolSessionContext(
       toolSessionContext,
-      nextLocator,
-      reloadedConfigResult.hash,
+      null,
+      reloadOutcome.reloadedConfigResult.hash,
+      previousExerciseLocator.issue.errorId,
     );
 
     const returnPayload = {
-      status: "exercise_ready",
+      status: "all_exercises_finished",
       mode: "follow_up",
-      message:
-        "Previous exercise was marked finished and persisted. Returning next unfinished exercise.",
-      config_hash: reloadedConfigResult.hash,
-      summary: reloadedConfigResult.summary,
+      message: "All exercises are finished.",
+      config_hash: reloadOutcome.reloadedConfigResult.hash,
+      summary: reloadOutcome.reloadedConfigResult.summary,
       progress: progressAfter,
       completed_exercise: {
         exercise_id: previousExerciseLocator.exercise.exercise_id,
@@ -540,19 +587,10 @@ export async function get_next_language_exercise(
         notes: normalizedPerformanceNotes,
         finished_at: previousExerciseLocator.exercise.finished_at,
       },
-      overview: {
-        issueIndex: nextLocator.issueIndex,
-        exerciseIndex: nextLocator.exerciseIndex,
-        issueCount: reloadedConfigResult.summary.issueCount,
-        totalExerciseCount: reloadedConfigResult.summary.exerciseCount,
-        exerciseCountInIssue: nextLocator.issue.exercises.length,
-      },
-      issue: buildIssuePayload(nextLocator.issue),
-      exercise: nextLocator.exercise,
     };
 
     log.info(
-      "[language_lesson] Returning next unfinished exercise after follow-up",
+      "[language_lesson] Returning all_exercises_finished",
       {},
       {
         returnPayload,
@@ -561,44 +599,91 @@ export async function get_next_language_exercise(
       },
     );
 
-    return {
-      result: JSON.stringify(returnPayload, null, 2),
-      updatedToolSessionContext,
-    };
+    return buildToolkitResult(returnPayload, updatedToolSessionContext);
   }
 
-  const initialLocator = findFirstUnfinishedExercise(mutableConfig);
+  const updatedToolSessionContext = buildUpdatedToolSessionContext(
+    toolSessionContext,
+    nextLocator,
+    reloadOutcome.reloadedConfigResult.hash,
+  );
+
+  const returnPayload = {
+    status: "exercise_ready",
+    mode: "follow_up",
+    message:
+      "Previous exercise was marked finished and persisted. Returning next unfinished exercise.",
+    config_hash: reloadOutcome.reloadedConfigResult.hash,
+    summary: reloadOutcome.reloadedConfigResult.summary,
+    progress: progressAfter,
+    completed_exercise: {
+      exercise_id: previousExerciseLocator.exercise.exercise_id,
+      issue_error_id: previousExerciseLocator.issue.errorId,
+      issue_title: previousExerciseLocator.issue.title,
+      score: numericScore,
+      notes: normalizedPerformanceNotes,
+      finished_at: previousExerciseLocator.exercise.finished_at,
+    },
+    overview: {
+      issueIndex: nextLocator.issueIndex,
+      exerciseIndex: nextLocator.exerciseIndex,
+      issueCount: reloadOutcome.reloadedConfigResult.summary.issueCount,
+      totalExerciseCount: reloadOutcome.reloadedConfigResult.summary.exerciseCount,
+      exerciseCountInIssue: nextLocator.issue.exercises.length,
+    },
+    issue: buildIssuePayload(nextLocator.issue),
+    exercise: nextLocator.exercise,
+  };
+
+  log.info(
+    "[language_lesson] Returning next unfinished exercise after follow-up",
+    {},
+    {
+      returnPayload,
+      updatedToolSessionContext,
+      toolSessionContext,
+    },
+  );
+
+  return buildToolkitResult(returnPayload, updatedToolSessionContext);
+}
+
+function handleInitialCall(
+  loadedConfigState: LoadedConfigState,
+  toolSessionContext: ToolSessionContext,
+): ToolkitResult {
+  const initialLocator = findFirstUnfinishedExercise(loadedConfigState.mutableConfig);
 
   log.info(
     "[language_lesson] Selecting first unfinished exercise for initial call",
     {},
     {
       initialLocator,
-      progressBefore,
-      config_hash: parsedConfigResult.hash,
-      summary: parsedConfigResult.summary,
+      progressBefore: loadedConfigState.progressBefore,
+      config_hash: loadedConfigState.parsedConfigResult.hash,
+      summary: loadedConfigState.parsedConfigResult.summary,
       toolSessionContext,
     },
   );
 
   if (!initialLocator) {
     const returnPayload =
-      progressBefore.totalExerciseCount === 0
+      loadedConfigState.progressBefore.totalExerciseCount === 0
         ? {
             status: "no_exercises_available",
             mode: "initial",
             message: "No exercises were found in the language lesson config.",
-            config_hash: parsedConfigResult.hash,
-            summary: parsedConfigResult.summary,
-            progress: progressBefore,
+            config_hash: loadedConfigState.parsedConfigResult.hash,
+            summary: loadedConfigState.parsedConfigResult.summary,
+            progress: loadedConfigState.progressBefore,
           }
         : {
             status: "all_exercises_finished",
             mode: "initial",
             message: "All exercises are already finished.",
-            config_hash: parsedConfigResult.hash,
-            summary: parsedConfigResult.summary,
-            progress: progressBefore,
+            config_hash: loadedConfigState.parsedConfigResult.hash,
+            summary: loadedConfigState.parsedConfigResult.summary,
+            progress: loadedConfigState.progressBefore,
           };
 
     log.warn(
@@ -606,35 +691,32 @@ export async function get_next_language_exercise(
       {},
       {
         returnPayload,
-        progressBefore,
-        config_hash: parsedConfigResult.hash,
+        progressBefore: loadedConfigState.progressBefore,
+        config_hash: loadedConfigState.parsedConfigResult.hash,
         toolSessionContext,
       },
     );
 
-    return {
-      result: JSON.stringify(returnPayload, null, 2),
-      updatedToolSessionContext: toolSessionContext,
-    };
+    return buildToolkitResult(returnPayload, toolSessionContext);
   }
 
   const updatedToolSessionContext = buildUpdatedToolSessionContext(
     toolSessionContext,
     initialLocator,
-    parsedConfigResult.hash,
+    loadedConfigState.parsedConfigResult.hash,
   );
 
   const returnPayload = {
     status: "exercise_ready",
     mode: "initial",
-    config_hash: parsedConfigResult.hash,
-    summary: parsedConfigResult.summary,
-    progress: progressBefore,
+    config_hash: loadedConfigState.parsedConfigResult.hash,
+    summary: loadedConfigState.parsedConfigResult.summary,
+    progress: loadedConfigState.progressBefore,
     overview: {
       issueIndex: initialLocator.issueIndex,
       exerciseIndex: initialLocator.exerciseIndex,
-      issueCount: parsedConfigResult.summary.issueCount,
-      totalExerciseCount: parsedConfigResult.summary.exerciseCount,
+      issueCount: loadedConfigState.parsedConfigResult.summary.issueCount,
+      totalExerciseCount: loadedConfigState.parsedConfigResult.summary.exerciseCount,
       exerciseCountInIssue: initialLocator.issue.exercises.length,
     },
     issue: buildIssuePayload(initialLocator.issue),
@@ -651,8 +733,50 @@ export async function get_next_language_exercise(
     },
   );
 
-  return {
-    result: JSON.stringify(returnPayload, null, 2),
-    updatedToolSessionContext,
-  };
+  return buildToolkitResult(returnPayload, updatedToolSessionContext);
+}
+
+/**
+ * POC implementation:
+ * - Initial call: return first unfinished exercise.
+ * - Follow-up call: mark previous exercise finished in persisted JSON, save,
+ *   then return next unfinished exercise.
+ *
+ * This intentionally mutates user lesson JSON in storage for rapid prototyping.
+ */
+export async function get_next_language_exercise(
+  params: GetNextLanguageExerciseParams = {},
+  _context_params?: any,
+  toolSessionContext: ToolSessionContext = {},
+): Promise<ToolkitResult> {
+  const invocationState = buildInvocationState(params, toolSessionContext);
+
+  const invocationValidationResult = validateInvocationOrResult(
+    invocationState,
+    toolSessionContext,
+  );
+  if (invocationValidationResult) {
+    return invocationValidationResult;
+  }
+
+  const loadedConfigOutcome = await loadValidatedConfigOrResult(
+    invocationState,
+    toolSessionContext,
+  );
+  if (loadedConfigOutcome.toolkitResult || !loadedConfigOutcome.loadedConfigState) {
+    return loadedConfigOutcome.toolkitResult as ToolkitResult;
+  }
+
+  if (invocationState.isInitialCall) {
+    return handleInitialCall(
+      loadedConfigOutcome.loadedConfigState,
+      toolSessionContext,
+    );
+  }
+
+  return handleFollowUpCall(
+    invocationState,
+    loadedConfigOutcome.loadedConfigState,
+    toolSessionContext,
+  );
 }

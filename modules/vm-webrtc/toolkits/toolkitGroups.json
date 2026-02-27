@@ -496,7 +496,7 @@
           "type": "function",
           "name": "get_next_language_exercise",
           "group": "language_lesson",
-          "description": "Get the next language exercise and optionally score/update the previous exercise attempt. To start a session, call with empty params. For follow-up calls, provide previous_exercise_id, user_score (0-10), and optional performance_notes.",
+          "description": "Get the first or the next language exercise and optionally score/update the previous exercise attempt. To start a session, call with empty params. For follow-up calls, provide previous_exercise_id, user_score (0-10), and optional performance_notes.",
           "supported_auth": "no_auth_required",
           "extra": {},
           "parameters": {

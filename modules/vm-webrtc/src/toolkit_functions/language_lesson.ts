@@ -106,7 +106,9 @@ function findFirstUnfinishedExercise(
   return null;
 }
 
-function summarizeProgress(config: NormalizedLanguageLessonConfig): ProgressSummary {
+function summarizeProgress(
+  config: NormalizedLanguageLessonConfig,
+): ProgressSummary {
   const issueCount = config.language_issues.length;
   const totalExerciseCount = config.language_issues.reduce(
     (count, issue) => count + issue.exercises.length,
@@ -114,7 +116,8 @@ function summarizeProgress(config: NormalizedLanguageLessonConfig): ProgressSumm
   );
   const finishedExerciseCount = config.language_issues.reduce(
     (count, issue) =>
-      count + issue.exercises.filter((exercise) => isExerciseFinished(exercise)).length,
+      count +
+      issue.exercises.filter((exercise) => isExerciseFinished(exercise)).length,
     0,
   );
 
@@ -346,7 +349,9 @@ async function loadValidatedConfigOrResult(
   };
 }
 
-function normalizePerformanceNotes(performanceNotes: string | null): string | null {
+function normalizePerformanceNotes(
+  performanceNotes: string | null,
+): string | null {
   if (!performanceNotes || performanceNotes.trim().length === 0) {
     return null;
   }
@@ -354,7 +359,7 @@ function normalizePerformanceNotes(performanceNotes: string | null): string | nu
   return performanceNotes;
 }
 
-async function persistUpdatedConfigOrResult(
+async function persistUpdatedConfigOrErrorResult(
   mutableConfig: NormalizedLanguageLessonConfig,
   parsedConfigResult: LoadParsedLanguageLessonConfigResult,
   previousExerciseId: string,
@@ -363,8 +368,7 @@ async function persistUpdatedConfigOrResult(
   try {
     await saveParsedLanguageLessonConfig(mutableConfig);
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     const returnPayload = {
       status: "persist_failed",
@@ -496,9 +500,10 @@ async function handleFollowUpCall(
         invocationState,
         user_score: numericScore,
         performance_notes: normalizedPerformanceNotes,
-        availableExerciseIds: loadedConfigState.mutableConfig.language_issues.flatMap(
-          (issue) => issue.exercises.map((exercise) => exercise.exercise_id),
-        ),
+        availableExerciseIds:
+          loadedConfigState.mutableConfig.language_issues.flatMap((issue) =>
+            issue.exercises.map((exercise) => exercise.exercise_id),
+          ),
         returnPayload,
         toolSessionContext,
       },
@@ -534,23 +539,42 @@ async function handleFollowUpCall(
     },
   );
 
-  const persistResult = await persistUpdatedConfigOrResult(
+  const persistErrorResult = await persistUpdatedConfigOrErrorResult(
     loadedConfigState.mutableConfig,
     loadedConfigState.parsedConfigResult,
     invocationState.normalizedPreviousExerciseId,
     toolSessionContext,
   );
 
-  if (persistResult) {
-    return persistResult;
+  if (persistErrorResult) {
+    log.warn(
+      "[language_lesson] Persistence step returned an error result; ending follow-up flow early",
+      {},
+      {
+        previous_exercise_id: invocationState.normalizedPreviousExerciseId,
+        toolSessionContext,
+      },
+    );
+    return persistErrorResult;
   }
+
+  log.info(
+    "[language_lesson] Previous exercise progress persisted; continuing to select next exercise",
+    {},
+    {
+      previous_exercise_id: invocationState.normalizedPreviousExerciseId,
+      toolSessionContext,
+    },
+  );
 
   const reloadOutcome = await reloadPersistedConfigOrResult(toolSessionContext);
   if (reloadOutcome.toolkitResult || !reloadOutcome.reloadedConfigResult) {
     return reloadOutcome.toolkitResult as ToolkitResult;
   }
 
-  const nextLocator = findFirstUnfinishedExercise(reloadOutcome.reloadedConfig!);
+  const nextLocator = findFirstUnfinishedExercise(
+    reloadOutcome.reloadedConfig!,
+  );
   const progressAfter = summarizeProgress(reloadOutcome.reloadedConfig!);
 
   log.info(
@@ -628,7 +652,8 @@ async function handleFollowUpCall(
       issueIndex: nextLocator.issueIndex,
       exerciseIndex: nextLocator.exerciseIndex,
       issueCount: reloadOutcome.reloadedConfigResult.summary.issueCount,
-      totalExerciseCount: reloadOutcome.reloadedConfigResult.summary.exerciseCount,
+      totalExerciseCount:
+        reloadOutcome.reloadedConfigResult.summary.exerciseCount,
       exerciseCountInIssue: nextLocator.issue.exercises.length,
     },
     issue: buildIssuePayload(nextLocator.issue),
@@ -652,7 +677,9 @@ function handleInitialCall(
   loadedConfigState: LoadedConfigState,
   toolSessionContext: ToolSessionContext,
 ): ToolkitResult {
-  const initialLocator = findFirstUnfinishedExercise(loadedConfigState.mutableConfig);
+  const initialLocator = findFirstUnfinishedExercise(
+    loadedConfigState.mutableConfig,
+  );
 
   log.info(
     "[language_lesson] Selecting first unfinished exercise for initial call",
@@ -716,7 +743,8 @@ function handleInitialCall(
       issueIndex: initialLocator.issueIndex,
       exerciseIndex: initialLocator.exerciseIndex,
       issueCount: loadedConfigState.parsedConfigResult.summary.issueCount,
-      totalExerciseCount: loadedConfigState.parsedConfigResult.summary.exerciseCount,
+      totalExerciseCount:
+        loadedConfigState.parsedConfigResult.summary.exerciseCount,
       exerciseCountInIssue: initialLocator.issue.exercises.length,
     },
     issue: buildIssuePayload(initialLocator.issue),
@@ -763,7 +791,10 @@ export async function get_next_language_exercise(
     invocationState,
     toolSessionContext,
   );
-  if (loadedConfigOutcome.toolkitResult || !loadedConfigOutcome.loadedConfigState) {
+  if (
+    loadedConfigOutcome.toolkitResult ||
+    !loadedConfigOutcome.loadedConfigState
+  ) {
     return loadedConfigOutcome.toolkitResult as ToolkitResult;
   }
 

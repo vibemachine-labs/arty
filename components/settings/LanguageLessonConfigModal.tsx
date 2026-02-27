@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   loadLanguageLessonExercisesJson,
@@ -51,7 +52,8 @@ export const LanguageLessonConfigModal: React.FC<
           "[LanguageLessonConfigModal] Failed loading stored JSON",
           {},
           {
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
           },
           error instanceof Error ? error : new Error(String(error)),
         );
@@ -80,16 +82,14 @@ export const LanguageLessonConfigModal: React.FC<
       try {
         JSON.parse(trimmed);
       } catch (error) {
-        Alert.alert(
-          "Invalid JSON",
-          "Please paste valid JSON before saving.",
-        );
+        Alert.alert("Invalid JSON", "Please paste valid JSON before saving.");
         log.warn(
           "[LanguageLessonConfigModal] Invalid JSON submitted",
           {},
           {
             jsonText,
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
           },
         );
         return;
@@ -117,6 +117,50 @@ export const LanguageLessonConfigModal: React.FC<
     }
   }, [isSaving, jsonText, onClose]);
 
+  const handleClear = useCallback(() => {
+    if (isLoading || isSaving) {
+      return;
+    }
+
+    log.info(
+      "[LanguageLessonConfigModal] Clearing JSON text",
+      {},
+      {
+        previousJsonText: jsonText,
+      },
+    );
+    setJsonText("");
+  }, [isLoading, isSaving, jsonText]);
+
+  const handleCopy = useCallback(async () => {
+    if (isLoading || isSaving) {
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(jsonText);
+      log.info(
+        "[LanguageLessonConfigModal] Copied JSON text to clipboard",
+        {},
+        {
+          jsonText,
+        },
+      );
+      Alert.alert("Copied", "Language lesson JSON copied to clipboard.");
+    } catch (error) {
+      log.error(
+        "[LanguageLessonConfigModal] Failed copying JSON to clipboard",
+        {},
+        {
+          jsonText,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      Alert.alert("Copy Failed", "Unable to copy language lesson JSON.");
+    }
+  }, [isLoading, isSaving, jsonText]);
+
   return (
     <Modal
       animationType="slide"
@@ -140,7 +184,10 @@ export const LanguageLessonConfigModal: React.FC<
               ]}
             >
               <Text
-                style={[styles.headerActionText, isSaving && styles.disabledText]}
+                style={[
+                  styles.headerActionText,
+                  isSaving && styles.disabledText,
+                ]}
               >
                 Cancel
               </Text>
@@ -173,6 +220,52 @@ export const LanguageLessonConfigModal: React.FC<
             <Text style={styles.description}>
               Paste the full exercises JSON used by the language lesson tool.
             </Text>
+
+            <View style={styles.actionRow}>
+              <Pressable
+                onPress={handleClear}
+                disabled={isLoading || isSaving}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed &&
+                    !isLoading &&
+                    !isSaving &&
+                    styles.actionButtonPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    (isLoading || isSaving) && styles.disabledText,
+                  ]}
+                >
+                  ❌ Clear
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleCopy}
+                disabled={isLoading || isSaving || jsonText.length === 0}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  pressed &&
+                    !isLoading &&
+                    !isSaving &&
+                    jsonText.length > 0 &&
+                    styles.actionButtonPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    (isLoading || isSaving || jsonText.length === 0) &&
+                      styles.disabledText,
+                  ]}
+                >
+                  Copy
+                </Text>
+              </Pressable>
+            </View>
 
             <TextInput
               style={styles.textArea}
@@ -249,6 +342,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     color: "#3A3A3C",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  actionButton: {
+    borderWidth: 1,
+    borderColor: "#D1D1D6",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  actionButtonPressed: {
+    backgroundColor: "#F2F2F7",
+  },
+  actionButtonText: {
+    fontSize: 14,
+    color: "#0A84FF",
+    fontWeight: "600",
   },
   textArea: {
     flex: 1,

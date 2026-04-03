@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   loadLanguageLessonExercisesJson,
   saveLanguageLessonExercisesJson,
+  validateAndNormalizeLanguageLessonExercisesJson,
 } from "../../lib/languageLessonConfig";
 import { log } from "../../lib/logger";
 
@@ -76,29 +77,34 @@ export const LanguageLessonConfigModal: React.FC<
       return;
     }
 
-    const trimmed = jsonText.trim();
+    const validationResult =
+      validateAndNormalizeLanguageLessonExercisesJson(jsonText);
 
-    if (trimmed.length > 0) {
-      try {
-        JSON.parse(trimmed);
-      } catch (error) {
-        Alert.alert("Invalid JSON", "Please paste valid JSON before saving.");
-        log.warn(
-          "[LanguageLessonConfigModal] Invalid JSON submitted",
-          {},
-          {
-            jsonText,
-            errorMessage:
-              error instanceof Error ? error.message : String(error),
-          },
-        );
-        return;
-      }
+    if (!validationResult.success || !validationResult.normalizedJson) {
+      const validationMessage = validationResult.validationErrors
+        .slice(0, 3)
+        .join("\n");
+
+      Alert.alert(
+        "Invalid Lesson JSON",
+        validationMessage.length > 0
+          ? validationMessage
+          : "Please fix the lesson JSON before saving.",
+      );
+      log.warn(
+        "[LanguageLessonConfigModal] Invalid language lesson config submitted",
+        {},
+        {
+          jsonText,
+          validationErrors: validationResult.validationErrors,
+        },
+      );
+      return;
     }
 
     try {
       setIsSaving(true);
-      await saveLanguageLessonExercisesJson(jsonText);
+      await saveLanguageLessonExercisesJson(validationResult.normalizedJson);
       Alert.alert("Saved", "Language lesson JSON has been saved.");
       onClose();
     } catch (error) {

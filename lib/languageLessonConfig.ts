@@ -20,6 +20,43 @@ export interface LoadParsedLanguageLessonConfigResult {
   parsedConfig: NormalizedLanguageLessonConfig | null;
   summary: LanguageLessonConfigSummary;
   validationErrors: string[];
+  hashError: string | null;
+}
+
+export type ValidateLanguageLessonExercisesJsonResult =
+  | {
+      success: true;
+      normalizedJson: string;
+      parsedConfig: NormalizedLanguageLessonConfig;
+      validationErrors: [];
+    }
+  | {
+      success: false;
+      normalizedJson: null;
+      parsedConfig: null;
+      validationErrors: string[];
+    };
+
+export function validateAndNormalizeLanguageLessonExercisesJson(
+  raw: string,
+): ValidateLanguageLessonExercisesJsonResult {
+  const parseResult = parseAndNormalizeLanguageLessonConfig(raw);
+
+  if (!parseResult.success || !parseResult.data) {
+    return {
+      success: false,
+      normalizedJson: null,
+      parsedConfig: null,
+      validationErrors: parseResult.errors,
+    };
+  }
+
+  return {
+    success: true,
+    normalizedJson: JSON.stringify(parseResult.data, null, 2),
+    parsedConfig: parseResult.data,
+    validationErrors: [],
+  };
 }
 
 function summarizeLanguageLessonConfig(
@@ -74,15 +111,15 @@ export async function loadLanguageLessonExercisesJson(): Promise<string> {
 
 export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLanguageLessonConfigResult> {
   const raw = await loadLanguageLessonConfigRaw();
-  const parseResult = parseAndNormalizeLanguageLessonConfig(raw);
+  const validationResult = validateAndNormalizeLanguageLessonExercisesJson(raw);
 
-  if (!parseResult.success || !parseResult.data) {
+  if (!validationResult.success || !validationResult.parsedConfig) {
     log.warn(
       "[LanguageLessonConfig] Parsed language lesson config is invalid",
       {},
       {
         raw,
-        parseResult,
+        validationErrors: validationResult.validationErrors,
       },
     );
 
@@ -94,12 +131,13 @@ export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLangua
         issueCount: 0,
         exerciseCount: 0,
       },
-      validationErrors: parseResult.errors,
+      validationErrors: validationResult.validationErrors,
+      hashError: null,
     };
   }
 
-  const summary = summarizeLanguageLessonConfig(parseResult.data);
-  const canonicalNormalizedJson = JSON.stringify(parseResult.data);
+  const summary = summarizeLanguageLessonConfig(validationResult.parsedConfig);
+  const canonicalNormalizedJson = JSON.stringify(validationResult.parsedConfig);
 
   try {
     const hash = await Crypto.digestStringAsync(
@@ -113,7 +151,7 @@ export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLangua
       {
         raw,
         hash,
-        parsedConfig: parseResult.data,
+        parsedConfig: validationResult.parsedConfig,
         summary,
       },
     );
@@ -121,9 +159,10 @@ export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLangua
     return {
       raw,
       hash,
-      parsedConfig: parseResult.data,
+      parsedConfig: validationResult.parsedConfig,
       summary,
       validationErrors: [],
+      hashError: null,
     };
   } catch (error) {
     const hashErrorMessage = `Failed to hash normalized language lesson config - ${error instanceof Error ? error.message : String(error)}`;
@@ -133,7 +172,7 @@ export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLangua
       {},
       {
         raw,
-        parsedConfig: parseResult.data,
+        parsedConfig: validationResult.parsedConfig,
         summary,
         canonicalNormalizedJson,
         hashErrorMessage,
@@ -144,9 +183,10 @@ export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLangua
     return {
       raw,
       hash: null,
-      parsedConfig: parseResult.data,
+      parsedConfig: validationResult.parsedConfig,
       summary,
-      validationErrors: [hashErrorMessage],
+      validationErrors: [],
+      hashError: hashErrorMessage,
     };
   }
 }
@@ -154,14 +194,37 @@ export async function loadParsedLanguageLessonConfig(): Promise<LoadParsedLangua
 export async function saveLanguageLessonExercisesJson(
   value: string,
 ): Promise<void> {
-  await AsyncStorage.setItem(LANGUAGE_LESSON_EXERCISES_JSON_KEY, value);
+  const validationResult =
+    validateAndNormalizeLanguageLessonExercisesJson(value);
+
+  if (!validationResult.success || !validationResult.normalizedJson) {
+    log.warn(
+      "[LanguageLessonConfig] Rejected invalid exercises JSON save",
+      {},
+      {
+        value,
+        validationErrors: validationResult.validationErrors,
+      },
+    );
+
+    throw new Error(
+      `Invalid language lesson config: ${validationResult.validationErrors.join(" | ")}`,
+    );
+  }
+
+  await AsyncStorage.setItem(
+    LANGUAGE_LESSON_EXERCISES_JSON_KEY,
+    validationResult.normalizedJson,
+  );
 
   log.info(
     "[LanguageLessonConfig] Saved exercises JSON",
     {},
     {
       value,
+      normalizedValue: validationResult.normalizedJson,
       valueLength: value.length,
+      normalizedValueLength: validationResult.normalizedJson.length,
     },
   );
 }

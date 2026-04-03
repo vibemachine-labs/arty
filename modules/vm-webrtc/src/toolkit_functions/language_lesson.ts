@@ -57,7 +57,8 @@ type LanguageExerciseToolStatus =
   | "config_invalid"
   | "persist_failed"
   | "persist_reload_invalid"
-  | "previous_exercise_not_found";
+  | "previous_exercise_not_found"
+  | "exercise_already_finished";
 
 interface ExerciseOverview {
   issueIndex: number;
@@ -123,6 +124,8 @@ interface ValidatedGradeInput {
   performanceNotes: string | null;
 }
 
+const MIN_USER_SCORE = 0;
+const MAX_USER_SCORE = 10;
 const PASSING_SCORE_THRESHOLD = 8;
 
 function isExerciseFinished(exercise: LanguageExercise): boolean {
@@ -244,6 +247,8 @@ function buildNextActionSuggestion(status: LanguageExerciseToolStatus): string {
       return "Tell the user progress could not be saved reliably and ask them to retry the exercise flow.";
     case "previous_exercise_not_found":
       return "Tell the user the pending exercise id was not found and that this internal issue is not their fault. Ask what they want help with next.";
+    case "exercise_already_finished":
+      return "Tell the user this exercise was already finished. If they want to continue the lesson, call language_lesson__start_next_exercise with the same previous_exercise_id.";
     default:
       return "Continue the lesson flow based on the returned status.";
   }
@@ -337,10 +342,26 @@ function buildToolkitResult(
   };
 }
 
+function normalizeOptionalTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isValidUserScore(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= MIN_USER_SCORE &&
+    value <= MAX_USER_SCORE
+  );
+}
+
 function normalizePerformanceNotes(
   performanceNotes: string | null | undefined,
 ): string | null {
-  if (!performanceNotes || performanceNotes.trim().length === 0) {
+  if (
+    typeof performanceNotes !== "string" ||
+    performanceNotes.trim().length === 0
+  ) {
     return null;
   }
 
@@ -681,12 +702,11 @@ function validateGradeInputOrResult(
   validatedInput: ValidatedGradeInput | null;
   toolkitResult: ToolkitResult | null;
 } {
-  const normalizedPreviousExerciseId = (
-    params.previous_exercise_id || ""
-  ).trim();
+  const normalizedPreviousExerciseId = normalizeOptionalTrimmedString(
+    params.previous_exercise_id,
+  );
   const hasPreviousExerciseId = normalizedPreviousExerciseId.length > 0;
-  const hasValidUserScore =
-    typeof params.user_score === "number" && Number.isFinite(params.user_score);
+  const hasValidUserScore = isValidUserScore(params.user_score);
 
   log.info(
     "[language_lesson] Validating grade_user_exercise input",
@@ -705,7 +725,7 @@ function validateGradeInputOrResult(
       status: "invalid_follow_up_input",
       mode: "follow_up",
       message:
-        "grade_user_exercise requires both previous_exercise_id and numeric user_score.",
+        "grade_user_exercise requires both previous_exercise_id and numeric user_score between 0 and 10.",
       input: {
         previous_exercise_id: params.previous_exercise_id ?? null,
         user_score: params.user_score ?? null,
@@ -881,6 +901,48 @@ export async function grade_user_exercise(
     );
 
     return buildToolkitResult(returnPayload, toolSessionContext);
+  }
+
+  if (isExerciseFinished(pendingExerciseLocator.exercise)) {
+    const updatedToolSessionContext = buildUpdatedToolSessionContext(
+      toolSessionContext,
+      pendingExerciseLocator,
+      loadedConfigState.parsedConfigResult.hash,
+      pendingExerciseLocator.issue.errorId,
+    );
+
+    const returnPayload = buildLanguageExerciseToolResponse({
+      status: "exercise_already_finished",
+      mode: "follow_up",
+      message:
+        "previous_exercise_id already refers to a finished exercise. Progress was not changed.",
+      config_hash: loadedConfigState.parsedConfigResult.hash,
+      summary: loadedConfigState.parsedConfigResult.summary,
+      progress: loadedConfigState.progressBefore,
+      completed_exercise: {
+        exercise_id: validatedInput.previousExerciseId,
+      },
+      input: {
+        previous_exercise_id: validatedInput.previousExerciseId,
+        user_score: validatedInput.userScore,
+        performance_notes: validatedInput.performanceNotes,
+      },
+    });
+
+    log.warn(
+      "[language_lesson] Refusing to re-grade an already finished exercise",
+      {},
+      {
+        validatedInput,
+        pendingExercise: pendingExerciseLocator.exercise,
+        progressBefore: loadedConfigState.progressBefore,
+        returnPayload,
+        updatedToolSessionContext,
+        toolSessionContext,
+      },
+    );
+
+    return buildToolkitResult(returnPayload, updatedToolSessionContext);
   }
 
   const passed = validatedInput.userScore >= PASSING_SCORE_THRESHOLD;
@@ -1077,9 +1139,9 @@ export async function start_next_exercise(
   _context_params?: any,
   toolSessionContext: ToolSessionContext = {},
 ): Promise<ToolkitResult> {
-  const normalizedPreviousExerciseId = (
-    params.previous_exercise_id || ""
-  ).trim();
+  const normalizedPreviousExerciseId = normalizeOptionalTrimmedString(
+    params.previous_exercise_id,
+  );
 
   log.info(
     "[language_lesson] start_next_exercise called",
@@ -1141,9 +1203,9 @@ export async function get_next_language_exercise(
     },
   );
 
-  const normalizedPreviousExerciseId = (
-    params.previous_exercise_id || ""
-  ).trim();
+  const normalizedPreviousExerciseId = normalizeOptionalTrimmedString(
+    params.previous_exercise_id,
+  );
   const hasPreviousExerciseId = normalizedPreviousExerciseId.length > 0;
   const hasUserScore =
     params.user_score !== null && params.user_score !== undefined;

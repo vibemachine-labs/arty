@@ -42,6 +42,12 @@ const GROUP_OPTION_OVERRIDES: Record<string, Partial<GroupDisplayOption>> = {
   },
 };
 
+const LANGUAGE_LESSON_CONFIG_TOOL_NAMES = [
+  "start_first_exercise",
+  "grade_user_exercise",
+  "start_next_exercise",
+];
+
 function humanizeGroupName(groupId: string): string {
   return groupId
     .split("_")
@@ -196,7 +202,7 @@ export const ConfigureToolsSheet: React.FC<ConfigureToolsSheetProps> = ({
   const handleToolPress = (tool: Tool) => {
     if (
       tool.group === "language_lesson" &&
-      tool.name === "get_next_language_exercise"
+      LANGUAGE_LESSON_CONFIG_TOOL_NAMES.includes(tool.name)
     ) {
       onClose();
       requestAnimationFrame(() => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   DeviceEventEmitter,
   Modal,
   Pressable,
@@ -12,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "@/modules/vm-webrtc";
+import { log } from "../../lib/logger";
 import { LanguageLessonConfigModal } from "./LanguageLessonConfigModal";
 
 type LanguageLessonConnectorInfoProps = {
@@ -34,8 +36,15 @@ export const LanguageLessonConnectorInfo: React.FC<
             "language_lesson_connector_enabled",
           );
           setIsEnabled(enabledValue === null ? false : enabledValue === "true");
-        } catch {
-          // ignore errors
+        } catch (error) {
+          log.warn(
+            "[LanguageLessonConnectorInfo] Failed to load enabled state",
+            {},
+            {
+              errorMessage:
+                error instanceof Error ? error.message : String(error),
+            },
+          );
         }
       };
       loadEnabled();
@@ -43,15 +52,31 @@ export const LanguageLessonConnectorInfo: React.FC<
   }, [visible]);
 
   const handleToggleEnabled = async (value: boolean) => {
+    const previous = isEnabled;
     setIsEnabled(value);
+
     try {
       await AsyncStorage.setItem(
         "language_lesson_connector_enabled",
         value.toString(),
       );
       DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
-    } catch {
-      // ignore errors
+    } catch (error) {
+      setIsEnabled(previous);
+      log.error(
+        "[LanguageLessonConnectorInfo] Failed to persist enabled state",
+        {},
+        {
+          previous,
+          attemptedValue: value,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      Alert.alert(
+        "Update Failed",
+        "Could not update the Language Lesson setting.",
+      );
     }
   };
 

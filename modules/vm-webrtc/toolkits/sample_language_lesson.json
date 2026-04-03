@@ -1,0 +1,185 @@
+{
+  "language_issues": [
+    {
+      "title": "Verb 'Gustar' Structure with Indirect Object",
+      "area": "Syntax / Spoken Word Order",
+      "impact": "high",
+      "description": "Learner uses English-like subject patterns with 'gustar' instead of the Spanish indirect-object structure.",
+      "theory_voice": {
+        "spoken_explanation": "In Spanish, with 'gustar', the person is not the subject. You say 'a' plus the person, and you repeat it with 'me', 'te', 'le', or 'les'. The thing you like is the subject.",
+        "example_pairs_audio": [
+          {
+            "incorrect": "Creo que ella le gustará.",
+            "correct": "Creo que a ella le gustará."
+          }
+        ]
+      },
+      "categoryCode": "G",
+      "subcategoryCode": "G-SYN",
+      "subcategoryName": "Syntax / Word Order",
+      "errorId": "priority-gustar-1",
+      "exercises_spec": {
+        "num_times_repeat_on_fail": 3,
+        "num_exercises_required_for_pass": 0.2,
+        "presentation_rules": {
+          "max_hint_level": 2,
+          "shuffle_exercises": true,
+          "speak_theory_before_first_exercise": true,
+          "spoken_corrections_after_each_attempt": true,
+          "allow_self_correction_window_seconds": 2.0
+        }
+      },
+      "exercises": [
+        {
+          "exercise_id": "ex-gustar-voice-1",
+          "type": "spoken_translation",
+          "agent_prompt_spoken": "Say in Spanish: I think she will like the game design book.",
+          "learner_response": {
+            "mode": "speech"
+          },
+          "grading": {
+            "semantic_target": "Creo que a ella le gustará el libro de diseño de juegos",
+            "must_include_concepts": [
+              "indirect_object_a_ella",
+              "indirect_object_pronoun_le",
+              "future_gustar"
+            ],
+            "common_error_patterns": [
+              {
+                "pattern": "ella le gustará",
+                "diagnosis": "missing a + person"
+              }
+            ],
+            "tolerance": {
+              "allow_minor_disfluencies": true,
+              "allow_article_variation": true
+            }
+          },
+          "spoken_feedback": {
+            "on_fail": [
+              {
+                "level": 1,
+                "text": "Listen carefully. With 'gustar', you need 'a ella' before 'le gustará'. Try again."
+              },
+              {
+                "level": 2,
+                "text": "Repeat after me: Creo que a ella le gustará el libro."
+              }
+            ],
+            "on_pass": "Good. You used 'a ella' and 'le' correctly."
+          },
+          "metadata": {
+            "difficulty": 2,
+            "tags": ["gustar", "future", "spoken-grammar"]
+          }
+        },
+        {
+          "exercise_id": "ex-gustar-voice-2",
+          "type": "listen_and_discriminate",
+          "agent_prompt_spoken": "I will say two sentences. Say which one sounds correct: first or second.",
+          "audio_pairs": [
+            {
+              "first": "Creo que ella le gustará la app.",
+              "second": "Creo que a ella le gustará la app."
+            }
+          ],
+          "learner_response": {
+            "mode": "speech",
+            "expected": ["first", "second"]
+          },
+          "grading": {
+            "correct_answer": "second"
+          },
+          "spoken_feedback": {
+            "on_fail": "The correct one includes 'a ella'. Let's say it together.",
+            "on_pass": "Exactly. Spanish needs 'a ella le'."
+          },
+          "metadata": {
+            "difficulty": 1,
+            "tags": ["gustar", "ear-training"]
+          }
+        },
+        {
+          "exercise_id": "ex-gustar-voice-3",
+          "type": "spoken_correction",
+          "agent_prompt_spoken": "Correct this sentence out loud, keeping the same meaning: Creo que ella le gustará esta herramienta.",
+          "learner_response": {
+            "mode": "speech"
+          },
+          "grading": {
+            "required_fix": "insert_indirect_object_phrase",
+            "target_structure": "a ella le gustará"
+          },
+          "spoken_feedback": {
+            "on_fail": "You only need one change. Add 'a ella' before 'le gustará'.",
+            "on_pass": "Perfect correction."
+          },
+          "metadata": {
+            "difficulty": 2,
+            "tags": ["self-repair", "gustar"]
+          }
+        },
+        {
+          "exercise_id": "ex-gustar-voice-4",
+          "type": "spoken_pattern_completion",
+          "agent_prompt_spoken": "Complete the sentence out loud: A mí ___ gusta esta idea de startup.",
+          "learner_response": {
+            "mode": "speech"
+          },
+          "grading": {
+            "expected_word": "me",
+            "forbidden_patterns": ["yo me gusta"]
+          },
+          "spoken_feedback": {
+            "on_fail": "Remember, it's 'a mí me gusta', not 'yo me gusta'.",
+            "on_pass": "Yes. 'A mí me gusta.'"
+          },
+          "metadata": {
+            "difficulty": 1,
+            "tags": ["gustar", "pronouns"]
+          }
+        },
+        {
+          "exercise_id": "ex-gustar-voice-5",
+          "type": "spoken_translation",
+          "agent_prompt_spoken": "Say in Spanish: I don't think they will like these notes.",
+          "learner_response": {
+            "mode": "speech"
+          },
+          "grading": {
+            "semantic_target": "No creo que a ellos les gusten estas notas",
+            "must_include_concepts": [
+              "a_ellos",
+              "les",
+              "plural_gustar",
+              "subjunctive"
+            ],
+            "common_error_patterns": [
+              {
+                "pattern": "ellos les gusten",
+                "diagnosis": "subject used instead of indirect object"
+              }
+            ]
+          },
+          "spoken_feedback": {
+            "on_fail": [
+              {
+                "level": 1,
+                "text": "You need 'a ellos les' and the plural verb 'gusten'. Try again."
+              },
+              {
+                "level": 2,
+                "text": "Repeat after me: No creo que a ellos les gusten estas notas."
+              }
+            ],
+            "on_pass": "Excellent. You used 'les gusten' correctly."
+          },
+          "metadata": {
+            "difficulty": 3,
+            "tags": ["gustar", "subjunctive", "plural"]
+          }
+        }
+      ]
+    }
+  ]
+}

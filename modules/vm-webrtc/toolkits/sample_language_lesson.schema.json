@@ -1,0 +1,875 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arty.local/modules/vm-webrtc/toolkits/sample_language_lesson.schema.json",
+  "title": "Language Lesson Config",
+  "description": "Shareable schema for the language lesson JSON consumed by the language_lesson toolkit. Canonical runtime validation lives in modules/vm-webrtc/src/toolkit_functions/language_lesson_schema.ts. Note: cross-record uniqueness of errorId and exercise_id is enforced by the tool at runtime and is not fully expressible here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["language_issues"],
+  "properties": {
+    "language_issues": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/languageIssue"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyTrimmedString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*",
+      "description": "String must contain at least one non-whitespace character."
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "exerciseProgressStateFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "languageIssueExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userSaid", "nativeTarget", "tsStart", "tsEnd"],
+      "properties": {
+        "userSaid": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "nativeTarget": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "tsStart": {
+          "type": "number"
+        },
+        "tsEnd": {
+          "type": "number"
+        }
+      }
+    },
+    "theoryVoiceExamplePair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["incorrect", "correct"],
+      "properties": {
+        "incorrect": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "correct": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        }
+      }
+    },
+    "theoryVoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spoken_explanation"],
+      "properties": {
+        "spoken_explanation": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "example_pairs_audio": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/theoryVoiceExamplePair"
+          },
+          "default": []
+        }
+      }
+    },
+    "exerciseNormalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "casefold": {
+          "type": "boolean",
+          "default": true
+        },
+        "strip_punctuation": {
+          "type": "boolean",
+          "default": true
+        },
+        "trim_whitespace": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "exerciseExpectedAnswers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted_answers"],
+      "properties": {
+        "accepted_answers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyTrimmedString"
+          }
+        },
+        "normalize": {
+          "$ref": "#/$defs/exerciseNormalization"
+        }
+      }
+    },
+    "exerciseChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "must_contain": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyTrimmedString"
+          },
+          "default": []
+        },
+        "must_match_regex_all": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyTrimmedString"
+          },
+          "default": []
+        },
+        "forbid_regex_any": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyTrimmedString"
+          },
+          "default": []
+        }
+      }
+    },
+    "exerciseFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_fail": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "hint_levels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyTrimmedString"
+          },
+          "default": []
+        }
+      }
+    },
+    "spokenOnFailLevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "text"],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        }
+      }
+    },
+    "spokenFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_fail": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonEmptyTrimmedString"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/spokenOnFailLevel"
+              }
+            }
+          ]
+        },
+        "on_pass": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        }
+      }
+    },
+    "exerciseMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "difficulty": {
+          "type": "number"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyTrimmedString"
+          },
+          "default": []
+        }
+      }
+    },
+    "chooseOneOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "text": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        }
+      }
+    },
+    "speechLearnerResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "const": "speech"
+        }
+      }
+    },
+    "listenLearnerResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "const": "speech"
+        },
+        "expected": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": ["first", "second"]
+          }
+        }
+      }
+    },
+    "spokenCommonErrorPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern", "diagnosis"],
+      "properties": {
+        "pattern": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "diagnosis": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        }
+      }
+    },
+    "spokenTolerance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_minor_disfluencies": {
+          "type": "boolean"
+        },
+        "allow_article_variation": {
+          "type": "boolean"
+        }
+      }
+    },
+    "translateExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exercise_id", "type", "prompt", "expected"],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "translate"
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "expected": {
+          "$ref": "#/$defs/exerciseExpectedAnswers"
+        },
+        "checks": {
+          "$ref": "#/$defs/exerciseChecks"
+        },
+        "feedback": {
+          "$ref": "#/$defs/exerciseFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "chooseOneExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exercise_id", "type", "prompt", "options", "answer"],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "choose_one"
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "stem": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/chooseOneOption"
+          }
+        },
+        "answer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["correct_option_id"],
+          "properties": {
+            "correct_option_id": {
+              "$ref": "#/$defs/nonEmptyTrimmedString"
+            }
+          },
+          "description": "Tool runtime also requires correct_option_id to match one of the option ids."
+        },
+        "rationale": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "feedback": {
+          "$ref": "#/$defs/exerciseFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "correctTheSentenceExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exercise_id", "type", "prompt", "sentence", "expected"],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "correct_the_sentence"
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "sentence": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "expected": {
+          "$ref": "#/$defs/exerciseExpectedAnswers"
+        },
+        "checks": {
+          "$ref": "#/$defs/exerciseChecks"
+        },
+        "feedback": {
+          "$ref": "#/$defs/exerciseFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "spokenTranslationExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercise_id",
+        "type",
+        "agent_prompt_spoken",
+        "learner_response",
+        "grading"
+      ],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "spoken_translation"
+        },
+        "agent_prompt_spoken": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "learner_response": {
+          "$ref": "#/$defs/speechLearnerResponse"
+        },
+        "grading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["semantic_target"],
+          "properties": {
+            "semantic_target": {
+              "$ref": "#/$defs/nonEmptyTrimmedString"
+            },
+            "must_include_concepts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nonEmptyTrimmedString"
+              }
+            },
+            "common_error_patterns": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/spokenCommonErrorPattern"
+              }
+            },
+            "tolerance": {
+              "$ref": "#/$defs/spokenTolerance"
+            }
+          }
+        },
+        "spoken_feedback": {
+          "$ref": "#/$defs/spokenFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "listenAndDiscriminateExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercise_id",
+        "type",
+        "agent_prompt_spoken",
+        "audio_pairs",
+        "learner_response",
+        "grading"
+      ],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "listen_and_discriminate"
+        },
+        "agent_prompt_spoken": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "audio_pairs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["first", "second"],
+            "properties": {
+              "first": {
+                "$ref": "#/$defs/nonEmptyTrimmedString"
+              },
+              "second": {
+                "$ref": "#/$defs/nonEmptyTrimmedString"
+              }
+            }
+          }
+        },
+        "learner_response": {
+          "$ref": "#/$defs/listenLearnerResponse"
+        },
+        "grading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["correct_answer"],
+          "properties": {
+            "correct_answer": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": ["first", "second"]
+                },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "enum": ["first", "second"]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "spoken_feedback": {
+          "$ref": "#/$defs/spokenFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "spokenCorrectionExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercise_id",
+        "type",
+        "agent_prompt_spoken",
+        "learner_response",
+        "grading"
+      ],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "spoken_correction"
+        },
+        "agent_prompt_spoken": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "learner_response": {
+          "$ref": "#/$defs/speechLearnerResponse"
+        },
+        "grading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required_fix", "target_structure"],
+          "properties": {
+            "required_fix": {
+              "$ref": "#/$defs/nonEmptyTrimmedString"
+            },
+            "target_structure": {
+              "$ref": "#/$defs/nonEmptyTrimmedString"
+            }
+          }
+        },
+        "spoken_feedback": {
+          "$ref": "#/$defs/spokenFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "spokenPatternCompletionExercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercise_id",
+        "type",
+        "agent_prompt_spoken",
+        "learner_response",
+        "grading"
+      ],
+      "properties": {
+        "exercise_id": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "type": {
+          "const": "spoken_pattern_completion"
+        },
+        "agent_prompt_spoken": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "learner_response": {
+          "$ref": "#/$defs/speechLearnerResponse"
+        },
+        "grading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["expected_word"],
+          "properties": {
+            "expected_word": {
+              "$ref": "#/$defs/nonEmptyTrimmedString"
+            },
+            "forbidden_patterns": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nonEmptyTrimmedString"
+              }
+            }
+          }
+        },
+        "spoken_feedback": {
+          "$ref": "#/$defs/spokenFeedback"
+        },
+        "metadata": {
+          "$ref": "#/$defs/exerciseMetadata"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "finished"]
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_score": {
+          "type": ["number", "null"]
+        },
+        "last_notes": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nullableString"
+        }
+      }
+    },
+    "languageExercise": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/translateExercise"
+        },
+        {
+          "$ref": "#/$defs/chooseOneExercise"
+        },
+        {
+          "$ref": "#/$defs/correctTheSentenceExercise"
+        },
+        {
+          "$ref": "#/$defs/spokenTranslationExercise"
+        },
+        {
+          "$ref": "#/$defs/listenAndDiscriminateExercise"
+        },
+        {
+          "$ref": "#/$defs/spokenCorrectionExercise"
+        },
+        {
+          "$ref": "#/$defs/spokenPatternCompletionExercise"
+        }
+      ]
+    },
+    "exercisePresentationRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_hint_level": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2
+        },
+        "shuffle_exercises": {
+          "type": "boolean",
+          "default": true
+        },
+        "speak_theory_before_first_exercise": {
+          "type": "boolean",
+          "default": true
+        },
+        "spoken_corrections_after_each_attempt": {
+          "type": "boolean",
+          "default": true
+        },
+        "allow_self_correction_window_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.0
+        },
+        "show_theory_before_first_exercise": {
+          "type": "boolean",
+          "description": "Backward-compatible alias for speak_theory_before_first_exercise."
+        },
+        "show_corrections_after_each_attempt": {
+          "type": "boolean",
+          "description": "Backward-compatible alias for spoken_corrections_after_each_attempt."
+        }
+      }
+    },
+    "exercisesSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "num_times_repeat_on_fail": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 3
+        },
+        "num_exercises_required_for_pass": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0.2
+        },
+        "presentation_rules": {
+          "$ref": "#/$defs/exercisePresentationRules"
+        }
+      }
+    },
+    "languageIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "errorId", "exercises"],
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "area": {
+          "type": "string"
+        },
+        "impact": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "theory": {
+          "type": "string"
+        },
+        "theory_voice": {
+          "$ref": "#/$defs/theoryVoice"
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/languageIssueExample"
+          }
+        },
+        "categoryCode": {
+          "type": "string"
+        },
+        "subcategoryCode": {
+          "type": "string"
+        },
+        "subcategoryName": {
+          "type": "string"
+        },
+        "errorId": {
+          "$ref": "#/$defs/nonEmptyTrimmedString"
+        },
+        "exercises_spec": {
+          "$ref": "#/$defs/exercisesSpec"
+        },
+        "exercises": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/languageExercise"
+          }
+        }
+      }
+    }
+  }
+}

@@ -490,7 +490,7 @@
     },
     "language_lesson": {
       "name": "language_lesson",
-      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets. Use a 3-step stateful flow: (1) call language_lesson__start_first_exercise, (2) after each learner response call language_lesson__grade_user_exercise, (3) if grading passes call language_lesson__start_next_exercise. Repeat until completion or user exit.",
+      "description": "When the user asks for a language lesson or language exercise, run interactive language drills from predefined issue exercise sets. Use a 3-step stateful flow: (1) call language_lesson__start_first_exercise, (2) after each learner response call language_lesson__grade_user_exercise, (3) if grading passes call language_lesson__start_next_exercise. Repeat until completion or user exit.  Do not give the user any hints unless they ask, otherwise they won't learn anything.",
       "toolkits": [
         {
           "type": "function",

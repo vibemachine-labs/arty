@@ -19,11 +19,13 @@ import {
   addMcpExtension,
   getMcpBearerToken,
   getMcpExtensions,
+  getMcpRefreshToken,
   saveMcpBearerToken,
   toNormalizedName,
   uniqueNormalizedName,
   type McpExtensionRecord,
 } from "../../lib/secure-storage";
+import { performMcpOAuthFlow } from "../../lib/mcp-oauth";
 import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "../../modules/vm-webrtc/src/ToolkitManager";
 
 export interface McpConnectorConfigProps {
@@ -47,22 +49,30 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   const [normalizedNamePreview, setNormalizedNamePreview] = useState("");
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectingLabel, setConnectingLabel] = useState("Connecting…");
   const [tokenVisible, setTokenVisible] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [hasOAuthToken, setHasOAuthToken] = useState(false);
 
   useEffect(() => {
     if (visible && existingExtension) {
       setName(existingExtension.name);
       setServerUrl(existingExtension.serverUrl);
       setNormalizedNamePreview(existingExtension.normalizedName ?? toNormalizedName(existingExtension.name));
-      getMcpBearerToken(existingExtension.id).then((token) => {
-        if (token) {
+      Promise.all([
+        getMcpBearerToken(existingExtension.id),
+        getMcpRefreshToken(existingExtension.id),
+      ]).then(([token, refreshToken]) => {
+        if (refreshToken) {
+          setHasOAuthToken(true);
+        } else if (token) {
           setBearerToken(token);
           setAdvancedExpanded(true);
         }
       });
     } else if (visible) {
       setNormalizedNamePreview("");
+      setHasOAuthToken(false);
     }
   }, [visible, existingExtension]);
 
@@ -84,30 +94,54 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setTimeout(() => setCopyFeedback(false), 1500);
   };
 
+  const persistExtension = async (id: string, manualToken?: string) => {
+    const allExtensions = await getMcpExtensions();
+    const normalizedName = uniqueNormalizedName(toNormalizedName(name), allExtensions, existingExtension?.id);
+    const record: McpExtensionRecord = { id, name, normalizedName, serverUrl };
+    await addMcpExtension(record);
+    if (manualToken) {
+      await saveMcpBearerToken(id, manualToken);
+    }
+    DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
+    onSave?.(record);
+    resetAndClose();
+    Alert.alert(
+      isEditing ? "Saved" : "Connected Successfully",
+      isEditing
+        ? "Extension updated."
+        : "Extension added. You can update its config anytime from the Extensions (MCP) screen.",
+      [{ text: "OK" }],
+    );
+  };
+
   const handleSave = async () => {
     setIsConnecting(true);
+    setConnectingLabel("Connecting…");
     try {
       const token = bearerToken.trim() || undefined;
       const result = await probeMcpServer(serverUrl, token, name);
 
       if (result.success) {
         const id = existingExtension?.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const allExtensions = await getMcpExtensions();
-        const normalizedName = uniqueNormalizedName(toNormalizedName(name), allExtensions, existingExtension?.id);
-        const record: McpExtensionRecord = { id, name, normalizedName, serverUrl };
-        await addMcpExtension(record);
-        if (token) {
-          await saveMcpBearerToken(id, token);
+        await persistExtension(id, token);
+      } else if (result.statusCode === 401 && result.resourceMetadataUrl) {
+        const id = existingExtension?.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        setConnectingLabel("Opening sign-in…");
+        try {
+          await performMcpOAuthFlow(id, result.resourceMetadataUrl, name);
+          await persistExtension(id);
+        } catch (oauthError: any) {
+          Alert.alert(
+            "Authentication Failed",
+            oauthError?.message ?? "OAuth sign-in failed.",
+            [{ text: "OK" }],
+          );
         }
-        DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
-        onSave?.(record);
-        resetAndClose();
+      } else if (result.statusCode === 401) {
         Alert.alert(
-          isEditing ? "Saved" : "Connected Successfully",
-          isEditing
-            ? "Extension updated."
-            : "Extension added. You can update its config anytime from the Extensions (MCP) screen.",
-          [{ text: "OK" }]
+          "Authentication Required",
+          "This server requires a Bearer token. Enter it in the Advanced section.",
+          [{ text: "OK" }],
         );
       } else {
         const detail = result.error ?? `Server returned ${result.statusCode}`;
@@ -115,6 +149,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
       }
     } finally {
       setIsConnecting(false);
+      setConnectingLabel("Connecting…");
     }
   };
 
@@ -125,6 +160,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setNormalizedNamePreview("");
     setAdvancedExpanded(false);
     setTokenVisible(false);
+    setHasOAuthToken(false);
     onClose();
   };
 
@@ -187,6 +223,15 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
               Streamable HTTP endpoint for the MCP server
             </Text>
           </View>
+
+          {hasOAuthToken && (
+            <View style={styles.oauthBadge}>
+              <Text style={styles.oauthBadgeText}>Authenticated via OAuth</Text>
+              <Text style={styles.oauthBadgeHint}>
+                Tap {isEditing ? "Save" : "Add"} to re-authenticate
+              </Text>
+            </View>
+          )}
 
           <Pressable
             style={styles.advancedToggle}
@@ -282,7 +327,10 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
             disabled={!name.trim() || !serverUrl.trim() || isConnecting}
           >
             {isConnecting ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <View style={styles.connectingRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.connectingLabel}>{connectingLabel}</Text>
+              </View>
             ) : (
               <Text style={styles.connectButtonText}>{isEditing ? "Save" : "Add"}</Text>
             )}
@@ -458,5 +506,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+  connectingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  connectingLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  oauthBadge: {
+    backgroundColor: "#E8F5E9",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  oauthBadgeText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2E7D32",
+  },
+  oauthBadgeHint: {
+    fontSize: 12,
+    color: "#4CAF50",
+    marginTop: 2,
   },
 });

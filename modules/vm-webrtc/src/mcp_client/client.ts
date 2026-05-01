@@ -21,6 +21,13 @@ export interface RequestOptions {
   timeout?: number;
 }
 
+export class McpAuthError extends Error {
+  constructor() {
+    super("MCP auth: 401");
+    this.name = "McpAuthError";
+  }
+}
+
 /**
  * Maximum characters allowed in MCP tool results to prevent context window overflow.
  * Results larger than this will be truncated.
@@ -43,6 +50,12 @@ export class MCPClient {
   constructor(endpoint: string, authToken?: string) {
     this.endpoint = endpoint;
     this.authToken = authToken;
+  }
+
+  reset(newToken: string): void {
+    this.authToken = newToken;
+    this.sessionId = null;
+    this.initializePromise = null;
   }
 
   /**
@@ -91,6 +104,7 @@ export class MCPClient {
       });
 
       if (!res.ok) {
+        if (res.status === 401) throw new McpAuthError();
         throw new Error(`Initialize failed: ${res.status} ${res.statusText}`);
       }
 
@@ -140,14 +154,16 @@ export class MCPClient {
         },
       );
     } catch (error) {
-      log.error(
-        "[MCPClient] Failed to initialize MCP session",
-        {},
-        {
-          endpoint: this.endpoint,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
+      if (!(error instanceof McpAuthError)) {
+        log.error(
+          "[MCPClient] Failed to initialize MCP session",
+          {},
+          {
+            endpoint: this.endpoint,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
       throw error;
     }
   }
@@ -353,6 +369,7 @@ export class MCPClient {
             statusText: res.statusText,
           },
         );
+        if (res.status === 401) throw new McpAuthError();
         throw new Error(`Network error: ${res.status} ${res.statusText}`);
       }
 

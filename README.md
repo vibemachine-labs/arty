@@ -356,6 +356,8 @@ All connectors use statically defined tools with explicit function definitions, 
 
 **MCP** *(can be enabled in settings)*: Connects to external MCP servers via a streamable HTTP endpoint. The MCP connector includes a configuration UI where you specify a Name, MCP Server URL (the HTTP endpoint), and an optional Bearer Token for authentication. The Bearer Token is sent as an `Authorization: Bearer` header on every request. The connector can be enabled or disabled in settings; when disabled, MCP features are hidden.
 
+> **Note:** Only static bearer tokens are supported at this time. OAuth token refresh is not yet implemented.
+
 ### Web Search
 
 GPT-4 web search serves as a temporary solution. The roadmap includes integrating a dedicated search API (e.g., Brave Search) using user-provided API tokens.

@@ -25,6 +25,7 @@ import { DailyPapersConnectorInfo } from "./DailyPapersConnectorInfo";
 import { GithubLegacyConnectorInfo } from "./GithubLegacyConnectorInfo";
 import { GDriveLegacyConnectorInfo } from "./GDriveLegacyConnectorInfo";
 import { LanguageLessonConnectorInfo } from "./LanguageLessonConnectorInfo";
+import { McpConnectorConfig } from "./McpConnectorConfig";
 
 export interface ConnectorsConfigProps {
   visible: boolean;
@@ -47,6 +48,7 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
     useState(false);
   const [githubLegacyInfoVisible, setGithubLegacyInfoVisible] = useState(false);
   const [gdriveLegacyInfoVisible, setGDriveLegacyInfoVisible] = useState(false);
+  const [mcpConfigVisible, setMcpConfigVisible] = useState(false);
 
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
@@ -69,6 +71,8 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       setGithubLegacyInfoVisible(true);
     } else if (connectorId === "gdrive_legacy") {
       setGDriveLegacyInfoVisible(true);
+    } else if (connectorId === "mcp") {
+      setMcpConfigVisible(true);
     }
   };
 
@@ -193,6 +197,11 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
       <GDriveLegacyConnectorInfo
         visible={gdriveLegacyInfoVisible}
         onClose={() => setGDriveLegacyInfoVisible(false)}
+      />
+
+      <McpConnectorConfig
+        visible={mcpConfigVisible}
+        onClose={() => setMcpConfigVisible(false)}
       />
     </Modal>
   );

@@ -6,7 +6,12 @@ import { DeviceEventEmitter } from "react-native";
 import toolkitGroupsData from "../toolkits/toolkitGroups.json";
 
 import { log } from "../../../lib/logger";
-import { getContext7ApiKey } from "../../../lib/secure-storage";
+import {
+  getContext7ApiKey,
+  getMcpBearerToken,
+  getMcpExtensions,
+  type McpExtensionRecord,
+} from "../../../lib/secure-storage";
 import type {
   RemoteMcpToolkitDefinition,
   ToolDefinition,
@@ -673,6 +678,118 @@ export const getToolkitDefinitions = async (): Promise<ToolDefinition[]> => {
   }
 };
 
+async function fetchAndCacheUserExtensionTools(
+  ext: McpExtensionRecord,
+  client: MCPClient,
+  cacheKey: string,
+  groupName: string,
+): Promise<void> {
+  const token = await getMcpBearerToken(ext.id);
+  const options: RequestOptions = {
+    ...REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
+    ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+  };
+
+  const result = await client.listTools(undefined, options);
+  if (!result.tools || result.tools.length === 0) {
+    setDynamicToolkitDefinitionsForServer(groupName, []);
+    return;
+  }
+
+  const cachedTools = await convertToolsForCache(result.tools, groupName, ext.name);
+  await registerUserExtensionToolsFromCache(ext, client, cachedTools);
+  setDynamicToolkitDefinitionsForServer(groupName, cachedTools.map((t) => t.definition));
+  await writeRemoteToolkitCache(cacheKey, { lastFetched: Date.now(), tools: cachedTools });
+
+  log.info(
+    "[ToolkitManager] Fetched and cached user MCP extension tools",
+    {},
+    { name: ext.name, group: groupName, toolCount: cachedTools.length },
+  );
+}
+
+async function registerUserExtensionToolsFromCache(
+  ext: McpExtensionRecord,
+  client: MCPClient,
+  tools: RemoteToolkitCacheEntry["tools"],
+): Promise<void> {
+  const groupName = ext.normalizedName;
+  for (const tool of tools) {
+    const toolName = tool.name;
+    registerMcpTool(groupName, toolName, async (args: any) => {
+      log.info(
+        "[ToolkitManager] Executing user MCP extension tool",
+        {},
+        { group: groupName, toolName, url: ext.serverUrl },
+      );
+      const token = await getMcpBearerToken(ext.id);
+      const options: RequestOptions = {
+        ...REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      };
+      const result = await client.callTool({ name: toolName, arguments: args }, options, groupName);
+      return { result: JSON.stringify(result, null, 2), updatedToolSessionContext: {} };
+    });
+  }
+}
+
+async function loadUserMcpExtensionTools(): Promise<void> {
+  const extensions = await getMcpExtensions().catch(() => [] as McpExtensionRecord[]);
+  const enabled = extensions.filter((ext) => !ext.disabled);
+
+  if (enabled.length === 0) return;
+
+  log.info(
+    "[ToolkitManager] Loading user MCP extension tools",
+    {},
+    { count: enabled.length, names: enabled.map((e) => e.normalizedName) },
+  );
+
+  for (const ext of enabled) {
+    const groupName = ext.normalizedName;
+    const cacheKey = `user_ext:${ext.id}`;
+
+    try {
+      const cached = await readRemoteToolkitCache(cacheKey);
+      const client = getOrCreateMcpClient(ext.serverUrl);
+
+      if (cached && cached.tools.length > 0) {
+        const isStale = Date.now() - cached.lastFetched > REMOTE_TOOLKIT_CACHE_TTL_MS;
+        log.debug(
+          "[ToolkitManager] Loading user extension tools from cache",
+          {},
+          { name: ext.name, group: groupName, toolCount: cached.tools.length, isStale },
+        );
+        await registerUserExtensionToolsFromCache(ext, client, cached.tools);
+        setDynamicToolkitDefinitionsForServer(groupName, cached.tools.map((t) => t.definition));
+        if (isStale) {
+          fetchAndCacheUserExtensionTools(ext, client, cacheKey, groupName).catch((error) => {
+            log.warn(
+              "[ToolkitManager] Background refresh of user extension cache failed",
+              {},
+              { name: ext.name, error: error instanceof Error ? error.message : String(error) },
+            );
+          });
+        }
+      } else {
+        await fetchAndCacheUserExtensionTools(ext, client, cacheKey, groupName);
+      }
+    } catch (error) {
+      log.error(
+        "[ToolkitManager] Failed to load user MCP extension tools",
+        {},
+        {
+          name: ext.name,
+          group: groupName,
+          url: ext.serverUrl,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
+  }
+}
+
 /**
  * Internal function that actually fetches toolkit definitions.
  */
@@ -711,6 +828,9 @@ async function fetchToolkitDefinitions(): Promise<ToolDefinition[]> {
       toolCount: definitions.length,
     });
   }
+
+  // Load user MCP extension tools (enabled extensions stored in secure storage)
+  await loadUserMcpExtensionTools();
 
   const allTools = rebuildToolkitDefinitionsCache();
 

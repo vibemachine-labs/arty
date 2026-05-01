@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -17,9 +18,13 @@ import { probeMcpServer } from "../../modules/vm-webrtc/src/mcp_client/extension
 import {
   addMcpExtension,
   getMcpBearerToken,
+  getMcpExtensions,
   saveMcpBearerToken,
+  toNormalizedName,
+  uniqueNormalizedName,
   type McpExtensionRecord,
 } from "../../lib/secure-storage";
+import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "../../modules/vm-webrtc/src/ToolkitManager";
 
 export interface McpConnectorConfigProps {
   visible: boolean;
@@ -39,6 +44,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   const [name, setName] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [bearerToken, setBearerToken] = useState("");
+  const [normalizedNamePreview, setNormalizedNamePreview] = useState("");
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [tokenVisible, setTokenVisible] = useState(false);
@@ -48,12 +54,15 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     if (visible && existingExtension) {
       setName(existingExtension.name);
       setServerUrl(existingExtension.serverUrl);
+      setNormalizedNamePreview(existingExtension.normalizedName ?? toNormalizedName(existingExtension.name));
       getMcpBearerToken(existingExtension.id).then((token) => {
         if (token) {
           setBearerToken(token);
           setAdvancedExpanded(true);
         }
       });
+    } else if (visible) {
+      setNormalizedNamePreview("");
     }
   }, [visible, existingExtension]);
 
@@ -83,11 +92,14 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
 
       if (result.success) {
         const id = existingExtension?.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const record: McpExtensionRecord = { id, name, serverUrl };
+        const allExtensions = await getMcpExtensions();
+        const normalizedName = uniqueNormalizedName(toNormalizedName(name), allExtensions, existingExtension?.id);
+        const record: McpExtensionRecord = { id, name, normalizedName, serverUrl };
         await addMcpExtension(record);
         if (token) {
           await saveMcpBearerToken(id, token);
         }
+        DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
         onSave?.(record);
         resetAndClose();
         Alert.alert(
@@ -110,6 +122,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setName("");
     setServerUrl("");
     setBearerToken("");
+    setNormalizedNamePreview("");
     setAdvancedExpanded(false);
     setTokenVisible(false);
     onClose();
@@ -142,12 +155,20 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
             <TextInput
               style={styles.input}
               value={name}
-              onChangeText={setName}
+              onChangeText={(v) => {
+                setName(v);
+                setNormalizedNamePreview(toNormalizedName(v));
+              }}
               placeholder="Enter extension name..."
               placeholderTextColor="#AEAEB2"
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {normalizedNamePreview ? (
+              <Text style={styles.hint}>
+                ID: <Text style={styles.hintMono}>{normalizedNamePreview}</Text>
+              </Text>
+            ) : null}
           </View>
 
           <View style={styles.section}>

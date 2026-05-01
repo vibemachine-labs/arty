@@ -3,6 +3,7 @@ import {
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   Modal,
   Platform,
   Pressable,
@@ -23,6 +24,7 @@ import {
   getMcpBearerToken,
   type McpExtensionRecord,
 } from "../../lib/secure-storage";
+import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "../../modules/vm-webrtc/src/ToolkitManager";
 import { McpConnectorConfig } from "./McpConnectorConfig";
 
 export interface McpExtensionDetailScreenProps {
@@ -76,6 +78,7 @@ export const McpExtensionDetailScreen: React.FC<McpExtensionDetailScreenProps> =
   const handleRemove = () => {
     const doRemove = async () => {
       await deleteMcpExtension(currentExtension.id);
+      DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
       onRemove(currentExtension.id);
       onClose();
     };
@@ -108,6 +111,7 @@ export const McpExtensionDetailScreen: React.FC<McpExtensionDetailScreenProps> =
   const handleToggleDisabled = async (enabled: boolean) => {
     const updated = { ...currentExtension, disabled: !enabled };
     await addMcpExtension(updated);
+    DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     setCurrentExtension(updated);
     onUpdated(updated);
   };

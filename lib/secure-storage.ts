@@ -775,8 +775,40 @@ export async function hasContext7ApiKey(): Promise<boolean> {
 export interface McpExtensionRecord {
   id: string;
   name: string;
+  normalizedName: string;
   serverUrl: string;
   disabled?: boolean;
+}
+
+// "My Cool Server!" → "my_cool_server"
+export function toNormalizedName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+const RESERVED_GROUP_NAMES = new Set([
+  "hacker_news", "daily_papers", "web", "google_drive",
+  "deepwiki", "context7", "github", "language_lesson",
+  "github_legacy", "gdrive_legacy",
+]);
+
+export function uniqueNormalizedName(
+  base: string,
+  existingExtensions: McpExtensionRecord[],
+  excludeId?: string,
+): string {
+  const taken = new Set([
+    ...RESERVED_GROUP_NAMES,
+    ...existingExtensions
+      .filter((e) => e.id !== excludeId)
+      .map((e) => e.normalizedName),
+  ]);
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}_${n}`)) n++;
+  return `${base}_${n}`;
 }
 
 const MCP_EXTENSIONS_KEY = "VIBEMACHINE_MCP_EXTENSIONS";
@@ -786,7 +818,18 @@ export async function getMcpExtensions(): Promise<McpExtensionRecord[]> {
   try {
     const raw = await AsyncStorage.getItem(MCP_EXTENSIONS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as McpExtensionRecord[];
+    const parsed = JSON.parse(raw) as McpExtensionRecord[];
+
+    let needsSave = false;
+    for (const ext of parsed) {
+      if (!ext.normalizedName) {
+        ext.normalizedName = uniqueNormalizedName(toNormalizedName(ext.name), parsed, ext.id);
+        needsSave = true;
+      }
+    }
+    if (needsSave) await saveMcpExtensions(parsed);
+
+    return parsed;
   } catch (err) {
     log.error("❌ Failed to load MCP extensions", {}, { error: (err as Error).message });
     return [];

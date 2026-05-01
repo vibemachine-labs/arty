@@ -120,6 +120,9 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
                   <Text style={styles.cardUrl} numberOfLines={1}>
                     {ext.serverUrl}
                   </Text>
+                  <Text style={[styles.cardStatus, ext.disabled && styles.cardStatusDisabled]}>
+                    {ext.disabled ? "Disabled" : "Enabled"}
+                  </Text>
                 </View>
                 <Text style={styles.cardChevron}>›</Text>
               </Pressable>
@@ -286,6 +289,15 @@ const styles = StyleSheet.create({
   },
   cardUrl: {
     fontSize: 12,
+    color: "#8E8E93",
+  },
+  cardStatus: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#34C759",
+    marginTop: 1,
+  },
+  cardStatusDisabled: {
     color: "#8E8E93",
   },
   cardChevron: {

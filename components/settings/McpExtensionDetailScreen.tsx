@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from "react-native";
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MCPClient } from "../../modules/vm-webrtc/src/mcp_client/client";
 import type { Tool } from "../../modules/vm-webrtc/src/mcp_client/types";
 import {
+  addMcpExtension,
   deleteMcpExtension,
   getMcpBearerToken,
   type McpExtensionRecord,
@@ -103,6 +105,13 @@ export const McpExtensionDetailScreen: React.FC<McpExtensionDetailScreenProps> =
     }
   };
 
+  const handleToggleDisabled = async (enabled: boolean) => {
+    const updated = { ...currentExtension, disabled: !enabled };
+    await addMcpExtension(updated);
+    setCurrentExtension(updated);
+    onUpdated(updated);
+  };
+
   const handleConfigureSave = (updated?: McpExtensionRecord) => {
     setConfigureVisible(false);
     if (updated) {
@@ -146,6 +155,16 @@ export const McpExtensionDetailScreen: React.FC<McpExtensionDetailScreenProps> =
                 {currentExtension.serverUrl}
               </Text>
             </View>
+          </View>
+
+          <View style={styles.enableRow}>
+            <Text style={styles.enableLabel}>Enabled</Text>
+            <Switch
+              value={!currentExtension.disabled}
+              onValueChange={handleToggleDisabled}
+              trackColor={{ false: "#E5E5EA", true: "#34C759" }}
+              thumbColor="#FFFFFF"
+            />
           </View>
 
           <View style={styles.sectionHeader}>
@@ -268,6 +287,22 @@ const styles = StyleSheet.create({
     gap: 14,
     borderWidth: 1,
     borderColor: "#E5E5EA",
+  },
+  enableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+  },
+  enableLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1C1C1E",
   },
   iconContainer: {
     width: 48,

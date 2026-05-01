@@ -776,6 +776,7 @@ export interface McpExtensionRecord {
   id: string;
   name: string;
   serverUrl: string;
+  disabled?: boolean;
 }
 
 const MCP_EXTENSIONS_KEY = "VIBEMACHINE_MCP_EXTENSIONS";

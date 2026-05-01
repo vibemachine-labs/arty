@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -10,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { log } from "../../lib/logger";
 
 export interface McpConnectorConfigProps {
   visible: boolean;
@@ -24,10 +26,80 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   const [serverUrl, setServerUrl] = useState("");
   const [bearerToken, setBearerToken] = useState("");
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
-  const handleConnect = () => {
-    // TODO: wire up MCP connection logic
-    onClose();
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (bearerToken.trim()) {
+        headers["Authorization"] = `Bearer ${bearerToken.trim()}`;
+      }
+
+      log.info(
+        "[mcp_connector] Probing MCP server (Step 1: initial request)",
+        {},
+        { connector_name: name, server_url: serverUrl, has_bearer_token: !!bearerToken.trim() }
+      );
+
+      let response: Response;
+      try {
+        response = await fetch(serverUrl, { method: "GET", headers });
+      } catch (fetchError: any) {
+        log.error(
+          "[mcp_connector] Step 1: network error reaching MCP server",
+          {},
+          { connector_name: name, server_url: serverUrl, error: fetchError?.message }
+        );
+        return;
+      }
+
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      let responseBody: string | null = null;
+      try {
+        responseBody = await response.text();
+      } catch {
+        responseBody = null;
+      }
+
+      const logAttrs = {
+        connector_name: name,
+        server_url: serverUrl,
+        status_code: response.status,
+        status_text: response.statusText,
+        response_headers: responseHeaders,
+        response_body_snippet: responseBody?.slice(0, 500) ?? null,
+        www_authenticate: responseHeaders["www-authenticate"] ?? null,
+        resource_metadata_url: null as string | null,
+      };
+
+      // Extract resource_metadata from WWW-Authenticate if present
+      const wwwAuth = responseHeaders["www-authenticate"] ?? "";
+      const resourceMetadataMatch = wwwAuth.match(/resource_metadata="([^"]+)"/);
+      if (resourceMetadataMatch) {
+        logAttrs.resource_metadata_url = resourceMetadataMatch[1];
+      }
+
+      if (response.status === 401) {
+        log.info(
+          "[mcp_connector] Step 1: got 401 — server requires auth (expected)",
+          { allowSensitiveLogging: true },
+          logAttrs
+        );
+      } else {
+        log.info(
+          "[mcp_connector] Step 1: server responded",
+          { allowSensitiveLogging: true },
+          logAttrs
+        );
+      }
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -134,13 +206,17 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
           <Pressable
             style={({ pressed }) => [
               styles.connectButton,
-              (!name.trim() || !serverUrl.trim()) && styles.connectButtonDisabled,
+              (!name.trim() || !serverUrl.trim() || isConnecting) && styles.connectButtonDisabled,
               pressed && styles.connectButtonPressed,
             ]}
             onPress={handleConnect}
-            disabled={!name.trim() || !serverUrl.trim()}
+            disabled={!name.trim() || !serverUrl.trim() || isConnecting}
           >
-            <Text style={styles.connectButtonText}>Connect</Text>
+            {isConnecting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.connectButtonText}>Connect</Text>
+            )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>

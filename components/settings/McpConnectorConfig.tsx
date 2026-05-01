@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -55,7 +56,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setTimeout(() => setCopyFeedback(false), 1500);
   };
 
-  const handleConnect = async () => {
+  const handleAdd = async () => {
     setIsConnecting(true);
     try {
       const token = bearerToken.trim() || undefined;
@@ -65,8 +66,16 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         await addMcpExtension({ id, name, serverUrl });
         if (token) await saveMcpBearerToken(id, token);
-        resetAndClose();
         onSave?.();
+        resetAndClose();
+        Alert.alert(
+          "Connected Successfully",
+          "Extension added. You can update its config anytime from the Extensions (MCP) screen.",
+          [{ text: "OK" }]
+        );
+      } else {
+        const detail = result.error ?? `Server returned ${result.statusCode}`;
+        Alert.alert("Connection Failed", detail, [{ text: "OK" }]);
       }
     } finally {
       setIsConnecting(false);
@@ -219,17 +228,16 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
           <Pressable
             style={({ pressed }) => [
               styles.connectButton,
-              (!name.trim() || !serverUrl.trim() || isConnecting) &&
-                styles.connectButtonDisabled,
+              (!name.trim() || !serverUrl.trim() || isConnecting) && styles.connectButtonDisabled,
               pressed && styles.connectButtonPressed,
             ]}
-            onPress={handleConnect}
+            onPress={handleAdd}
             disabled={!name.trim() || !serverUrl.trim() || isConnecting}
           >
             {isConnecting ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.connectButtonText}>Connect</Text>
+              <Text style={styles.connectButtonText}>Add</Text>
             )}
           </Pressable>
         </View>

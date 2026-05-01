@@ -159,6 +159,7 @@ async function reloadToolkitGroups(): Promise<void> {
   staticToolkitDefinitionsCache = null;
   toolkitDefinitionsCache = null;
   toolkitDefinitionsPromise = null;
+  userExtensionClientsByExtId.clear();
 
   // Rebuild toolkit groups cache
   const groups = await getFilteredToolkitGroups();
@@ -356,6 +357,8 @@ type RemoteToolkitCacheEntry = {
 const dynamicToolkitDefinitionsByServer = new Map<string, ToolDefinition[]>();
 const remoteCacheRefreshPromises = new Map<string, Promise<void>>();
 const mcpClientsByServerUrl = new Map<string, MCPClient>();
+// User extension clients keyed by extension ID (bearer token baked into constructor)
+const userExtensionClientsByExtId = new Map<string, MCPClient>();
 
 /**
  * Get or create a cached MCP client for the given server URL.
@@ -373,6 +376,15 @@ function getOrCreateMcpClient(serverUrl: string): MCPClient {
     );
     client = new MCPClient(serverUrl);
     mcpClientsByServerUrl.set(serverUrl, client);
+  }
+  return client;
+}
+
+function getOrCreateUserExtensionClient(extId: string, serverUrl: string, bearerToken: string | null): MCPClient {
+  let client = userExtensionClientsByExtId.get(extId);
+  if (!client) {
+    client = new MCPClient(serverUrl, bearerToken ?? undefined);
+    userExtensionClientsByExtId.set(extId, client);
   }
   return client;
 }
@@ -684,13 +696,7 @@ async function fetchAndCacheUserExtensionTools(
   cacheKey: string,
   groupName: string,
 ): Promise<void> {
-  const token = await getMcpBearerToken(ext.id);
-  const options: RequestOptions = {
-    ...REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
-    ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
-  };
-
-  const result = await client.listTools(undefined, options);
+  const result = await client.listTools(undefined, REMOTE_TOOLKIT_DISCOVERY_OPTIONS);
   if (!result.tools || result.tools.length === 0) {
     setDynamicToolkitDefinitionsForServer(groupName, []);
     return;
@@ -722,12 +728,11 @@ async function registerUserExtensionToolsFromCache(
         {},
         { group: groupName, toolName, url: ext.serverUrl },
       );
-      const token = await getMcpBearerToken(ext.id);
-      const options: RequestOptions = {
-        ...REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
-        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
-      };
-      const result = await client.callTool({ name: toolName, arguments: args }, options, groupName);
+      const result = await client.callTool(
+        { name: toolName, arguments: args },
+        REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
+        groupName,
+      );
       return { result: JSON.stringify(result, null, 2), updatedToolSessionContext: {} };
     });
   }
@@ -751,7 +756,8 @@ async function loadUserMcpExtensionTools(): Promise<void> {
 
     try {
       const cached = await readRemoteToolkitCache(cacheKey);
-      const client = getOrCreateMcpClient(ext.serverUrl);
+      const bearerToken = await getMcpBearerToken(ext.id);
+      const client = getOrCreateUserExtensionClient(ext.id, ext.serverUrl, bearerToken);
 
       if (cached && cached.tools.length > 0) {
         const isStale = Date.now() - cached.lastFetched > REMOTE_TOOLKIT_CACHE_TTL_MS;

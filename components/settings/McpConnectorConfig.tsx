@@ -31,20 +31,45 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+      };
       if (bearerToken.trim()) {
         headers["Authorization"] = `Bearer ${bearerToken.trim()}`;
       }
 
+      const requestBody = {
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "arty", version: "1.0.0" },
+        },
+        id: 1,
+      };
+      const requestBodyStr = JSON.stringify(requestBody);
+
       log.info(
-        "[mcp_connector] Probing MCP server (Step 1: initial request)",
-        {},
-        { connector_name: name, server_url: serverUrl, has_bearer_token: !!bearerToken.trim() }
+        "[mcp_connector] Step 1: sending request",
+        { allowSensitiveLogging: true },
+        {
+          connector_name: name,
+          method: "POST",
+          server_url: serverUrl,
+          request_headers: headers,
+          request_body: requestBody,
+        }
       );
 
       let response: Response;
       try {
-        response = await fetch(serverUrl, { method: "GET", headers });
+        response = await fetch(serverUrl, {
+          method: "POST",
+          headers,
+          body: requestBodyStr,
+        });
       } catch (fetchError: any) {
         log.error(
           "[mcp_connector] Step 1: network error reaching MCP server",

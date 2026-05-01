@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   SafeAreaView,
@@ -11,11 +10,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  deleteMcpExtension,
   getMcpExtensions,
   type McpExtensionRecord,
 } from "../../lib/secure-storage";
 import { McpConnectorConfig } from "./McpConnectorConfig";
+import { McpExtensionDetailScreen } from "./McpExtensionDetailScreen";
 
 export interface McpExtensionsScreenProps {
   visible: boolean;
@@ -29,6 +28,7 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
   const insets = useSafeAreaInsets();
   const [extensions, setExtensions] = useState<McpExtensionRecord[]>([]);
   const [addVisible, setAddVisible] = useState(false);
+  const [detailExtension, setDetailExtension] = useState<McpExtensionRecord | null>(null);
 
   const loadExtensions = useCallback(async () => {
     const list = await getMcpExtensions();
@@ -39,22 +39,13 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
     if (visible) loadExtensions();
   }, [visible, loadExtensions]);
 
-  const handleDelete = (ext: McpExtensionRecord) => {
-    Alert.alert(
-      "Remove Extension",
-      `Remove "${ext.name}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            await deleteMcpExtension(ext.id);
-            loadExtensions();
-          },
-        },
-      ]
-    );
+  const handleRemove = (id: string) => {
+    setDetailExtension(null);
+    setExtensions((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const handleUpdated = (updated: McpExtensionRecord) => {
+    setExtensions((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
   };
 
   return (
@@ -116,7 +107,11 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
             ]}
           >
             {extensions.map((ext) => (
-              <View key={ext.id} style={styles.card}>
+              <Pressable
+                key={ext.id}
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                onPress={() => setDetailExtension(ext)}
+              >
                 <View style={styles.cardIcon}>
                   <Text style={styles.cardIconText}>🔌</Text>
                 </View>
@@ -126,16 +121,8 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
                     {ext.serverUrl}
                   </Text>
                 </View>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    pressed && styles.deleteButtonPressed,
-                  ]}
-                  onPress={() => handleDelete(ext)}
-                >
-                  <Text style={styles.deleteButtonText}>✕</Text>
-                </Pressable>
-              </View>
+                <Text style={styles.cardChevron}>›</Text>
+              </Pressable>
             ))}
           </ScrollView>
         )}
@@ -149,6 +136,16 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
           loadExtensions();
         }}
       />
+
+      {detailExtension && (
+        <McpExtensionDetailScreen
+          extension={detailExtension}
+          visible={detailExtension !== null}
+          onClose={() => setDetailExtension(null)}
+          onRemove={handleRemove}
+          onUpdated={handleUpdated}
+        />
+      )}
     </Modal>
   );
 };
@@ -264,6 +261,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E5EA",
   },
+  cardPressed: {
+    backgroundColor: "#F2F2F7",
+  },
   cardIcon: {
     width: 40,
     height: 40,
@@ -288,20 +288,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#8E8E93",
   },
-  deleteButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#F2F2F7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  deleteButtonPressed: {
-    backgroundColor: "#FFE5E5",
-  },
-  deleteButtonText: {
-    fontSize: 12,
-    color: "#8E8E93",
-    fontWeight: "600",
+  cardChevron: {
+    fontSize: 22,
+    color: "#C7C7CC",
+    fontWeight: "300",
   },
 });

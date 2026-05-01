@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,20 +16,26 @@ import * as Clipboard from "expo-clipboard";
 import { probeMcpServer } from "../../modules/vm-webrtc/src/mcp_client/extensions";
 import {
   addMcpExtension,
+  getMcpBearerToken,
   saveMcpBearerToken,
+  type McpExtensionRecord,
 } from "../../lib/secure-storage";
 
 export interface McpConnectorConfigProps {
   visible: boolean;
   onClose: () => void;
-  onSave?: () => void;
+  existingExtension?: McpExtensionRecord;
+  onSave?: (updated?: McpExtensionRecord) => void;
 }
 
 export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   visible,
   onClose,
+  existingExtension,
   onSave,
 }) => {
+  const isEditing = !!existingExtension;
+
   const [name, setName] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [bearerToken, setBearerToken] = useState("");
@@ -37,6 +43,19 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [tokenVisible, setTokenVisible] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+
+  useEffect(() => {
+    if (visible && existingExtension) {
+      setName(existingExtension.name);
+      setServerUrl(existingExtension.serverUrl);
+      getMcpBearerToken(existingExtension.id).then((token) => {
+        if (token) {
+          setBearerToken(token);
+          setAdvancedExpanded(true);
+        }
+      });
+    }
+  }, [visible, existingExtension]);
 
   const sanitizeToken = (value: string) => value.replace(/[\r\n\t ]+/g, "");
 
@@ -56,21 +75,26 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setTimeout(() => setCopyFeedback(false), 1500);
   };
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     setIsConnecting(true);
     try {
       const token = bearerToken.trim() || undefined;
       const result = await probeMcpServer(serverUrl, token, name);
 
       if (result.success) {
-        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        await addMcpExtension({ id, name, serverUrl });
-        if (token) await saveMcpBearerToken(id, token);
-        onSave?.();
+        const id = existingExtension?.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const record: McpExtensionRecord = { id, name, serverUrl };
+        await addMcpExtension(record);
+        if (token) {
+          await saveMcpBearerToken(id, token);
+        }
+        onSave?.(record);
         resetAndClose();
         Alert.alert(
-          "Connected Successfully",
-          "Extension added. You can update its config anytime from the Extensions (MCP) screen.",
+          isEditing ? "Saved" : "Connected Successfully",
+          isEditing
+            ? "Extension updated."
+            : "Extension added. You can update its config anytime from the Extensions (MCP) screen.",
           [{ text: "OK" }]
         );
       } else {
@@ -103,7 +127,9 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Add MCP Extension</Text>
+          <Text style={styles.headerTitle}>
+            {isEditing ? "Edit MCP Extension" : "Add MCP Extension"}
+          </Text>
         </View>
 
         <ScrollView
@@ -231,13 +257,13 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
               (!name.trim() || !serverUrl.trim() || isConnecting) && styles.connectButtonDisabled,
               pressed && styles.connectButtonPressed,
             ]}
-            onPress={handleAdd}
+            onPress={handleSave}
             disabled={!name.trim() || !serverUrl.trim() || isConnecting}
           >
             {isConnecting ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.connectButtonText}>Add</Text>
+              <Text style={styles.connectButtonText}>{isEditing ? "Save" : "Add"}</Text>
             )}
           </Pressable>
         </View>

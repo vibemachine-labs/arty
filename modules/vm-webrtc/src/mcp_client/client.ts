@@ -35,12 +35,14 @@ const MAX_MCP_RESULT_LENGTH = 25000;
  */
 export class MCPClient {
   private endpoint: string;
+  private authToken?: string;
   private requestId = 0;
   private sessionId: string | null = null;
   private initializePromise: Promise<void> | null = null;
 
-  constructor(endpoint: string) {
+  constructor(endpoint: string, authToken?: string) {
     this.endpoint = endpoint;
+    this.authToken = authToken;
   }
 
   /**
@@ -74,12 +76,17 @@ export class MCPClient {
     };
 
     try {
+      const initHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      };
+      if (this.authToken) {
+        initHeaders["Authorization"] = `Bearer ${this.authToken}`;
+      }
+
       const res = await fetch(this.endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-        },
+        headers: initHeaders,
         body: JSON.stringify(body),
       });
 
@@ -316,6 +323,7 @@ export class MCPClient {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "application/json, text/event-stream",
+        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
         ...(options?.headers || {}),
       };
 

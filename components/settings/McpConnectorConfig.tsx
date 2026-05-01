@@ -25,7 +25,11 @@ import {
   uniqueNormalizedName,
   type McpExtensionRecord,
 } from "../../lib/secure-storage";
-import { performMcpOAuthFlow } from "../../lib/mcp-oauth";
+import {
+  completeMcpOAuthFromCallbackUrl,
+  performMcpOAuthFlow,
+  type McpOAuthPendingState,
+} from "../../lib/mcp-oauth";
 import { CONNECTOR_SETTINGS_CHANGED_EVENT } from "../../modules/vm-webrtc/src/ToolkitManager";
 
 export interface McpConnectorConfigProps {
@@ -53,6 +57,10 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   const [tokenVisible, setTokenVisible] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [hasOAuthToken, setHasOAuthToken] = useState(false);
+  const [pendingOAuth, setPendingOAuth] = useState<McpOAuthPendingState | null>(null);
+  const [pendingExtensionId, setPendingExtensionId] = useState<string | null>(null);
+  const [callbackUrl, setCallbackUrl] = useState("");
+  const [callbackError, setCallbackError] = useState("");
 
   useEffect(() => {
     if (visible && existingExtension) {
@@ -128,8 +136,13 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
         const id = existingExtension?.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         setConnectingLabel("Opening sign-in…");
         try {
-          await performMcpOAuthFlow(id, result.resourceMetadataUrl, name);
-          await persistExtension(id);
+          const oauthResult = await performMcpOAuthFlow(id, result.resourceMetadataUrl, name);
+          if (oauthResult.type === "success") {
+            await persistExtension(id);
+          } else {
+            setPendingOAuth(oauthResult.pendingState);
+            setPendingExtensionId(id);
+          }
         } catch (oauthError: any) {
           Alert.alert(
             "Authentication Failed",
@@ -153,6 +166,22 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     }
   };
 
+  const handleCompleteOAuth = async () => {
+    if (!pendingOAuth || !pendingExtensionId) return;
+    setCallbackError("");
+    setIsConnecting(true);
+    setConnectingLabel("Completing sign-in…");
+    try {
+      await completeMcpOAuthFromCallbackUrl(callbackUrl.trim(), pendingOAuth);
+      await persistExtension(pendingExtensionId);
+    } catch (err: any) {
+      setCallbackError(err?.message ?? "Failed to complete sign-in. Check the URL and try again.");
+    } finally {
+      setIsConnecting(false);
+      setConnectingLabel("Connecting…");
+    }
+  };
+
   const resetAndClose = () => {
     setName("");
     setServerUrl("");
@@ -161,6 +190,10 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setAdvancedExpanded(false);
     setTokenVisible(false);
     setHasOAuthToken(false);
+    setPendingOAuth(null);
+    setPendingExtensionId(null);
+    setCallbackUrl("");
+    setCallbackError("");
     onClose();
   };
 
@@ -186,123 +219,166 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.section}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={(v) => {
-                setName(v);
-                setNormalizedNamePreview(toNormalizedName(v));
-              }}
-              placeholder="Enter extension name..."
-              placeholderTextColor="#AEAEB2"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {normalizedNamePreview ? (
-              <Text style={styles.hint}>
-                ID: <Text style={styles.hintMono}>{normalizedNamePreview}</Text>
+          {pendingOAuth ? (
+            <View style={styles.callbackSection}>
+              <Text style={styles.callbackTitle}>Complete Sign-in</Text>
+              <Text style={styles.callbackBody}>
+                The browser closed before the redirect was received. Copy the callback URL shown in the browser (it starts with{" "}
+                <Text style={styles.hintMono}>vibemachine://mcp-oauth-callback</Text>
+                ) and paste it below.
               </Text>
-            ) : null}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>MCP Server URL</Text>
-            <TextInput
-              style={styles.input}
-              value={serverUrl}
-              onChangeText={setServerUrl}
-              placeholder="https://..."
-              placeholderTextColor="#AEAEB2"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-            <Text style={styles.hint}>
-              Streamable HTTP endpoint for the MCP server
-            </Text>
-          </View>
-
-          {hasOAuthToken && (
-            <View style={styles.oauthBadge}>
-              <Text style={styles.oauthBadgeText}>Authenticated via OAuth</Text>
-              <Text style={styles.oauthBadgeHint}>
-                Tap {isEditing ? "Save" : "Add"} to re-authenticate
-              </Text>
+              <TextInput
+                style={[styles.input, styles.callbackInput]}
+                value={callbackUrl}
+                onChangeText={(v) => {
+                  setCallbackUrl(v);
+                  setCallbackError("");
+                }}
+                placeholder="vibemachine://mcp-oauth-callback?code=…"
+                placeholderTextColor="#AEAEB2"
+                autoCapitalize="none"
+                autoCorrect={false}
+                multiline
+              />
+              {callbackError ? (
+                <Text style={styles.callbackError}>{callbackError}</Text>
+              ) : null}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.tryAgainButton,
+                  pressed && styles.tryAgainButtonPressed,
+                ]}
+                onPress={() => {
+                  setPendingOAuth(null);
+                  setPendingExtensionId(null);
+                  setCallbackUrl("");
+                  setCallbackError("");
+                }}
+              >
+                <Text style={styles.tryAgainText}>Open sign-in browser again</Text>
+              </Pressable>
             </View>
-          )}
-
-          <Pressable
-            style={styles.advancedToggle}
-            onPress={() => setAdvancedExpanded((v) => !v)}
-          >
-            <Text style={styles.advancedToggleText}>Advanced</Text>
-            <Text style={styles.advancedChevron}>
-              {advancedExpanded ? "▲" : "▼"}
-            </Text>
-          </Pressable>
-
-          {advancedExpanded && (
-            <View style={styles.advancedSection}>
-              <Text style={styles.label}>Bearer Token</Text>
-
-              <View style={styles.tokenInputRow}>
+          ) : (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.label}>Name</Text>
                 <TextInput
-                  style={[styles.input, styles.tokenInput]}
-                  value={bearerToken}
-                  onChangeText={handleTokenChange}
-                  placeholder="Optional JWT or access token..."
+                  style={styles.input}
+                  value={name}
+                  onChangeText={(v) => {
+                    setName(v);
+                    setNormalizedNamePreview(toNormalizedName(v));
+                  }}
+                  placeholder="Enter extension name..."
                   placeholderTextColor="#AEAEB2"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  secureTextEntry={!tokenVisible}
-                  multiline={false}
                 />
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.tokenIconButton,
-                    pressed && styles.tokenIconButtonPressed,
-                  ]}
-                  onPress={() => setTokenVisible((v) => !v)}
-                >
-                  <Text style={styles.tokenIconText}>
-                    {tokenVisible ? "🙈" : "👁️"}
+                {normalizedNamePreview ? (
+                  <Text style={styles.hint}>
+                    ID: <Text style={styles.hintMono}>{normalizedNamePreview}</Text>
                   </Text>
-                </Pressable>
+                ) : null}
               </View>
 
-              <View style={styles.tokenActions}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.tokenActionButton,
-                    pressed && styles.tokenActionButtonPressed,
-                  ]}
-                  onPress={handlePaste}
-                >
-                  <Text style={styles.tokenActionText}>Paste</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.tokenActionButton,
-                    !bearerToken && styles.tokenActionButtonDisabled,
-                    pressed && styles.tokenActionButtonPressed,
-                  ]}
-                  onPress={handleCopy}
-                  disabled={!bearerToken}
-                >
-                  <Text style={styles.tokenActionText}>
-                    {copyFeedback ? "Copied!" : "Copy"}
-                  </Text>
-                </Pressable>
+              <View style={styles.section}>
+                <Text style={styles.label}>MCP Server URL</Text>
+                <TextInput
+                  style={styles.input}
+                  value={serverUrl}
+                  onChangeText={setServerUrl}
+                  placeholder="https://..."
+                  placeholderTextColor="#AEAEB2"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+                <Text style={styles.hint}>
+                  Streamable HTTP endpoint for the MCP server
+                </Text>
               </View>
 
-              <Text style={styles.hint}>
-                Sent as{" "}
-                <Text style={styles.hintMono}>Authorization: Bearer …</Text> on
-                every request. Newlines are stripped automatically.
-              </Text>
-            </View>
+              {hasOAuthToken && (
+                <View style={styles.oauthBadge}>
+                  <Text style={styles.oauthBadgeText}>Authenticated via OAuth</Text>
+                  <Text style={styles.oauthBadgeHint}>
+                    Tap {isEditing ? "Save" : "Add"} to re-authenticate
+                  </Text>
+                </View>
+              )}
+
+              <Pressable
+                style={styles.advancedToggle}
+                onPress={() => setAdvancedExpanded((v) => !v)}
+              >
+                <Text style={styles.advancedToggleText}>Advanced</Text>
+                <Text style={styles.advancedChevron}>
+                  {advancedExpanded ? "▲" : "▼"}
+                </Text>
+              </Pressable>
+
+              {advancedExpanded && (
+                <View style={styles.advancedSection}>
+                  <Text style={styles.label}>Bearer Token</Text>
+
+                  <View style={styles.tokenInputRow}>
+                    <TextInput
+                      style={[styles.input, styles.tokenInput]}
+                      value={bearerToken}
+                      onChangeText={handleTokenChange}
+                      placeholder="Optional JWT or access token..."
+                      placeholderTextColor="#AEAEB2"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      secureTextEntry={!tokenVisible}
+                      multiline={false}
+                    />
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.tokenIconButton,
+                        pressed && styles.tokenIconButtonPressed,
+                      ]}
+                      onPress={() => setTokenVisible((v) => !v)}
+                    >
+                      <Text style={styles.tokenIconText}>
+                        {tokenVisible ? "🙈" : "👁️"}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.tokenActions}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.tokenActionButton,
+                        pressed && styles.tokenActionButtonPressed,
+                      ]}
+                      onPress={handlePaste}
+                    >
+                      <Text style={styles.tokenActionText}>Paste</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.tokenActionButton,
+                        !bearerToken && styles.tokenActionButtonDisabled,
+                        pressed && styles.tokenActionButtonPressed,
+                      ]}
+                      onPress={handleCopy}
+                      disabled={!bearerToken}
+                    >
+                      <Text style={styles.tokenActionText}>
+                        {copyFeedback ? "Copied!" : "Copy"}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <Text style={styles.hint}>
+                    Sent as{" "}
+                    <Text style={styles.hintMono}>Authorization: Bearer …</Text> on
+                    every request. Newlines are stripped automatically.
+                  </Text>
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
 
@@ -317,24 +393,45 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.connectButton,
-              (!name.trim() || !serverUrl.trim() || isConnecting) && styles.connectButtonDisabled,
-              pressed && styles.connectButtonPressed,
-            ]}
-            onPress={handleSave}
-            disabled={!name.trim() || !serverUrl.trim() || isConnecting}
-          >
-            {isConnecting ? (
-              <View style={styles.connectingRow}>
-                <ActivityIndicator color="#FFFFFF" size="small" />
-                <Text style={styles.connectingLabel}>{connectingLabel}</Text>
-              </View>
-            ) : (
-              <Text style={styles.connectButtonText}>{isEditing ? "Save" : "Add"}</Text>
-            )}
-          </Pressable>
+          {pendingOAuth ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.connectButton,
+                (!callbackUrl.trim() || isConnecting) && styles.connectButtonDisabled,
+                pressed && styles.connectButtonPressed,
+              ]}
+              onPress={handleCompleteOAuth}
+              disabled={!callbackUrl.trim() || isConnecting}
+            >
+              {isConnecting ? (
+                <View style={styles.connectingRow}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text style={styles.connectingLabel}>{connectingLabel}</Text>
+                </View>
+              ) : (
+                <Text style={styles.connectButtonText}>Complete Sign-in</Text>
+              )}
+            </Pressable>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [
+                styles.connectButton,
+                (!name.trim() || !serverUrl.trim() || isConnecting) && styles.connectButtonDisabled,
+                pressed && styles.connectButtonPressed,
+              ]}
+              onPress={handleSave}
+              disabled={!name.trim() || !serverUrl.trim() || isConnecting}
+            >
+              {isConnecting ? (
+                <View style={styles.connectingRow}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text style={styles.connectingLabel}>{connectingLabel}</Text>
+                </View>
+              ) : (
+                <Text style={styles.connectButtonText}>{isEditing ? "Save" : "Add"}</Text>
+              )}
+            </Pressable>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -533,5 +630,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#4CAF50",
     marginTop: 2,
+  },
+  callbackSection: {
+    gap: 14,
+  },
+  callbackTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1C1C1E",
+  },
+  callbackBody: {
+    fontSize: 14,
+    color: "#636366",
+    lineHeight: 20,
+  },
+  callbackInput: {
+    minHeight: 80,
+    textAlignVertical: "top",
+    paddingTop: 12,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 13,
+  },
+  callbackError: {
+    fontSize: 13,
+    color: "#FF3B30",
+    lineHeight: 18,
+  },
+  tryAgainButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+  },
+  tryAgainButtonPressed: {
+    opacity: 0.5,
+  },
+  tryAgainText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0A84FF",
   },
 });

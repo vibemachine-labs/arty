@@ -16,11 +16,23 @@ import {
   saveMcpTokenEndpoint,
 } from "./secure-storage";
 
+export interface McpOAuthPendingState {
+  extensionId: string;
+  codeVerifier: string;
+  redirectUri: string;
+  clientId: string;
+  tokenEndpoint: string;
+}
+
+export type McpOAuthFlowResult =
+  | { type: "success"; accessToken: string; refreshToken?: string }
+  | { type: "needs_manual_callback"; pendingState: McpOAuthPendingState };
+
 export async function performMcpOAuthFlow(
   extensionId: string,
   resourceMetadataUrl: string,
   connectorName?: string,
-): Promise<{ accessToken: string; refreshToken?: string }> {
+): Promise<McpOAuthFlowResult> {
   log.info(
     "[mcp_oauth] Starting OAuth flow",
     {},
@@ -75,29 +87,93 @@ export async function performMcpOAuthFlow(
   );
   const result = await request.promptAsync(discovery);
 
-  if (result.type !== "success" || !result.params.code) {
-    throw new Error(
-      result.type === "cancel" ? "Sign-in was cancelled." : "OAuth sign-in failed.",
+  if (result.type === "success" && result.params.code) {
+    log.info(
+      "[mcp_oauth] Step 6: exchanging code for token",
+      {},
+      { connector_name: connectorName },
     );
+    const tokens = await exchangeAndStore(
+      result.params.code,
+      clientId,
+      redirectUri,
+      request.codeVerifier ?? "",
+      oauthMeta.tokenEndpoint,
+      extensionId,
+      connectorName,
+    );
+    return { type: "success", ...tokens };
+  }
+
+  // Browser was dismissed or redirect wasn't intercepted — surface manual paste UI
+  log.info(
+    "[mcp_oauth] Browser closed without redirect, returning manual callback state",
+    {},
+    { connector_name: connectorName, result_type: result.type },
+  );
+  return {
+    type: "needs_manual_callback",
+    pendingState: {
+      extensionId,
+      codeVerifier: request.codeVerifier ?? "",
+      redirectUri,
+      clientId,
+      tokenEndpoint: oauthMeta.tokenEndpoint,
+    },
+  };
+}
+
+export async function completeMcpOAuthFromCallbackUrl(
+  callbackUrl: string,
+  pendingState: McpOAuthPendingState,
+): Promise<{ accessToken: string; refreshToken?: string }> {
+  const questionIdx = callbackUrl.indexOf("?");
+  if (questionIdx === -1) {
+    throw new Error("No authorization code found in that URL.");
+  }
+  const params = new URLSearchParams(callbackUrl.slice(questionIdx + 1));
+  const code = params.get("code");
+  if (!code) {
+    throw new Error("No authorization code found in that URL.");
   }
 
   log.info(
-    "[mcp_oauth] Step 6: exchanging code for token",
+    "[mcp_oauth] Completing OAuth from pasted callback URL",
     {},
-    { connector_name: connectorName },
+    { extension_id: pendingState.extensionId },
   );
+
+  return exchangeAndStore(
+    code,
+    pendingState.clientId,
+    pendingState.redirectUri,
+    pendingState.codeVerifier,
+    pendingState.tokenEndpoint,
+    pendingState.extensionId,
+  );
+}
+
+async function exchangeAndStore(
+  code: string,
+  clientId: string,
+  redirectUri: string,
+  codeVerifier: string,
+  tokenEndpoint: string,
+  extensionId: string,
+  connectorName?: string,
+): Promise<{ accessToken: string; refreshToken?: string }> {
   const tokenResponse = await AuthSession.exchangeCodeAsync(
     {
-      code: result.params.code,
+      code,
       clientId,
       redirectUri,
-      extraParams: { code_verifier: request.codeVerifier ?? "" },
+      extraParams: { code_verifier: codeVerifier },
     },
-    { tokenEndpoint: oauthMeta.tokenEndpoint },
+    { tokenEndpoint },
   );
 
   await saveMcpBearerToken(extensionId, tokenResponse.accessToken);
-  await saveMcpTokenEndpoint(extensionId, oauthMeta.tokenEndpoint);
+  await saveMcpTokenEndpoint(extensionId, tokenEndpoint);
   if (tokenResponse.refreshToken) {
     await saveMcpRefreshToken(extensionId, tokenResponse.refreshToken);
   }

@@ -8,7 +8,7 @@ An open-source voice assistant for iOS that connects to your data and the web.
 **Current features**:
 
 * Voice interaction via OpenAI Realtime API  (note: secure API key storage in iOS keychain)
-* Connectors: DeepWiki MCP, Google Drive, GitHub, Hugging Face Papers, Hacker News, Web Search
+* Connectors: DeepWiki MCP, Google Drive, GitHub, Hugging Face Papers, Hacker News, Web Search, **MCP** *(user-defined; can be enabled in settings)*
 
 **Roadmap**:
 
@@ -354,7 +354,7 @@ All connectors use statically defined tools with explicit function definitions, 
 
 ### MCP Support
 
-Not yet implemented since all tools are currently local. Future versions will add MCP server support via cloud or local tunnel connections.
+**MCP** *(can be enabled in settings)*: Connects to external MCP servers via a streamable HTTP endpoint. The MCP connector includes a configuration UI where you specify a Name, MCP Server URL (the HTTP endpoint), and an optional Bearer Token for authentication. The Bearer Token is sent as an `Authorization: Bearer` header on every request. The connector can be enabled or disabled in settings; when disabled, MCP features are hidden.
 
 ### Web Search
 
@@ -372,7 +372,6 @@ OpenAI is currently the only supported backend. Adding support for multiple prov
 1. Improve text mode support
 1. Investigate async voice processing to reduce cost
 1. Add support for alternative voice providers ([Unmute.sh](https://unmute.sh/), [Speaches.ai](https://speaches.ai), self-hosted)
-1. Remote MCP integration
 1. TypeScript MCP plugin support
 
 ## 🤝 How You Can Help

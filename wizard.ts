@@ -183,6 +183,12 @@ const BUILD_OPTIONS: BuildOption[] = [
     command: "eas build --platform ios --profile production --non-interactive && eas submit --platform ios",
     description: "Build and submit iOS app to App Store",
   },
+  {
+    name: "Open in Xcode",
+    flag: "open-xcode",
+    command: "xed ios",
+    description: "Open iOS project in Xcode",
+  },
 ];
 
 async function executeCommand(command: string): Promise<number> {

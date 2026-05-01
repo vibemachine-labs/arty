@@ -34,14 +34,19 @@ export async function probeMcpServer(
     headers["Authorization"] = `Bearer ${bearerToken}`;
   }
 
+  const sanitizedHeaders = Object.fromEntries(
+    Object.entries(headers).map(([k, v]) =>
+      k.toLowerCase() === "authorization" ? [k, "[REDACTED]"] : [k, v]
+    )
+  );
   log.info(
     "[mcp_extensions] Step 1: sending request",
-    { allowSensitiveLogging: true },
+    {},
     {
       connector_name: connectorName,
       method: "POST",
       server_url: serverUrl,
-      request_headers: headers,
+      request_headers: sanitizedHeaders,
     }
   );
 

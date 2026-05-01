@@ -853,12 +853,12 @@ export async function deleteMcpExtension(id: string): Promise<void> {
 }
 
 export async function saveMcpBearerToken(id: string, token: string): Promise<void> {
-  await SecureStore.setItemAsync(`${MCP_TOKEN_PREFIX}${id}`, token);
+  await setCachedValue(`${MCP_TOKEN_PREFIX}${id}`, token);
 }
 
 export async function getMcpBearerToken(id: string): Promise<string | null> {
   try {
-    return await SecureStore.getItemAsync(`${MCP_TOKEN_PREFIX}${id}`);
+    return await getCachedValue(`${MCP_TOKEN_PREFIX}${id}`);
   } catch {
     return null;
   }
@@ -866,7 +866,7 @@ export async function getMcpBearerToken(id: string): Promise<string | null> {
 
 export async function deleteMcpBearerToken(id: string): Promise<void> {
   try {
-    await SecureStore.deleteItemAsync(`${MCP_TOKEN_PREFIX}${id}`);
+    await deleteCachedValue(`${MCP_TOKEN_PREFIX}${id}`);
   } catch {
     // token may not exist
   }

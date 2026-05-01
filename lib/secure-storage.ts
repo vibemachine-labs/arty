@@ -770,6 +770,64 @@ export async function hasContext7ApiKey(): Promise<boolean> {
   }
 }
 
+// MCP Extensions
+
+export interface McpExtensionRecord {
+  id: string;
+  name: string;
+  serverUrl: string;
+}
+
+const MCP_EXTENSIONS_KEY = "VIBEMACHINE_MCP_EXTENSIONS";
+const MCP_TOKEN_PREFIX = "VIBEMACHINE_MCP_TOKEN_";
+
+export async function getMcpExtensions(): Promise<McpExtensionRecord[]> {
+  try {
+    const raw = await AsyncStorage.getItem(MCP_EXTENSIONS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as McpExtensionRecord[];
+  } catch (err) {
+    log.error("❌ Failed to load MCP extensions", {}, { error: (err as Error).message });
+    return [];
+  }
+}
+
+export async function saveMcpExtensions(extensions: McpExtensionRecord[]): Promise<void> {
+  await AsyncStorage.setItem(MCP_EXTENSIONS_KEY, JSON.stringify(extensions));
+}
+
+export async function addMcpExtension(extension: McpExtensionRecord): Promise<void> {
+  const existing = await getMcpExtensions();
+  const filtered = existing.filter((e) => e.id !== extension.id);
+  await saveMcpExtensions([...filtered, extension]);
+}
+
+export async function deleteMcpExtension(id: string): Promise<void> {
+  const existing = await getMcpExtensions();
+  await saveMcpExtensions(existing.filter((e) => e.id !== id));
+  await deleteMcpBearerToken(id);
+}
+
+export async function saveMcpBearerToken(id: string, token: string): Promise<void> {
+  await SecureStore.setItemAsync(`${MCP_TOKEN_PREFIX}${id}`, token);
+}
+
+export async function getMcpBearerToken(id: string): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(`${MCP_TOKEN_PREFIX}${id}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteMcpBearerToken(id: string): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(`${MCP_TOKEN_PREFIX}${id}`);
+  } catch {
+    // token may not exist
+  }
+}
+
 // Pydantic Logfire Enabled State Functions
 // Note: These use AsyncStorage, not SecureStore, so no caching is needed
 

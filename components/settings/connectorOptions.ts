@@ -9,7 +9,7 @@ export type ConnectorId =
   | "language_lesson"
   | "github_legacy"
   | "gdrive_legacy"
-  | "mcp";
+;
 
 export type ConnectorOption = {
   id: ConnectorId;
@@ -90,12 +90,5 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     icon: "🔧",
     backgroundColor: "#FFF8EF",
     iconBackgroundColor: "#FFF3E6",
-  },
-  {
-    id: "mcp",
-    name: "MCP",
-    icon: "🔌",
-    backgroundColor: "#F0FFF4",
-    iconBackgroundColor: "#DCFFE8",
   },
 ];

@@ -16,6 +16,7 @@ import { ConfigureTranscription } from "../components/settings/ConfigureTranscri
 import { ConfigureVad } from "../components/settings/ConfigureVad";
 import { ConfigureVoice } from "../components/settings/ConfigureVoice";
 import { ConnectorsConfig } from "../components/settings/ConnectorsConfig";
+import { McpExtensionsScreen } from "../components/settings/McpExtensionsScreen";
 import { DeveloperMode } from "../components/ui/DeveloperMode";
 import { HamburgerButton } from "../components/ui/HamburgerButton";
 import {
@@ -101,6 +102,7 @@ export default function Index() {
   const [apiKeyConfigVisible, setApiKeyConfigVisible] = useState(false);
   const [developerModeVisible, setDeveloperModeVisible] = useState(false);
   const [connectorsConfigVisible, setConnectorsConfigVisible] = useState(false);
+  const [mcpExtensionsVisible, setMcpExtensionsVisible] = useState(false);
   const [advancedConfigVisible, setAdvancedConfigVisible] = useState(false);
   const [configureToolsVisible, setConfigureToolsVisible] = useState(false);
   const [baseConnectionOptions, setBaseConnectionOptions] =
@@ -403,6 +405,11 @@ export default function Index() {
         return;
       }
 
+      if (section.id === "mcp_extensions") {
+        setMcpExtensionsVisible(true);
+        return;
+      }
+
       if (section.id === "apiKey") {
         setApiKeyConfigVisible(true);
         return;
@@ -599,6 +606,10 @@ export default function Index() {
       <ConnectorsConfig
         visible={connectorsConfigVisible}
         onClose={() => setConnectorsConfigVisible(false)}
+      />
+      <McpExtensionsScreen
+        visible={mcpExtensionsVisible}
+        onClose={() => setMcpExtensionsVisible(false)}
       />
       <ConfigureApiKeyScreen
         visible={apiKeyConfigVisible}

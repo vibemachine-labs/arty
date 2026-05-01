@@ -11,127 +11,74 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { log } from "../../lib/logger";
+import * as Clipboard from "expo-clipboard";
+import { probeMcpServer } from "../../modules/vm-webrtc/src/mcp_client/extensions";
+import {
+  addMcpExtension,
+  saveMcpBearerToken,
+} from "../../lib/secure-storage";
 
 export interface McpConnectorConfigProps {
   visible: boolean;
   onClose: () => void;
+  onSave?: () => void;
 }
 
 export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
   visible,
   onClose,
+  onSave,
 }) => {
   const [name, setName] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [bearerToken, setBearerToken] = useState("");
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [tokenVisible, setTokenVisible] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
+
+  const sanitizeToken = (value: string) => value.replace(/[\r\n\t ]+/g, "");
+
+  const handleTokenChange = (value: string) => {
+    setBearerToken(sanitizeToken(value));
+  };
+
+  const handlePaste = async () => {
+    const text = await Clipboard.getStringAsync();
+    if (text) setBearerToken(sanitizeToken(text));
+  };
+
+  const handleCopy = async () => {
+    if (!bearerToken) return;
+    await Clipboard.setStringAsync(bearerToken);
+    setCopyFeedback(true);
+    setTimeout(() => setCopyFeedback(false), 1500);
+  };
 
   const handleConnect = async () => {
     setIsConnecting(true);
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-      };
-      if (bearerToken.trim()) {
-        headers["Authorization"] = `Bearer ${bearerToken.trim()}`;
-      }
+      const token = bearerToken.trim() || undefined;
+      const result = await probeMcpServer(serverUrl, token, name);
 
-      const requestBody = {
-        jsonrpc: "2.0",
-        method: "initialize",
-        params: {
-          protocolVersion: "2024-11-05",
-          capabilities: {},
-          clientInfo: { name: "arty", version: "1.0.0" },
-        },
-        id: 1,
-      };
-      const requestBodyStr = JSON.stringify(requestBody);
-
-      log.info(
-        "[mcp_connector] Step 1: sending request",
-        { allowSensitiveLogging: true },
-        {
-          connector_name: name,
-          method: "POST",
-          server_url: serverUrl,
-          request_headers: headers,
-          request_body: requestBody,
-        }
-      );
-
-      let response: Response;
-      try {
-        response = await fetch(serverUrl, {
-          method: "POST",
-          headers,
-          body: requestBodyStr,
-        });
-      } catch (fetchError: any) {
-        log.error(
-          "[mcp_connector] Step 1: network error reaching MCP server",
-          {},
-          { connector_name: name, server_url: serverUrl, error: fetchError?.message }
-        );
-        return;
-      }
-
-      const responseHeaders: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-
-      let responseBody: string | null = null;
-      try {
-        responseBody = await response.text();
-      } catch {
-        responseBody = null;
-      }
-
-      const logAttrs = {
-        connector_name: name,
-        server_url: serverUrl,
-        status_code: response.status,
-        status_text: response.statusText,
-        response_headers: responseHeaders,
-        response_body_snippet: responseBody?.slice(0, 500) ?? null,
-        www_authenticate: responseHeaders["www-authenticate"] ?? null,
-        resource_metadata_url: null as string | null,
-      };
-
-      // Extract resource_metadata from WWW-Authenticate if present
-      const wwwAuth = responseHeaders["www-authenticate"] ?? "";
-      const resourceMetadataMatch = wwwAuth.match(/resource_metadata="([^"]+)"/);
-      if (resourceMetadataMatch) {
-        logAttrs.resource_metadata_url = resourceMetadataMatch[1];
-      }
-
-      if (response.status === 401) {
-        log.info(
-          "[mcp_connector] Step 1: got 401 — server requires auth (expected)",
-          { allowSensitiveLogging: true },
-          logAttrs
-        );
-      } else {
-        log.info(
-          "[mcp_connector] Step 1: server responded",
-          { allowSensitiveLogging: true },
-          logAttrs
-        );
+      if (result.success) {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        await addMcpExtension({ id, name, serverUrl });
+        if (token) await saveMcpBearerToken(id, token);
+        resetAndClose();
+        onSave?.();
       }
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const handleCancel = () => {
+  const resetAndClose = () => {
     setName("");
     setServerUrl("");
     setBearerToken("");
     setAdvancedExpanded(false);
+    setTokenVisible(false);
     onClose();
   };
 
@@ -140,14 +87,14 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
       animationType="slide"
       presentationStyle="formSheet"
       visible={visible}
-      onRequestClose={handleCancel}
+      onRequestClose={resetAndClose}
     >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Add MCP Connector</Text>
+          <Text style={styles.headerTitle}>Add MCP Extension</Text>
         </View>
 
         <ScrollView
@@ -161,7 +108,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="Enter connector name..."
+              placeholder="Enter extension name..."
               placeholderTextColor="#AEAEB2"
               autoCapitalize="none"
               autoCorrect={false}
@@ -198,20 +145,61 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
           {advancedExpanded && (
             <View style={styles.advancedSection}>
               <Text style={styles.label}>Bearer Token</Text>
-              <TextInput
-                style={styles.input}
-                value={bearerToken}
-                onChangeText={setBearerToken}
-                placeholder="Optional JWT or access token..."
-                placeholderTextColor="#AEAEB2"
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-              />
+
+              <View style={styles.tokenInputRow}>
+                <TextInput
+                  style={[styles.input, styles.tokenInput]}
+                  value={bearerToken}
+                  onChangeText={handleTokenChange}
+                  placeholder="Optional JWT or access token..."
+                  placeholderTextColor="#AEAEB2"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry={!tokenVisible}
+                  multiline={false}
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.tokenIconButton,
+                    pressed && styles.tokenIconButtonPressed,
+                  ]}
+                  onPress={() => setTokenVisible((v) => !v)}
+                >
+                  <Text style={styles.tokenIconText}>
+                    {tokenVisible ? "🙈" : "👁️"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.tokenActions}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.tokenActionButton,
+                    pressed && styles.tokenActionButtonPressed,
+                  ]}
+                  onPress={handlePaste}
+                >
+                  <Text style={styles.tokenActionText}>Paste</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.tokenActionButton,
+                    !bearerToken && styles.tokenActionButtonDisabled,
+                    pressed && styles.tokenActionButtonPressed,
+                  ]}
+                  onPress={handleCopy}
+                  disabled={!bearerToken}
+                >
+                  <Text style={styles.tokenActionText}>
+                    {copyFeedback ? "Copied!" : "Copy"}
+                  </Text>
+                </Pressable>
+              </View>
+
               <Text style={styles.hint}>
                 Sent as{" "}
                 <Text style={styles.hintMono}>Authorization: Bearer …</Text> on
-                every request
+                every request. Newlines are stripped automatically.
               </Text>
             </View>
           )}
@@ -223,7 +211,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
               styles.cancelButton,
               pressed && styles.cancelButtonPressed,
             ]}
-            onPress={handleCancel}
+            onPress={resetAndClose}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>
@@ -231,7 +219,8 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
           <Pressable
             style={({ pressed }) => [
               styles.connectButton,
-              (!name.trim() || !serverUrl.trim() || isConnecting) && styles.connectButtonDisabled,
+              (!name.trim() || !serverUrl.trim() || isConnecting) &&
+                styles.connectButtonDisabled,
               pressed && styles.connectButtonPressed,
             ]}
             onPress={handleConnect}
@@ -309,7 +298,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderTopWidth: 1,
     borderTopColor: "#E5E5EA",
-    marginBottom: 0,
   },
   advancedToggleText: {
     fontSize: 15,
@@ -322,6 +310,54 @@ const styles = StyleSheet.create({
   },
   advancedSection: {
     marginBottom: 24,
+  },
+  tokenInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tokenInput: {
+    flex: 1,
+  },
+  tokenIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tokenIconButtonPressed: {
+    opacity: 0.6,
+  },
+  tokenIconText: {
+    fontSize: 18,
+  },
+  tokenActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  tokenActionButton: {
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E5EA",
+  },
+  tokenActionButtonDisabled: {
+    opacity: 0.4,
+  },
+  tokenActionButtonPressed: {
+    opacity: 0.6,
+  },
+  tokenActionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#0A84FF",
   },
   footer: {
     flexDirection: "row",

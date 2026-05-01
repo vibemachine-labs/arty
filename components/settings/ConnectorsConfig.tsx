@@ -47,7 +47,6 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
     useState(false);
   const [githubLegacyInfoVisible, setGithubLegacyInfoVisible] = useState(false);
   const [gdriveLegacyInfoVisible, setGDriveLegacyInfoVisible] = useState(false);
-
   const handleConnectorPress = (connectorId: ConnectorId) => {
     if (connectorId === "github") {
       setGithubConfigVisible(true);
@@ -194,6 +193,7 @@ export const ConnectorsConfig: React.FC<ConnectorsConfigProps> = ({
         visible={gdriveLegacyInfoVisible}
         onClose={() => setGDriveLegacyInfoVisible(false)}
       />
+
     </Modal>
   );
 };

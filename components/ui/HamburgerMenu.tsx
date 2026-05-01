@@ -45,11 +45,19 @@ export const MENU_SECTIONS: MenuSection[] = [
   },
   {
     id: "connectors",
-    title: "Configure Connectors",
+    title: "Extensions (One-off)",
     description: "Connect to GitHub, Drive, and more.",
     icon: "🔗",
     iconBackgroundColor: "#E8F5FF",
     backgroundColor: "#F0F9FF",
+  },
+  {
+    id: "mcp_extensions",
+    title: "Extensions (MCP)",
+    description: "Connect to any MCP-compatible server.",
+    icon: "🔌",
+    iconBackgroundColor: "#DCFFE8",
+    backgroundColor: "#F0FFF4",
   },
   {
     id: "advanced",

@@ -770,6 +770,108 @@ export async function hasContext7ApiKey(): Promise<boolean> {
   }
 }
 
+// MCP Extensions
+
+export interface McpExtensionRecord {
+  id: string;
+  name: string;
+  normalizedName: string;
+  serverUrl: string;
+  disabled?: boolean;
+}
+
+// "My Cool Server!" → "my_cool_server"
+export function toNormalizedName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+const RESERVED_GROUP_NAMES = new Set([
+  "hacker_news", "daily_papers", "web", "google_drive",
+  "deepwiki", "context7", "github", "language_lesson",
+  "github_legacy", "gdrive_legacy",
+]);
+
+export function uniqueNormalizedName(
+  base: string,
+  existingExtensions: McpExtensionRecord[],
+  excludeId?: string,
+): string {
+  const taken = new Set([
+    ...RESERVED_GROUP_NAMES,
+    ...existingExtensions
+      .filter((e) => e.id !== excludeId)
+      .map((e) => e.normalizedName),
+  ]);
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}_${n}`)) n++;
+  return `${base}_${n}`;
+}
+
+const MCP_EXTENSIONS_KEY = "VIBEMACHINE_MCP_EXTENSIONS";
+const MCP_TOKEN_PREFIX = "VIBEMACHINE_MCP_TOKEN_";
+
+export async function getMcpExtensions(): Promise<McpExtensionRecord[]> {
+  try {
+    const raw = await AsyncStorage.getItem(MCP_EXTENSIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as McpExtensionRecord[];
+
+    let needsSave = false;
+    for (const ext of parsed) {
+      if (!ext.normalizedName) {
+        ext.normalizedName = uniqueNormalizedName(toNormalizedName(ext.name), parsed, ext.id);
+        needsSave = true;
+      }
+    }
+    if (needsSave) await saveMcpExtensions(parsed);
+
+    return parsed;
+  } catch (err) {
+    log.error("❌ Failed to load MCP extensions", {}, { error: (err as Error).message });
+    return [];
+  }
+}
+
+export async function saveMcpExtensions(extensions: McpExtensionRecord[]): Promise<void> {
+  await AsyncStorage.setItem(MCP_EXTENSIONS_KEY, JSON.stringify(extensions));
+}
+
+export async function addMcpExtension(extension: McpExtensionRecord): Promise<void> {
+  const existing = await getMcpExtensions();
+  const filtered = existing.filter((e) => e.id !== extension.id);
+  await saveMcpExtensions([...filtered, extension]);
+}
+
+export async function deleteMcpExtension(id: string): Promise<void> {
+  const existing = await getMcpExtensions();
+  await saveMcpExtensions(existing.filter((e) => e.id !== id));
+  await deleteMcpBearerToken(id);
+}
+
+export async function saveMcpBearerToken(id: string, token: string): Promise<void> {
+  await setCachedValue(`${MCP_TOKEN_PREFIX}${id}`, token);
+}
+
+export async function getMcpBearerToken(id: string): Promise<string | null> {
+  try {
+    return await getCachedValue(`${MCP_TOKEN_PREFIX}${id}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteMcpBearerToken(id: string): Promise<void> {
+  try {
+    await deleteCachedValue(`${MCP_TOKEN_PREFIX}${id}`);
+  } catch {
+    // token may not exist
+  }
+}
+
 // Pydantic Logfire Enabled State Functions
 // Note: These use AsyncStorage, not SecureStore, so no caching is needed
 

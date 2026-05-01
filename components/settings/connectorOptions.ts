@@ -8,7 +8,8 @@ export type ConnectorId =
   | "daily_papers"
   | "language_lesson"
   | "github_legacy"
-  | "gdrive_legacy";
+  | "gdrive_legacy"
+;
 
 export type ConnectorOption = {
   id: ConnectorId;

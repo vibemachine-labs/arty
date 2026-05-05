@@ -183,10 +183,9 @@ const emit = (
     return;
   }
 
-  const applyRedaction =
-    redactionEnabled && options.allowSensitiveLogging !== true;
-  const safeMessage = applyRedaction ? sanitizeMessage(message) : message;
-  const safeArgs = applyRedaction ? sanitizeArgs(args) : args;
+  // Console always redacts — allowSensitiveLogging never bypasses console output.
+  const safeMessage = sanitizeMessage(message);
+  const safeArgs = sanitizeArgs(args);
 
   const timestamp = new Date().toISOString();
   const prefix = `[${LOG_PREFIX}][${level.toUpperCase()}][${timestamp}]`;
@@ -212,17 +211,23 @@ const emit = (
       break;
   }
 
-  // Send to logfire with log level as attribute (if enabled)
+  // Send to logfire with log level as attribute (if enabled).
+  // Logfire respects both redactionEnabled and allowSensitiveLogging.
   const emit2logfire = options.emit2logfire ?? true;
   if (emit2logfire) {
+    const applyRedactionForLogfire =
+      redactionEnabled && options.allowSensitiveLogging !== true;
+    const logfireMessage = applyRedactionForLogfire ? safeMessage : message;
+    const logfireArgs = applyRedactionForLogfire ? safeArgs : args;
+
     const attrs: Record<string, unknown> = {
       level,
       timestamp,
     };
 
     // Add any additional args as attributes
-    if (safeArgs.length > 0) {
-      safeArgs.forEach((arg, index) => {
+    if (logfireArgs.length > 0) {
+      logfireArgs.forEach((arg, index) => {
         if (arg && typeof arg === "object" && !Array.isArray(arg)) {
           Object.assign(attrs, arg);
         } else {
@@ -235,7 +240,7 @@ const emit = (
       attrs.is_native_logger = false;
     }
 
-    logfireEvent(safeMessage, attrs);
+    logfireEvent(logfireMessage, attrs);
   }
 };
 

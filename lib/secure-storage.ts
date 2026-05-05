@@ -980,8 +980,19 @@ export async function clearAllStoredSecrets(): Promise<void> {
     CONTEXT7_API_KEY,
   ];
 
+  // Add per-extension MCP SecureStore keys (bearer token + OAuth data) for every known extension
+  const mcpExtensions = await getMcpExtensions().catch(() => [] as McpExtensionRecord[]);
+  for (const ext of mcpExtensions) {
+    secureStoreKeys.push(
+      `${MCP_TOKEN_PREFIX}${ext.id}`,
+      `${MCP_CLIENT_ID_PREFIX}${ext.id}`,
+      `${MCP_REFRESH_TOKEN_PREFIX}${ext.id}`,
+      `${MCP_TOKEN_ENDPOINT_PREFIX}${ext.id}`,
+    );
+  }
+
   // Define all AsyncStorage keys that need to be deleted
-  const asyncStorageKeys = [LOGFIRE_ENABLED_KEY];
+  const asyncStorageKeys = [LOGFIRE_ENABLED_KEY, MCP_EXTENSIONS_KEY];
 
   try {
     // Log all keys that will be deleted BEFORE deletion

@@ -17,6 +17,7 @@ import * as Clipboard from "expo-clipboard";
 import { probeMcpServer } from "../../modules/vm-webrtc/src/mcp_client/extensions";
 import {
   addMcpExtension,
+  deleteMcpBearerToken,
   getMcpBearerToken,
   getMcpExtensions,
   getMcpRefreshToken,
@@ -102,13 +103,19 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setTimeout(() => setCopyFeedback(false), 1500);
   };
 
-  const persistExtension = async (id: string, manualToken?: string) => {
+  const persistExtension = async (
+    id: string,
+    manualToken?: string,
+    options?: { preserveExistingToken?: boolean },
+  ) => {
     const allExtensions = await getMcpExtensions();
     const normalizedName = uniqueNormalizedName(toNormalizedName(name), allExtensions, existingExtension?.id);
     const record: McpExtensionRecord = { id, name, normalizedName, serverUrl };
     await addMcpExtension(record);
     if (manualToken) {
       await saveMcpBearerToken(id, manualToken);
+    } else if (!options?.preserveExistingToken) {
+      await deleteMcpBearerToken(id);
     }
     DeviceEventEmitter.emit(CONNECTOR_SETTINGS_CHANGED_EVENT);
     onSave?.(record);
@@ -138,7 +145,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
         try {
           const oauthResult = await performMcpOAuthFlow(id, result.resourceMetadataUrl, name);
           if (oauthResult.type === "success") {
-            await persistExtension(id);
+            await persistExtension(id, undefined, { preserveExistingToken: true });
           } else {
             setPendingOAuth(oauthResult.pendingState);
             setPendingExtensionId(id);
@@ -173,7 +180,7 @@ export const McpConnectorConfig: React.FC<McpConnectorConfigProps> = ({
     setConnectingLabel("Completing sign-in…");
     try {
       await completeMcpOAuthFromCallbackUrl(callbackUrl.trim(), pendingOAuth);
-      await persistExtension(pendingExtensionId);
+      await persistExtension(pendingExtensionId, undefined, { preserveExistingToken: true });
     } catch (err: any) {
       setCallbackError(err?.message ?? "Failed to complete sign-in. Check the URL and try again.");
     } finally {

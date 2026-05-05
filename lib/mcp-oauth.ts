@@ -105,6 +105,16 @@ export async function performMcpOAuthFlow(
     return { type: "success", ...tokens };
   }
 
+  if (result.type === "error") {
+    const detail = (result as any).error_description ?? (result as any).error ?? JSON.stringify((result as any).params ?? result);
+    log.error(
+      "[mcp_oauth] OAuth server returned an error",
+      {},
+      { connector_name: connectorName, result },
+    );
+    throw new Error(`OAuth error: ${detail}`);
+  }
+
   // Browser was dismissed or redirect wasn't intercepted — surface manual paste UI
   log.info(
     "[mcp_oauth] Browser closed without redirect, returning manual callback state",

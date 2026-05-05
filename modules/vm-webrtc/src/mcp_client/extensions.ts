@@ -157,9 +157,17 @@ export async function fetchResourceMetadata(
   }
 
   const json = await response.json();
-  const resource: string = json.resource ?? resourceMetadataUrl;
-  const authorizationServers: string[] = json.authorization_servers ?? [];
-
+  const resource: string = typeof json.resource === "string" ? json.resource : resourceMetadataUrl;
+  const rawServers = json.authorization_servers;
+  if (!Array.isArray(rawServers)) {
+    throw new Error("Resource metadata field 'authorization_servers' must be an array");
+  }
+  const authorizationServers: string[] = rawServers.map((s: unknown, i: number) => {
+    if (typeof s !== "string") {
+      throw new Error(`Resource metadata field 'authorization_servers[${i}]' must be a string`);
+    }
+    return s;
+  });
   if (authorizationServers.length === 0) {
     throw new Error("No authorization_servers in resource metadata");
   }
@@ -194,15 +202,20 @@ export async function fetchOAuthServerMetadata(
   }
 
   const json = await response.json();
+  if (typeof json.authorization_endpoint !== "string") {
+    throw new Error("OAuth server metadata field 'authorization_endpoint' must be a string");
+  }
+  if (typeof json.token_endpoint !== "string") {
+    throw new Error("OAuth server metadata field 'token_endpoint' must be a string");
+  }
+  if (json.registration_endpoint != null && typeof json.registration_endpoint !== "string") {
+    throw new Error("OAuth server metadata field 'registration_endpoint' must be a string");
+  }
   const result: McpOAuthServerMetadata = {
     authorizationEndpoint: json.authorization_endpoint,
     tokenEndpoint: json.token_endpoint,
     registrationEndpoint: json.registration_endpoint ?? null,
   };
-
-  if (!result.authorizationEndpoint || !result.tokenEndpoint) {
-    throw new Error("OAuth server metadata missing authorization_endpoint or token_endpoint");
-  }
 
   log.info(
     "[mcp_extensions] Step 3: got OAuth server metadata",
@@ -242,11 +255,10 @@ export async function registerOAuthClient(
   }
 
   const json = await response.json();
-  const clientId: string = json.client_id;
-
-  if (!clientId) {
-    throw new Error("Client registration response missing client_id");
+  if (typeof json.client_id !== "string" || !json.client_id) {
+    throw new Error("Client registration response field 'client_id' must be a non-empty string");
   }
+  const clientId: string = json.client_id;
 
   log.info(
     "[mcp_extensions] Step 4: registered OAuth client",

@@ -718,6 +718,18 @@ async function fetchAndCacheUserExtensionTools(
   );
 }
 
+const pendingTokenRefreshes = new Map<string, Promise<string | null>>();
+
+async function refreshTokenSingleFlight(ext: McpExtensionRecord): Promise<string | null> {
+  const existing = pendingTokenRefreshes.get(ext.id);
+  if (existing) return existing;
+  const promise = refreshMcpAccessToken(ext.id, ext.name).finally(() => {
+    pendingTokenRefreshes.delete(ext.id);
+  });
+  pendingTokenRefreshes.set(ext.id, promise);
+  return promise;
+}
+
 async function registerUserExtensionToolsFromCache(
   ext: McpExtensionRecord,
   client: MCPClient,
@@ -747,7 +759,7 @@ async function registerUserExtensionToolsFromCache(
           {},
           { name: ext.name, toolName },
         );
-        const newToken = await refreshMcpAccessToken(ext.id, ext.name);
+        const newToken = await refreshTokenSingleFlight(ext);
         if (newToken) {
           client.reset(newToken);
           try {
@@ -784,7 +796,7 @@ async function fetchWithTokenRefresh(
       {},
       { name: ext.name },
     );
-    const newToken = await refreshMcpAccessToken(ext.id, ext.name);
+    const newToken = await refreshTokenSingleFlight(ext);
     if (newToken) {
       client.reset(newToken);
       try {

@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
+  DeviceEventEmitter,
   Modal,
   Pressable,
   SafeAreaView,
@@ -13,6 +15,7 @@ import {
   getMcpExtensions,
   type McpExtensionRecord,
 } from "../../lib/secure-storage";
+import { MCP_REAUTH_REQUIRED_EVENT } from "../../modules/vm-webrtc/src/ToolkitManager";
 import { McpConnectorConfig } from "./McpConnectorConfig";
 import { McpExtensionDetailScreen } from "./McpExtensionDetailScreen";
 
@@ -29,15 +32,39 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
   const [extensions, setExtensions] = useState<McpExtensionRecord[]>([]);
   const [addVisible, setAddVisible] = useState(false);
   const [detailExtension, setDetailExtension] = useState<McpExtensionRecord | null>(null);
+  const [reauthExtension, setReauthExtension] = useState<McpExtensionRecord | null>(null);
+  const extensionsRef = useRef<McpExtensionRecord[]>([]);
 
   const loadExtensions = useCallback(async () => {
     const list = await getMcpExtensions();
     setExtensions(list);
+    extensionsRef.current = list;
   }, []);
 
   useEffect(() => {
     if (visible) loadExtensions();
   }, [visible, loadExtensions]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(
+      MCP_REAUTH_REQUIRED_EVENT,
+      ({ id, name }: { id: string; name: string }) => {
+        const ext = extensionsRef.current.find((e) => e.id === id);
+        Alert.alert(
+          `"${name}" needs to sign in again`,
+          "Your session has expired.",
+          [
+            { text: "Later", style: "cancel" },
+            {
+              text: "Re-authenticate",
+              onPress: () => setReauthExtension(ext ?? { id, name, normalizedName: "", serverUrl: "" }),
+            },
+          ],
+        );
+      },
+    );
+    return () => sub.remove();
+  }, []);
 
   const handleRemove = (id: string) => {
     setDetailExtension(null);
@@ -149,6 +176,16 @@ export const McpExtensionsScreen: React.FC<McpExtensionsScreenProps> = ({
           onUpdated={handleUpdated}
         />
       )}
+
+      <McpConnectorConfig
+        visible={reauthExtension !== null}
+        existingExtension={reauthExtension ?? undefined}
+        onClose={() => setReauthExtension(null)}
+        onSave={() => {
+          setReauthExtension(null);
+          loadExtensions();
+        }}
+      />
     </Modal>
   );
 };

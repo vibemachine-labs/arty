@@ -813,6 +813,9 @@ export function uniqueNormalizedName(
 
 const MCP_EXTENSIONS_KEY = "VIBEMACHINE_MCP_EXTENSIONS";
 const MCP_TOKEN_PREFIX = "VIBEMACHINE_MCP_TOKEN_";
+const MCP_CLIENT_ID_PREFIX = "VIBEMACHINE_MCP_CLIENT_ID_";
+const MCP_REFRESH_TOKEN_PREFIX = "VIBEMACHINE_MCP_REFRESH_TOKEN_";
+const MCP_TOKEN_ENDPOINT_PREFIX = "VIBEMACHINE_MCP_TOKEN_ENDPOINT_";
 
 export async function getMcpExtensions(): Promise<McpExtensionRecord[]> {
   try {
@@ -850,6 +853,7 @@ export async function deleteMcpExtension(id: string): Promise<void> {
   const existing = await getMcpExtensions();
   await saveMcpExtensions(existing.filter((e) => e.id !== id));
   await deleteMcpBearerToken(id);
+  await deleteMcpOAuthData(id);
 }
 
 export async function saveMcpBearerToken(id: string, token: string): Promise<void> {
@@ -870,6 +874,50 @@ export async function deleteMcpBearerToken(id: string): Promise<void> {
   } catch {
     // token may not exist
   }
+}
+
+export async function saveMcpClientId(id: string, clientId: string): Promise<void> {
+  await setCachedValue(`${MCP_CLIENT_ID_PREFIX}${id}`, clientId);
+}
+
+export async function getMcpClientId(id: string): Promise<string | null> {
+  try {
+    return await getCachedValue(`${MCP_CLIENT_ID_PREFIX}${id}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveMcpRefreshToken(id: string, token: string): Promise<void> {
+  await setCachedValue(`${MCP_REFRESH_TOKEN_PREFIX}${id}`, token);
+}
+
+export async function getMcpRefreshToken(id: string): Promise<string | null> {
+  try {
+    return await getCachedValue(`${MCP_REFRESH_TOKEN_PREFIX}${id}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveMcpTokenEndpoint(id: string, url: string): Promise<void> {
+  await setCachedValue(`${MCP_TOKEN_ENDPOINT_PREFIX}${id}`, url);
+}
+
+export async function getMcpTokenEndpoint(id: string): Promise<string | null> {
+  try {
+    return await getCachedValue(`${MCP_TOKEN_ENDPOINT_PREFIX}${id}`);
+  } catch {
+    return null;
+  }
+}
+
+async function deleteMcpOAuthData(id: string): Promise<void> {
+  await Promise.allSettled([
+    deleteCachedValue(`${MCP_CLIENT_ID_PREFIX}${id}`),
+    deleteCachedValue(`${MCP_REFRESH_TOKEN_PREFIX}${id}`),
+    deleteCachedValue(`${MCP_TOKEN_ENDPOINT_PREFIX}${id}`),
+  ]);
 }
 
 // Pydantic Logfire Enabled State Functions
@@ -932,8 +980,19 @@ export async function clearAllStoredSecrets(): Promise<void> {
     CONTEXT7_API_KEY,
   ];
 
+  // Add per-extension MCP SecureStore keys (bearer token + OAuth data) for every known extension
+  const mcpExtensions = await getMcpExtensions().catch(() => [] as McpExtensionRecord[]);
+  for (const ext of mcpExtensions) {
+    secureStoreKeys.push(
+      `${MCP_TOKEN_PREFIX}${ext.id}`,
+      `${MCP_CLIENT_ID_PREFIX}${ext.id}`,
+      `${MCP_REFRESH_TOKEN_PREFIX}${ext.id}`,
+      `${MCP_TOKEN_ENDPOINT_PREFIX}${ext.id}`,
+    );
+  }
+
   // Define all AsyncStorage keys that need to be deleted
-  const asyncStorageKeys = [LOGFIRE_ENABLED_KEY];
+  const asyncStorageKeys = [LOGFIRE_ENABLED_KEY, MCP_EXTENSIONS_KEY];
 
   try {
     // Log all keys that will be deleted BEFORE deletion

@@ -1,5 +1,16 @@
 import { log } from "../../../../lib/logger";
 
+export interface McpResourceMetadata {
+  resource: string;
+  authorizationServers: string[];
+}
+
+export interface McpOAuthServerMetadata {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  registrationEndpoint: string | null;
+}
+
 export interface McpProbeResult {
   success: boolean;
   statusCode: number;
@@ -124,4 +135,136 @@ export async function probeMcpServer(
   );
 
   return result;
+}
+
+export async function fetchResourceMetadata(
+  resourceMetadataUrl: string,
+  connectorName?: string,
+): Promise<McpResourceMetadata> {
+  log.info(
+    "[mcp_extensions] Step 2: fetching resource metadata",
+    {},
+    { resource_metadata_url: resourceMetadataUrl, connector_name: connectorName },
+  );
+
+  const response = await fetch(resourceMetadataUrl, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Resource metadata fetch failed: ${response.status}`);
+  }
+
+  const json = await response.json();
+  const resource: string = typeof json.resource === "string" ? json.resource : resourceMetadataUrl;
+  const rawServers = json.authorization_servers;
+  if (!Array.isArray(rawServers)) {
+    throw new Error("Resource metadata field 'authorization_servers' must be an array");
+  }
+  const authorizationServers: string[] = rawServers.map((s: unknown, i: number) => {
+    if (typeof s !== "string") {
+      throw new Error(`Resource metadata field 'authorization_servers[${i}]' must be a string`);
+    }
+    return s;
+  });
+  if (authorizationServers.length === 0) {
+    throw new Error("No authorization_servers in resource metadata");
+  }
+
+  log.info(
+    "[mcp_extensions] Step 2: got resource metadata",
+    {},
+    { resource, authorization_servers: authorizationServers, connector_name: connectorName },
+  );
+
+  return { resource, authorizationServers };
+}
+
+export async function fetchOAuthServerMetadata(
+  authServerBaseUrl: string,
+  connectorName?: string,
+): Promise<McpOAuthServerMetadata> {
+  const url = `${authServerBaseUrl.replace(/\/$/, "")}/.well-known/oauth-authorization-server`;
+  log.info(
+    "[mcp_extensions] Step 3: fetching OAuth server metadata",
+    {},
+    { url, connector_name: connectorName },
+  );
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    throw new Error(`OAuth server metadata fetch failed: ${response.status}`);
+  }
+
+  const json = await response.json();
+  if (typeof json.authorization_endpoint !== "string") {
+    throw new Error("OAuth server metadata field 'authorization_endpoint' must be a string");
+  }
+  if (typeof json.token_endpoint !== "string") {
+    throw new Error("OAuth server metadata field 'token_endpoint' must be a string");
+  }
+  if (json.registration_endpoint != null && typeof json.registration_endpoint !== "string") {
+    throw new Error("OAuth server metadata field 'registration_endpoint' must be a string");
+  }
+  const result: McpOAuthServerMetadata = {
+    authorizationEndpoint: json.authorization_endpoint,
+    tokenEndpoint: json.token_endpoint,
+    registrationEndpoint: json.registration_endpoint ?? null,
+  };
+
+  log.info(
+    "[mcp_extensions] Step 3: got OAuth server metadata",
+    {},
+    { ...result, connector_name: connectorName },
+  );
+
+  return result;
+}
+
+export async function registerOAuthClient(
+  registrationEndpoint: string,
+  redirectUri: string,
+  connectorName?: string,
+): Promise<{ clientId: string }> {
+  log.info(
+    "[mcp_extensions] Step 4: registering OAuth client",
+    {},
+    { registration_endpoint: registrationEndpoint, redirect_uri: redirectUri, connector_name: connectorName },
+  );
+
+  const response = await fetch(registrationEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      client_name: "Arty",
+      redirect_uris: [redirectUri],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Client registration failed: ${response.status} ${body.slice(0, 200)}`);
+  }
+
+  const json = await response.json();
+  if (typeof json.client_id !== "string" || !json.client_id) {
+    throw new Error("Client registration response field 'client_id' must be a non-empty string");
+  }
+  const clientId: string = json.client_id;
+
+  log.info(
+    "[mcp_extensions] Step 4: registered OAuth client",
+    {},
+    { client_id: clientId, connector_name: connectorName },
+  );
+
+  return { clientId };
 }

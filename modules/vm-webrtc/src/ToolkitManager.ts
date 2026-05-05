@@ -6,6 +6,7 @@ import { DeviceEventEmitter } from "react-native";
 import toolkitGroupsData from "../toolkits/toolkitGroups.json";
 
 import { log } from "../../../lib/logger";
+import { refreshMcpAccessToken } from "../../../lib/mcp-oauth";
 import {
   getContext7ApiKey,
   getMcpBearerToken,
@@ -20,7 +21,7 @@ import type {
   ToolkitGroups,
 } from "./VmWebrtc.types";
 import { exportToolDefinition } from "./VmWebrtc.types";
-import { MCPClient, type RequestOptions } from "./mcp_client/client";
+import { MCPClient, McpAuthError, type RequestOptions } from "./mcp_client/client";
 import type { Tool } from "./mcp_client/types";
 import {
   registerMcpTool,
@@ -30,6 +31,9 @@ import { getWrapperForGroup } from "./toolkit_functions/wrappers/ToolkitFunction
 
 // Event emitted when connector settings change
 export const CONNECTOR_SETTINGS_CHANGED_EVENT = "connector_settings_changed";
+
+// Event emitted when an MCP extension's token is expired and refresh failed
+export const MCP_REAUTH_REQUIRED_EVENT = "mcp_reauth_required";
 
 /**
  * Get the AsyncStorage key for a toolkit group using convention:
@@ -714,6 +718,18 @@ async function fetchAndCacheUserExtensionTools(
   );
 }
 
+const pendingTokenRefreshes = new Map<string, Promise<string | null>>();
+
+async function refreshTokenSingleFlight(ext: McpExtensionRecord): Promise<string | null> {
+  const existing = pendingTokenRefreshes.get(ext.id);
+  if (existing) return existing;
+  const promise = refreshMcpAccessToken(ext.id, ext.name).finally(() => {
+    pendingTokenRefreshes.delete(ext.id);
+  });
+  pendingTokenRefreshes.set(ext.id, promise);
+  return promise;
+}
+
 async function registerUserExtensionToolsFromCache(
   ext: McpExtensionRecord,
   client: MCPClient,
@@ -728,13 +744,81 @@ async function registerUserExtensionToolsFromCache(
         {},
         { group: groupName, toolName, url: ext.serverUrl },
       );
-      const result = await client.callTool(
-        { name: toolName, arguments: args },
-        REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
-        groupName,
-      );
-      return { result: JSON.stringify(result, null, 2), updatedToolSessionContext: {} };
+      try {
+        const result = await client.callTool(
+          { name: toolName, arguments: args },
+          REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
+          groupName,
+        );
+        return { result: JSON.stringify(result, null, 2), updatedToolSessionContext: {} };
+      } catch (error) {
+        if (!(error instanceof McpAuthError)) throw error;
+
+        log.info(
+          "[ToolkitManager] Tool call got 401, attempting token refresh",
+          {},
+          { name: ext.name, toolName },
+        );
+        const newToken = await refreshTokenSingleFlight(ext);
+        if (newToken) {
+          client.reset(newToken);
+          try {
+            const result = await client.callTool(
+              { name: toolName, arguments: args },
+              REMOTE_TOOLKIT_DISCOVERY_OPTIONS,
+              groupName,
+            );
+            return { result: JSON.stringify(result, null, 2), updatedToolSessionContext: {} };
+          } catch (retryError) {
+            if (!(retryError instanceof McpAuthError)) throw retryError;
+          }
+        }
+        DeviceEventEmitter.emit(MCP_REAUTH_REQUIRED_EVENT, { id: ext.id, name: ext.name });
+        throw new Error(`${ext.name} needs to sign in again. Open Extensions (MCP) to re-authenticate.`);
+      }
     });
+  }
+}
+
+async function fetchWithTokenRefresh(
+  ext: McpExtensionRecord,
+  client: MCPClient,
+  cacheKey: string,
+  groupName: string,
+): Promise<void> {
+  try {
+    await fetchAndCacheUserExtensionTools(ext, client, cacheKey, groupName);
+  } catch (error) {
+    if (!(error instanceof McpAuthError)) throw error;
+
+    log.info(
+      "[ToolkitManager] Got 401, attempting token refresh",
+      {},
+      { name: ext.name },
+    );
+    const newToken = await refreshTokenSingleFlight(ext);
+    if (newToken) {
+      client.reset(newToken);
+      try {
+        await fetchAndCacheUserExtensionTools(ext, client, cacheKey, groupName);
+        return;
+      } catch (retryError) {
+        if (!(retryError instanceof McpAuthError)) throw retryError;
+        log.warn(
+          "[ToolkitManager] Refreshed token also rejected, emitting re-auth event",
+          {},
+          { name: ext.name },
+        );
+      }
+    } else {
+      log.warn(
+        "[ToolkitManager] Token refresh failed, emitting re-auth event",
+        {},
+        { name: ext.name },
+      );
+    }
+    DeviceEventEmitter.emit(MCP_REAUTH_REQUIRED_EVENT, { id: ext.id, name: ext.name });
+    throw error;
   }
 }
 
@@ -769,7 +853,7 @@ async function loadUserMcpExtensionTools(): Promise<void> {
         await registerUserExtensionToolsFromCache(ext, client, cached.tools);
         setDynamicToolkitDefinitionsForServer(groupName, cached.tools.map((t) => t.definition));
         if (isStale) {
-          fetchAndCacheUserExtensionTools(ext, client, cacheKey, groupName).catch((error) => {
+          fetchWithTokenRefresh(ext, client, cacheKey, groupName).catch((error) => {
             log.warn(
               "[ToolkitManager] Background refresh of user extension cache failed",
               {},
@@ -778,7 +862,7 @@ async function loadUserMcpExtensionTools(): Promise<void> {
           });
         }
       } else {
-        await fetchAndCacheUserExtensionTools(ext, client, cacheKey, groupName);
+        await fetchWithTokenRefresh(ext, client, cacheKey, groupName);
       }
     } catch (error) {
       log.error(
